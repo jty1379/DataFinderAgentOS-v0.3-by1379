@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block admin_content %}
+<section class="v02-page source-management-page">
+    <header class="v02-heading">
+        <div>
+            <p class="section-kicker">采集连接与规则</p>
+            <h2>瞭源管理</h2>
+            <p>统一维护公开网页来源、请求头与查询参数。规则仅保存采集所需的最小配置，不保存 Cookie、Authorization 等个人会话凭据。</p>
+        </div>
+        <div class="v02-heading-actions">
+            {% if can_write %}
+            <button class="v02-button" type="button" data-dialog-open="create-source"><i class="layui-icon layui-icon-add-1"></i>新增来源</button>
+            <button class="v02-button-secondary" type="button" data-dialog-open="create-rule"><i class="layui-icon layui-icon-set"></i>新增规则</button>
+            {% else %}
+            <span class="v02-readonly"><i class="layui-icon layui-icon-auz"></i>只读角色</span>
+            {% end %}
+        </div>
+    </header>
+
+    <form class="v02-filter" method="get" action="/admin/sources">
+        <label class="v02-field"><span>搜索瞭源或规则</span><input class="v02-input" name="q" value="{{ keyword }}" placeholder="输入名称、编码或网址"></label>
+        <button class="v02-button" type="submit"><i class="layui-icon layui-icon-search"></i>查询</button>
+        <a class="v02-button-secondary" href="/admin/sources">重置</a>
+    </form>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>瞭源列表</h3><p>定义站点入口和默认请求头</p></div><span class="v02-count">当前页 {{ len(sources) }} 条</span></header>
+        <div class="v02-table-wrap">
+            <table class="v02-table">
+                <caption>瞭源列表</caption>
+                <thead><tr><th>来源</th><th>编码</th><th>基础地址</th><th>规则数</th><th>状态</th><th>创建时间</th>{% if can_write %}<th>操作</th>{% end %}</tr></thead>
+                <tbody>
+                {% for item in sources %}
+                <tr>
+                    <td><div class="v02-cell-title"><b>{{ item["name"] }}</b><small>{{ item["description"] or "暂无来源说明" }}</small></div></td>
+                    <td><code>{{ item["code"] }}</code></td>
+                    <td><div class="v02-cell-title"><small title="{{ item['base_url'] }}">{{ item["base_url"] }}</small></div></td>
+                    <td>{{ item["rule_count"] }}</td>
+                    <td><span class="v02-status {{ 'enabled' if item['enabled'] else 'disabled' }}">{{ "可用" if item["enabled"] else "停用" }}</span></td>
+                    <td>{{ item["created_at"][:16] }}</td>
+                    {% if can_write %}
+                    <td><div class="v02-row-actions">
+                        <button class="v02-row-action" type="button" data-dialog-open="edit-source-{{ item['id'] }}">编辑</button>
+                        <form method="post"><input type="hidden" name="action" value="toggle_source"><input type="hidden" name="source_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action" type="submit">{{ "停用" if item["enabled"] else "启用" }}</button></form>
+                        <form method="post" data-confirm="确认删除瞭源“{{ item['name'] }}”？其采集规则也将删除。"><input type="hidden" name="action" value="delete_source"><input type="hidden" name="source_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action danger" type="submit">删除</button></form>
+                    </div></td>
+                    {% end %}
+                </tr>
+                {% end %}
+                {% if not sources %}<tr><td colspan="7"><div class="v02-feedback"><i class="layui-icon layui-icon-search"></i><h4>没有找到瞭源</h4><p>调整搜索条件，或由超级管理员新增公开数据来源。</p></div></td></tr>{% end %}
+                </tbody>
+            </table>
+        </div>
+        {% if source_pages > 1 %}<nav class="v02-pagination" aria-label="瞭源分页">{% for page_number in range(1, source_pages + 1) %}{% if page_number == source_page %}<span class="current" aria-current="page">{{ page_number }}</span>{% else %}<a href="/admin/sources?q={{ url_escape(keyword) }}&source_page={{ page_number }}&rule_page={{ rule_page }}">{{ page_number }}</a>{% end %}{% end %}</nav>{% end %}
+    </article>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>采集规则</h3><p>将关键词、页码和固定参数映射为可执行请求</p></div><span class="v02-count">当前页 {{ len(rules) }} 条</span></header>
+        <div class="v02-table-wrap">
+            <table class="v02-table">
+                <caption>采集规则列表</caption>
+                <thead><tr><th>规则</th><th>所属瞭源</th><th>关键词参数</th><th>页码参数</th><th>步长 / 每页</th><th>状态</th>{% if can_write %}<th>操作</th>{% end %}</tr></thead>
+                <tbody>
+                {% for item in rules %}
+                <tr>
+                    <td><div class="v02-cell-title"><b>{{ item["name"] }}</b><small>固定参数 {{ item["fixed_param_count"] }} 项 · 请求头 {{ item["header_count"] }} 项</small></div></td>
+                    <td>{{ item["source_name"] }}</td>
+                    <td><code>{{ item["keyword_param"] }}</code></td>
+                    <td><code>{{ item["page_param"] }}</code></td>
+                    <td>{{ item["page_step"] }} / {{ item["page_size"] }}</td>
+                    <td><span class="v02-status {{ 'enabled' if item['enabled'] else 'disabled' }}">{{ "可用" if item["enabled"] else "停用" }}</span></td>
+                    {% if can_write %}
+                    <td><div class="v02-row-actions">
+                        <button class="v02-row-action" type="button" data-dialog-open="edit-rule-{{ item['id'] }}">编辑</button>
+                        <form method="post" data-submit-lock><input type="hidden" name="action" value="test_rule"><input type="hidden" name="rule_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action" type="submit" {% if not item['enabled'] %}disabled{% end %}><span>测试</span></button></form>
+                        <form method="post"><input type="hidden" name="action" value="toggle_rule"><input type="hidden" name="rule_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action" type="submit">{{ "停用" if item["enabled"] else "启用" }}</button></form>
+                        <form method="post" data-confirm="确认删除采集规则“{{ item['name'] }}”？"><input type="hidden" name="action" value="delete_rule"><input type="hidden" name="rule_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action danger" type="submit">删除</button></form>
+                    </div></td>
+                    {% end %}
+                </tr>
+                {% end %}
+                {% if not rules %}<tr><td colspan="7"><div class="v02-feedback"><i class="layui-icon layui-icon-set"></i><h4>没有找到采集规则</h4><p>先建立瞭源，再配置关键词与分页参数。</p></div></td></tr>{% end %}
+                </tbody>
+            </table>
+        </div>
+        {% if rule_pages > 1 %}<nav class="v02-pagination" aria-label="规则分页">{% for page_number in range(1, rule_pages + 1) %}{% if page_number == rule_page %}<span class="current" aria-current="page">{{ page_number }}</span>{% else %}<a href="/admin/sources?q={{ url_escape(keyword) }}&source_page={{ source_page }}&rule_page={{ page_number }}">{{ page_number }}</a>{% end %}{% end %}</nav>{% end %}
+    </article>
+</section>
+
+{% if can_write %}
+<dialog class="management-dialog v02-dialog" id="create-source" aria-labelledby="create-source-title"><form method="post">
+    <header><h3 id="create-source-title">新增瞭源</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header>
+    <div class="dialog-body v02-dialog-grid"><input type="hidden" name="action" value="create_source">{% raw xsrf_form_html() %}
+        <label class="v02-dialog-field"><span>来源名称</span><input class="v02-input" name="name" required maxlength="40" placeholder="例如：百度新闻"></label>
+        <label class="v02-dialog-field"><span>来源编码</span><input class="v02-input" name="code" required pattern="[a-z][a-z0-9_]{2,40}" placeholder="例如 baidu_news"></label>
+        <label class="v02-dialog-field full"><span>基础地址</span><input class="v02-input" name="base_url" type="url" required maxlength="500" placeholder="https://example.com/search"></label>
+        <label class="v02-dialog-field"><span>状态</span><select class="v02-select" name="enabled"><option value="1">启用</option><option value="0">停用</option></select></label>
+        <label class="v02-dialog-field full"><span>说明</span><textarea class="v02-textarea" name="description" maxlength="300" placeholder="说明数据范围与用途"></textarea></label>
+        <label class="v02-dialog-field full"><span>默认请求头（JSON）</span><textarea class="v02-textarea v02-code-textarea" name="headers_json" required>{"Accept":"text/html,application/xhtml+xml","User-Agent":"DataFinderAgentOS/0.2"}</textarea><small class="v02-help warning">不得填写 Cookie、Authorization、Host、Referer 中的个人身份信息。</small></label>
+    </div>
+    <footer><button type="button" data-dialog-close>取消</button><button class="v02-button" type="submit">保存瞭源</button></footer>
+</form></dialog>
+
+<dialog class="management-dialog v02-dialog" id="create-rule" aria-labelledby="create-rule-title"><form method="post">
+    <header><h3 id="create-rule-title">新增采集规则</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header>
+    <div class="dialog-body v02-dialog-grid"><input type="hidden" name="action" value="create_rule">{% raw xsrf_form_html() %}
+        <label class="v02-dialog-field"><span>所属瞭源</span><select class="v02-select" name="source_id" required>{% for source in all_sources %}<option value="{{ source['id'] }}">{{ source["name"] }}</option>{% end %}</select></label>
+        <label class="v02-dialog-field"><span>规则名称</span><input class="v02-input" name="name" required maxlength="50"></label>
+        <label class="v02-dialog-field"><span>关键词参数</span><input class="v02-input" name="keyword_param" required value="word"></label>
+        <label class="v02-dialog-field"><span>页码参数</span><input class="v02-input" name="page_param" required value="pn"></label>
+        <label class="v02-dialog-field"><span>分页步长</span><input class="v02-input" name="page_step" type="number" min="1" max="100" required value="10"></label>
+        <label class="v02-dialog-field"><span>每页条数</span><input class="v02-input" name="page_size" type="number" min="1" max="50" required value="10"></label>
+        <label class="v02-dialog-field"><span>状态</span><select class="v02-select" name="enabled"><option value="1">启用</option><option value="0">停用</option></select></label>
+        <label class="v02-dialog-field full"><span>固定参数（JSON）</span><textarea class="v02-textarea v02-code-textarea" name="fixed_params_json" required>{}</textarea><small class="v02-help">例如 {"tn":"news"}。分页和关键词参数无需重复填写。</small></label>
+        <label class="v02-dialog-field full"><span>规则请求头（JSON）</span><textarea class="v02-textarea v02-code-textarea" name="headers_json" required>{}</textarea><small class="v02-help warning">仅用于覆盖瞭源默认值，同样禁止 Cookie 和 Authorization。</small></label>
+    </div>
+    <footer><button type="button" data-dialog-close>取消</button><button class="v02-button" type="submit">保存规则</button></footer>
+</form></dialog>
+
+{% for item in sources %}
+<dialog class="management-dialog v02-dialog" id="edit-source-{{ item['id'] }}" aria-labelledby="edit-source-title-{{ item['id'] }}"><form method="post">
+    <header><h3 id="edit-source-title-{{ item['id'] }}">编辑瞭源</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header>
+    <div class="dialog-body v02-dialog-grid"><input type="hidden" name="action" value="update_source"><input type="hidden" name="source_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}
+        <label class="v02-dialog-field"><span>来源名称</span><input class="v02-input" name="name" value="{{ item['name'] }}" required maxlength="40"></label>
+        <label class="v02-dialog-field"><span>来源编码</span><input class="v02-input" name="code" value="{{ item['code'] }}" required pattern="[a-z][a-z0-9_]{2,40}"></label>
+        <label class="v02-dialog-field full"><span>基础地址</span><input class="v02-input" name="base_url" type="url" value="{{ item['base_url'] }}" required maxlength="500"></label>
+        <label class="v02-dialog-field"><span>状态</span><select class="v02-select" name="enabled"><option value="1" {% if item['enabled'] %}selected{% end %}>启用</option><option value="0" {% if not item['enabled'] %}selected{% end %}>停用</option></select></label>
+        <label class="v02-dialog-field full"><span>说明</span><textarea class="v02-textarea" name="description" maxlength="300">{{ item["description"] }}</textarea></label>
+        <label class="v02-dialog-field full"><span>默认请求头（JSON）</span><textarea class="v02-textarea v02-code-textarea" name="headers_json" required>{{ item["headers_json"] }}</textarea><small class="v02-help warning">不得填写 Cookie、Authorization、Host 等敏感请求头。</small></label>
+    </div>
+    <footer><button type="button" data-dialog-close>取消</button><button class="v02-button" type="submit">保存修改</button></footer>
+</form></dialog>
+{% end %}
+
+{% for item in rules %}
+<dialog class="management-dialog v02-dialog" id="edit-rule-{{ item['id'] }}" aria-labelledby="edit-rule-title-{{ item['id'] }}"><form method="post">
+    <header><h3 id="edit-rule-title-{{ item['id'] }}">编辑采集规则</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header>
+    <div class="dialog-body v02-dialog-grid"><input type="hidden" name="action" value="update_rule"><input type="hidden" name="rule_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}
+        <label class="v02-dialog-field"><span>所属瞭源</span><select class="v02-select" name="source_id" required>{% for source in all_sources %}<option value="{{ source['id'] }}" {% if source['id'] == item['source_id'] %}selected{% end %}>{{ source["name"] }}</option>{% end %}</select></label>
+        <label class="v02-dialog-field"><span>规则名称</span><input class="v02-input" name="name" value="{{ item['name'] }}" required maxlength="50"></label>
+        <label class="v02-dialog-field"><span>关键词参数</span><input class="v02-input" name="keyword_param" value="{{ item['keyword_param'] }}" required></label>
+        <label class="v02-dialog-field"><span>页码参数</span><input class="v02-input" name="page_param" value="{{ item['page_param'] }}" required></label>
+        <label class="v02-dialog-field"><span>分页步长</span><input class="v02-input" name="page_step" type="number" min="1" max="100" value="{{ item['page_step'] }}" required></label>
+        <label class="v02-dialog-field"><span>每页条数</span><input class="v02-input" name="page_size" type="number" min="1" max="50" value="{{ item['page_size'] }}" required></label>
+        <label class="v02-dialog-field"><span>状态</span><select class="v02-select" name="enabled"><option value="1" {% if item['enabled'] %}selected{% end %}>启用</option><option value="0" {% if not item['enabled'] %}selected{% end %}>停用</option></select></label>
+        <label class="v02-dialog-field full"><span>固定参数（JSON）</span><textarea class="v02-textarea v02-code-textarea" name="fixed_params_json" required>{{ item["fixed_params_json"] }}</textarea></label>
+        <label class="v02-dialog-field full"><span>规则请求头（JSON）</span><textarea class="v02-textarea v02-code-textarea" name="headers_json" required>{{ item["headers_json"] }}</textarea><small class="v02-help warning">禁止 Cookie、Authorization 和任何个人会话凭据。</small></label>
+    </div>
+    <footer><button type="button" data-dialog-close>取消</button><button class="v02-button" type="submit">保存修改</button></footer>
+</form></dialog>
+{% end %}
+{% end %}
+{% end %}

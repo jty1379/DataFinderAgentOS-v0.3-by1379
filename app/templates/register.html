@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block content %}
+<main class="auth-shell">
+    <section class="auth-visual auth-visual-register" aria-label="系统介绍">
+        <div class="brand-lockup">
+            <span class="brand-mark"><i class="layui-icon layui-icon-chart-screen"></i></span>
+            <div><strong>瞭望与问数系统</strong><small>DATAFINDER AGENT OS</small></div>
+        </div>
+        <div class="auth-copy">
+            <p class="section-kicker">创建数据工作空间</p>
+            <h1>建立你的<br><span>数据观察站</span></h1>
+            <p>注册后即可进入 v0.5 智能问数工作台，使用流式问答、仓库分析、任务历史与数字员工。</p>
+        </div>
+        <div class="register-steps">
+            <div><b>01</b><span>创建安全账号</span></div>
+            <div><b>02</b><span>进入问数空间</span></div>
+            <div><b>03</b><span>探索数字员工</span></div>
+        </div>
+    </section>
+    <section class="auth-panel">
+        <div class="auth-card">
+            <div class="mobile-brand"><span class="brand-mark">D</span> 瞭望与问数系统</div>
+            <p class="section-kicker">用户注册</p>
+            <h2>创建用户账号</h2>
+            <p class="auth-muted">用户名支持中文、字母、数字和下划线</p>
+            {% if error %}<div class="notice error">{{ error }}</div>{% end %}
+            <form class="layui-form auth-form" method="post" action="/register" data-submit-lock>
+                {% module xsrf_form_html() %}
+                <label class="field-label" for="username">用户名</label>
+                <div class="field-control"><i class="layui-icon layui-icon-username"></i>
+                    <input id="username" class="layui-input" name="username" value="{{ username }}"
+                           minlength="3" maxlength="20" autocomplete="username" placeholder="3—20 位字符" required autofocus>
+                </div>
+                <label class="field-label" for="password">密码</label>
+                <div class="field-control"><i class="layui-icon layui-icon-password"></i>
+                    <input id="password" class="layui-input" type="password" name="password"
+                           minlength="6" maxlength="64" autocomplete="new-password" placeholder="至少 6 位" required>
+                    <button class="password-toggle" type="button" data-password-toggle="password" aria-label="显示密码"><i class="layui-icon layui-icon-eye"></i></button>
+                </div>
+                <label class="field-label" for="password-confirm">确认密码</label>
+                <div class="field-control"><i class="layui-icon layui-icon-vercode"></i>
+                    <input id="password-confirm" class="layui-input" type="password" name="password_confirm"
+                           minlength="6" maxlength="64" autocomplete="new-password" placeholder="再次输入密码" required>
+                </div>
+                <button class="primary-action" type="submit"><span>创建账号</span><i class="layui-icon layui-icon-add-circle"></i></button>
+            </form>
+            <div class="auth-links"><span>已有账号？</span><a href="/">返回登录</a></div>
+        </div>
+    </section>
+</main>
+{% end %}

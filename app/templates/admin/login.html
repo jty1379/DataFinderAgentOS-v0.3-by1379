@@ -1,0 +1,34 @@
+{% extends "../base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block content %}
+<main class="admin-login-shell">
+    <section class="admin-login-brand">
+        <a class="brand-lockup" href="/"><span class="brand-mark">D</span><div><strong>瞭望与问数系统</strong><small>DATAFINDER AGENT OS</small></div></a>
+        <p class="section-kicker">系统管理平台 · V0.5</p>
+        <h1>数据之上，<br><span>洞见全局</span></h1>
+        <p>面向系统管理员的数据资源、数字员工与智能模型统一管理控制台。</p>
+        <div class="security-badges"><span>Secure Cookie</span><span>XSRF</span><span>PBKDF2</span></div>
+    </section>
+    <section class="admin-login-card">
+        <span class="admin-chip"><i class="layui-icon layui-icon-auz"></i> 安全管理入口</span>
+        <h2>管理员登录</h2>
+        <p class="auth-muted">请输入管理端凭据完成身份验证</p>
+        {% if error %}<div class="notice error">{{ error }}</div>{% end %}
+        <form class="layui-form auth-form" method="post" action="/admin/login" data-submit-lock>
+            {% module xsrf_form_html() %}
+            <label class="field-label" for="admin-username">管理员账号</label>
+            <div class="field-control"><i class="layui-icon layui-icon-username"></i>
+                <input id="admin-username" class="layui-input" name="username" value="{{ username }}" autocomplete="username" required autofocus>
+            </div>
+            <label class="field-label" for="admin-password">密码</label>
+            <div class="field-control"><i class="layui-icon layui-icon-password"></i>
+                <input id="admin-password" class="layui-input" type="password" name="password" autocomplete="current-password" required>
+                <button class="password-toggle" type="button" data-password-toggle="admin-password" aria-label="显示密码"><i class="layui-icon layui-icon-eye"></i></button>
+            </div>
+            <button class="primary-action" type="submit"><span>进入管理控制台</span><i class="layui-icon layui-icon-right"></i></button>
+        </form>
+        <div class="credential-hint"><b>课堂演示账号</b><code>admin</code><span>/</span><code>123456</code></div>
+        <a class="back-link" href="/"><i class="layui-icon layui-icon-left"></i> 返回用户端</a>
+    </section>
+</main>
+{% end %}

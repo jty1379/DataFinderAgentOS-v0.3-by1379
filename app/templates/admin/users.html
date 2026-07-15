@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block admin_content %}
+<section class="management-page task2-management-page">
+    <header class="management-heading">
+        <div>
+            <p class="section-kicker">账号与身份</p>
+            <h2>用户管理</h2>
+            <p>集中维护普通用户与管理员账号，支持搜索、新增、批量启停、修改和删除；默认超级管理员始终受系统保护。</p>
+        </div>
+        {% if not can_write %}<span class="v02-readonly"><i class="layui-icon layui-icon-auz"></i>只读角色</span>{% end %}
+    </header>
+
+    {% if not can_write %}<div class="readonly-banner">当前角色仅可查看用户信息；新增、修改、停用、重置密码和删除操作仅限默认超级管理员。</div>{% end %}
+
+    <div class="task2-toolbar" aria-label="用户功能区">
+        <form class="filter-bar" method="get" action="/admin/users">
+            <label><span>搜索用户</span><input class="layui-input" name="q" value="{{ keyword }}" placeholder="输入用户名"></label>
+            <label><span>角色</span><select name="role_id"><option value="0">全部角色</option>{% for role in roles %}<option value="{{ role['id'] }}" {% if selected_role_id == role['id'] %}selected{% end %}>{{ role["name"] }}</option>{% end %}</select></label>
+            <label><span>状态</span><select name="status"><option value="">全部状态</option><option value="enabled" {% if selected_status == 'enabled' %}selected{% end %}>正常</option><option value="disabled" {% if selected_status == 'disabled' %}selected{% end %}>已停用</option></select></label>
+            <button class="filter-submit" type="submit"><i class="layui-icon layui-icon-search"></i>查询</button>
+            <a class="filter-reset" href="/admin/users">重置</a>
+        </form>
+        {% if can_write %}
+        <div class="task2-toolbar-actions">
+            <form class="task2-batch-form" id="user-batch-form" method="post" data-user-batch-form>
+                <input type="hidden" name="action" value="batch">
+                {% raw xsrf_form_html() %}
+                <label><span class="sr-only">批量操作</span><select name="batch_action" aria-label="选择批量操作"><option value="">批量操作</option><option value="enable">批量启用</option><option value="disable">批量停用</option><option value="delete">批量删除</option></select></label>
+                <button class="filter-submit" type="submit" data-batch-submit disabled>执行 <span data-selected-count>0</span> 项</button>
+            </form>
+            <button class="management-primary" type="button" data-dialog-open="create-user"><i class="layui-icon layui-icon-add-1"></i>新增用户</button>
+        </div>
+        {% end %}
+    </div>
+
+    <div class="management-card">
+        <div class="management-summary"><b>用户列表</b><span>共 {{ pager["total"] }} 条，每页 {{ pager["page_size"] }} 条</span></div>
+        <div class="table-responsive">
+            <table class="management-table task2-table">
+                <caption class="sr-only">后台用户列表</caption>
+                <thead><tr>{% if can_write %}<th class="selection-column"><label class="table-check"><input type="checkbox" data-select-all-users aria-label="选择本页可操作用户"><span></span></label></th>{% end %}<th>ID</th><th>用户名</th><th>角色</th><th>访问端</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+                <tbody>
+                    {% for item in users %}
+                    <tr>
+                        {% if can_write %}<td class="selection-column">{% if not item["is_superadmin"] %}<label class="table-check"><input form="user-batch-form" type="checkbox" name="user_ids" value="{{ item['id'] }}" data-user-select aria-label="选择用户 {{ item['username'] }}"><span></span></label>{% else %}<i class="layui-icon layui-icon-auz protected-mark" title="默认超级管理员不可批量操作"></i>{% end %}</td>{% end %}
+                        <td>#{{ item["id"] }}</td>
+                        <td><div class="name-cell"><span>{{ item["username"][0] }}</span><div><b>{{ item["username"] }}</b>{% if item["is_superadmin"] %}<small>默认超级管理员</small>{% end %}</div></div></td>
+                        <td>{{ item["role_name"] }}</td>
+                        <td>{{ "管理侧" if item["role_scope"] == "admin" else "用户侧" }}</td>
+                        <td><span class="state-badge {{ item['status'] }}">{{ "正常" if item["status"] == "enabled" else "已停用" }}</span></td>
+                        <td>{{ item["created_at"][:16] }}</td>
+                        <td>
+                            {% if item["is_superadmin"] %}
+                            <div class="row-actions protected-actions"><span class="v02-readonly"><i class="layui-icon layui-icon-auz"></i>身份锁定</span>{% if can_write and item["id"] == user["id"] %}<button type="button" data-dialog-open="change-admin-password">修改我的密码</button>{% end %}</div>
+                            {% elif can_write %}
+                            <div class="row-actions"><button type="button" data-dialog-open="edit-user-{{ item['id'] }}">编辑</button>{% if item["id"] != user["id"] %}<form method="post" data-confirm="确认删除用户“{{ item['username'] }}”？"><input type="hidden" name="action" value="delete"><input type="hidden" name="user_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="danger" type="submit">删除</button></form>{% end %}</div>
+                            {% else %}<span class="state-badge disabled">只读</span>{% end %}
+                        </td>
+                    </tr>
+                    {% end %}
+                    {% if not users %}<tr><td colspan="{% if can_write %}8{% else %}7{% end %}"><div class="empty-state"><i class="layui-icon layui-icon-face-surprised"></i><b>没有找到用户</b><span>请调整搜索条件或新增用户。</span></div></td></tr>{% end %}
+                </tbody>
+            </table>
+        </div>
+        <nav class="v02-pagination task2-pagination" aria-label="用户列表分页">
+            <span class="pager-meta">第 {{ pager["page"] }} / {{ pager["total_pages"] }} 页</span>
+            {% if pager["prev_url"] %}<a href="{{ pager['prev_url'] }}" aria-label="上一页">上一页</a>{% else %}<span aria-disabled="true">上一页</span>{% end %}
+            {% for link in pager["page_links"] %}{% if link["current"] %}<span class="current" aria-current="page">{{ link["number"] }}</span>{% else %}<a href="{{ link['url'] }}">{{ link["number"] }}</a>{% end %}{% end %}
+            {% if pager["next_url"] %}<a href="{{ pager['next_url'] }}" aria-label="下一页">下一页</a>{% else %}<span aria-disabled="true">下一页</span>{% end %}
+        </nav>
+    </div>
+</section>
+
+{% if can_write %}
+<dialog class="management-dialog" id="create-user"><form method="post"><header><h3>新增用户</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header><div class="dialog-body"><input type="hidden" name="action" value="create">{% raw xsrf_form_html() %}<label>用户名<input class="layui-input" name="username" autocomplete="off" required minlength="3" maxlength="20" placeholder="3—20 位中文、字母、数字或下划线"></label><label>初始密码<input class="layui-input" type="password" name="password" autocomplete="new-password" required minlength="6" maxlength="64" placeholder="至少 6 位"></label><label>所属角色<select name="role_id" required>{% for role in roles %}{% if role["enabled"] %}<option value="{{ role['id'] }}">{{ role["name"] }} · {{ "管理侧" if role["access_scope"] == "admin" else "用户侧" }}</option>{% end %}{% end %}</select></label></div><footer><button type="button" data-dialog-close>取消</button><button class="management-primary" type="submit">创建用户</button></footer></form></dialog>
+
+<dialog class="management-dialog" id="change-admin-password"><form method="post"><header><div><h3>修改我的密码</h3><p>超级管理员的用户名、角色、状态及权限均不可在此修改。</p></div><button type="button" data-dialog-close aria-label="关闭">×</button></header><div class="dialog-body"><input type="hidden" name="action" value="change_superadmin_password"><input type="text" name="username" value="{{ user['username'] }}" autocomplete="username" hidden readonly>{% raw xsrf_form_html() %}<div class="identity-lock-note"><i class="layui-icon layui-icon-auz"></i><div><b>受保护账号：{{ user["username"] }}</b><span>仅允许当前超级管理员验证原密码后更新自己的密码。</span></div></div><label>当前密码<input class="layui-input" type="password" name="current_password" autocomplete="current-password" required minlength="6" maxlength="64"></label><label>新密码<input class="layui-input" type="password" name="new_password" autocomplete="new-password" required minlength="6" maxlength="64"></label><label>确认新密码<input class="layui-input" type="password" name="confirm_password" autocomplete="new-password" required minlength="6" maxlength="64"></label></div><footer><button type="button" data-dialog-close>取消</button><button class="management-primary" type="submit">更新我的密码</button></footer></form></dialog>
+
+{% for item in users %}{% if not item["is_superadmin"] %}<dialog class="management-dialog" id="edit-user-{{ item['id'] }}"><form method="post"><header><h3>编辑用户</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header><div class="dialog-body"><input type="hidden" name="action" value="update"><input type="hidden" name="user_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<label>用户名<input class="layui-input" name="username" autocomplete="off" value="{{ item['username'] }}" required minlength="3" maxlength="20"></label><label>所属角色<select name="role_id">{% for role in roles %}<option value="{{ role['id'] }}" {% if item['role_id'] == role['id'] %}selected{% end %}>{{ role["name"] }}</option>{% end %}</select></label><label>账号状态<select name="status"><option value="enabled" {% if item['status'] == 'enabled' %}selected{% end %}>正常</option><option value="disabled" {% if item['status'] == 'disabled' %}selected{% end %}>停用</option></select></label><label>重置密码（可选）<input class="layui-input" type="password" name="password" autocomplete="new-password" minlength="6" maxlength="64" placeholder="留空则保持原密码"></label></div><footer><button type="button" data-dialog-close>取消</button><button class="management-primary" type="submit">保存修改</button></footer></form></dialog>{% end %}{% end %}
+{% end %}
+{% end %}
+{% block admin_scripts %}<script src="{{ static_url('js/admin-task2.js') }}"></script>{% end %}

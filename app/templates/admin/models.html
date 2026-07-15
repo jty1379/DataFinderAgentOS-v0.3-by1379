@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block admin_content %}
+<section class="v02-page model-engine-page">
+    <header class="v02-heading">
+        <div>
+            <p class="section-kicker">OpenAI API 兼容服务</p>
+            <h2>模型引擎</h2>
+            <p>集中配置模型端点、生成参数与默认调用策略；密钥只填写环境变量名，不在页面或数据库中保存明文。</p>
+        </div>
+        <div class="v02-heading-actions">
+            {% if can_write %}<button class="v02-button" type="button" data-dialog-open="create-model"><i class="layui-icon layui-icon-add-1"></i>新增模型</button>{% else %}<span class="v02-readonly"><i class="layui-icon layui-icon-auz"></i>只读角色</span>{% end %}
+        </div>
+    </header>
+
+    <form class="v02-filter" method="get" action="/admin/models">
+        <label class="v02-field"><span>搜索模型</span><input class="v02-input" name="q" value="{{ keyword }}" placeholder="显示名称、服务商或模型标识"></label>
+        <input type="hidden" name="type" value="{{ selected_type }}">
+        <button class="v02-button" type="submit"><i class="layui-icon layui-icon-search"></i>查询</button>
+        <a class="v02-button-secondary" href="/admin/models">重置</a>
+    </form>
+
+    <nav class="model-type-filter" aria-label="模型分类">
+        <a href="/admin/models?q={{ url_escape(keyword) }}" aria-pressed="{{ 'true' if not selected_type else 'false' }}">全部</a>
+        <a href="/admin/models?q={{ url_escape(keyword) }}&type=text" aria-pressed="{{ 'true' if selected_type == 'text' else 'false' }}">文本</a>
+        <a href="/admin/models?q={{ url_escape(keyword) }}&type=image" aria-pressed="{{ 'true' if selected_type == 'image' else 'false' }}">图像</a>
+        <a href="/admin/models?q={{ url_escape(keyword) }}&type=audio" aria-pressed="{{ 'true' if selected_type == 'audio' else 'false' }}">音频</a>
+        <a href="/admin/models?q={{ url_escape(keyword) }}&type=video" aria-pressed="{{ 'true' if selected_type == 'video' else 'false' }}">视频</a>
+        <a href="/admin/models?q={{ url_escape(keyword) }}&type=multimodal" aria-pressed="{{ 'true' if selected_type == 'multimodal' else 'false' }}">多模态</a>
+        <a href="/admin/models?q={{ url_escape(keyword) }}&type=embedding" aria-pressed="{{ 'true' if selected_type == 'embedding' else 'false' }}">嵌入</a>
+    </nav>
+
+    <div class="model-grid" data-model-grid>
+        {% for item in models %}
+        <article class="model-card {% if item['is_default'] %}is-default{% end %}" data-model-card data-total-tokens="{{ item['total_tokens'] }}">
+            <header>
+                <span class="model-icon"><i class="layui-icon layui-icon-engine"></i></span>
+                <div class="model-title"><h3>{{ item["name"] }}</h3><code>{{ item["provider"] }} / {{ item["model_name"] }}</code></div>
+                <div class="model-badges"><span class="model-badge">{{ item["type_label"] }}</span>{% if item["is_default"] %}<span class="model-badge default">默认</span>{% end %}</div>
+            </header>
+            <div class="model-meta">
+                <div><strong>{{ item["total_calls"] }}</strong><span>累计调用</span></div>
+                <div><strong>{{ item["total_tokens"] }}</strong><span>累计 Token</span></div>
+                <div><strong>{{ item["context_messages"] }}</strong><span>上下文消息</span></div>
+            </div>
+            <div class="token-usage"><header><span>Token 使用相对值</span><span>{{ item["last_used_at"] or "尚未调用" }}</span></header><div class="token-track" role="img" aria-label="{{ item['name'] }} 累计使用 {{ item['total_tokens'] }} Token"><span data-token-bar></span></div></div>
+            <div class="model-actions">
+                <button class="v02-button-secondary" type="button" data-dialog-open="model-chat" data-chat-model="{{ item['id'] }}" data-chat-model-name="{{ item['name'] }}" {% if not item['enabled'] or not can_write %}disabled{% end %}><i class="layui-icon layui-icon-dialogue"></i>模型对话</button>
+                {% if can_write %}
+                <button class="v02-row-action" type="button" data-dialog-open="edit-model-{{ item['id'] }}">设置</button>
+                <form method="post"><input type="hidden" name="action" value="toggle"><input type="hidden" name="model_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action" type="submit">{{ "停用" if item["enabled"] else "启用" }}</button></form>
+                {% if not item["is_default"] %}<form method="post"><input type="hidden" name="action" value="set_default"><input type="hidden" name="model_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action" type="submit" {% if not item['enabled'] %}disabled{% end %}>设为默认</button></form>{% end %}
+                <form method="post" data-confirm="确认删除模型“{{ item['name'] }}”？调用统计也将被删除。"><input type="hidden" name="action" value="delete"><input type="hidden" name="model_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action danger" type="submit">删除</button></form>
+                {% end %}
+            </div>
+            <span class="v02-status {{ 'enabled' if item['enabled'] else 'disabled' }}">{{ "服务可用" if item["enabled"] else "已停用" }}</span>
+        </article>
+        {% end %}
+        {% if not models %}<div class="v02-panel model-grid-empty"><div class="v02-feedback"><i class="layui-icon layui-icon-engine"></i><h4>没有匹配的模型</h4><p>切换分类或搜索条件；超级管理员也可以新增 OpenAI API 兼容模型。</p></div></div>{% end %}
+    </div>
+
+    {% if pages > 1 %}<nav class="v02-pagination" aria-label="模型分页">{% for page_number in range(1, pages + 1) %}{% if page_number == page %}<span class="current" aria-current="page">{{ page_number }}</span>{% else %}<a href="/admin/models?q={{ url_escape(keyword) }}&type={{ selected_type }}&page={{ page_number }}">{{ page_number }}</a>{% end %}{% end %}</nav>{% end %}
+</section>
+
+{% if can_write %}
+<dialog class="management-dialog v02-dialog extra-wide" id="create-model" aria-labelledby="create-model-title"><form method="post" data-model-form>
+    <header><h3 id="create-model-title">新增模型</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header>
+    <div class="dialog-body v02-dialog-grid"><input type="hidden" name="action" value="create">{% raw xsrf_form_html() %}
+        <label class="v02-dialog-field"><span>显示名称</span><input class="v02-input" name="name" required maxlength="60" placeholder="例如：政务问数模型"></label>
+        <label class="v02-dialog-field"><span>服务商</span><input class="v02-input" name="provider" required maxlength="40" placeholder="OpenAI Compatible"></label>
+        <label class="v02-dialog-field"><span>模型标识</span><input class="v02-input" name="model_name" required maxlength="100" placeholder="例如 gpt-4.1-mini"></label>
+        <label class="v02-dialog-field"><span>模型分类</span><select class="v02-select" name="model_type" required><option value="text">文本</option><option value="image">图像</option><option value="audio">音频</option><option value="video">视频</option><option value="multimodal">多模态</option><option value="embedding">嵌入</option></select></label>
+        <label class="v02-dialog-field full"><span>Base URL</span><input class="v02-input" name="base_url" type="url" required maxlength="500" placeholder="https://api.example.com/v1"></label>
+        <label class="v02-dialog-field full"><span>API Key 环境变量</span><input class="v02-input" name="api_key_env" required pattern="[A-Z][A-Z0-9_]{2,80}" placeholder="DATAFINDER_MODEL_API_KEY"><small class="v02-help">只保存环境变量名；请勿在此粘贴真实密钥。</small></label>
+        <label class="v02-dialog-field full"><span>系统提示词</span><textarea class="v02-textarea" name="system_prompt" maxlength="4000" placeholder="限定模型角色、数据边界和输出格式"></textarea></label>
+        <label class="v02-dialog-field"><span>Temperature</span><input class="v02-input" name="temperature" type="number" min="0" max="2" step="0.1" value="0.7" required></label>
+        <label class="v02-dialog-field"><span>Top P</span><input class="v02-input" name="top_p" type="number" min="0" max="1" step="0.05" value="1" required></label>
+        <label class="v02-dialog-field"><span>最大 Token</span><input class="v02-input" name="max_tokens" type="number" min="1" max="131072" value="2048" required></label>
+        <label class="v02-dialog-field"><span>上下文消息数</span><input class="v02-input" name="context_messages" type="number" min="1" max="100" value="12" required></label>
+        <label class="v02-dialog-field"><span>状态</span><select class="v02-select" name="enabled"><option value="1">启用</option><option value="0">停用</option></select></label>
+    </div>
+    <footer><button type="button" data-dialog-close>取消</button><button class="v02-button" type="submit">创建模型</button></footer>
+</form></dialog>
+
+{% for item in models %}
+<dialog class="management-dialog v02-dialog extra-wide" id="edit-model-{{ item['id'] }}" aria-labelledby="edit-model-title-{{ item['id'] }}"><form method="post" data-model-form>
+    <header><h3 id="edit-model-title-{{ item['id'] }}">模型设置 · {{ item["name"] }}</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header>
+    <div class="dialog-body v02-dialog-grid"><input type="hidden" name="action" value="update"><input type="hidden" name="model_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}
+        <label class="v02-dialog-field"><span>显示名称</span><input class="v02-input" name="name" value="{{ item['name'] }}" required maxlength="60"></label>
+        <label class="v02-dialog-field"><span>服务商</span><input class="v02-input" name="provider" value="{{ item['provider'] }}" required maxlength="40"></label>
+        <label class="v02-dialog-field"><span>模型标识</span><input class="v02-input" name="model_name" value="{{ item['model_name'] }}" required maxlength="100"></label>
+        <label class="v02-dialog-field"><span>模型分类</span><select class="v02-select" name="model_type" required><option value="text" {% if item['model_type'] == 'text' %}selected{% end %}>文本</option><option value="image" {% if item['model_type'] == 'image' %}selected{% end %}>图像</option><option value="audio" {% if item['model_type'] == 'audio' %}selected{% end %}>音频</option><option value="video" {% if item['model_type'] == 'video' %}selected{% end %}>视频</option><option value="multimodal" {% if item['model_type'] == 'multimodal' %}selected{% end %}>多模态</option><option value="embedding" {% if item['model_type'] == 'embedding' %}selected{% end %}>嵌入</option></select></label>
+        <label class="v02-dialog-field full"><span>Base URL</span><input class="v02-input" name="base_url" type="url" value="{{ item['base_url'] }}" required maxlength="500"></label>
+        <label class="v02-dialog-field full"><span>API Key 环境变量</span><input class="v02-input" name="api_key_env" value="{{ item['api_key_env'] }}" required pattern="[A-Z][A-Z0-9_]{2,80}"><small class="v02-help">页面不会读取环境变量的真实值。</small></label>
+        <label class="v02-dialog-field full"><span>系统提示词</span><textarea class="v02-textarea" name="system_prompt" maxlength="4000">{{ item["system_prompt"] }}</textarea></label>
+        <label class="v02-dialog-field"><span>Temperature</span><input class="v02-input" name="temperature" type="number" min="0" max="2" step="0.1" value="{{ item['temperature'] }}" required></label>
+        <label class="v02-dialog-field"><span>Top P</span><input class="v02-input" name="top_p" type="number" min="0" max="1" step="0.05" value="{{ item['top_p'] }}" required></label>
+        <label class="v02-dialog-field"><span>最大 Token</span><input class="v02-input" name="max_tokens" type="number" min="1" max="131072" value="{{ item['max_tokens'] }}" required></label>
+        <label class="v02-dialog-field"><span>上下文消息数</span><input class="v02-input" name="context_messages" type="number" min="1" max="100" value="{{ item['context_messages'] }}" required></label>
+        <label class="v02-dialog-field"><span>状态</span><select class="v02-select" name="enabled"><option value="1" {% if item['enabled'] %}selected{% end %}>启用</option><option value="0" {% if not item['enabled'] %}selected{% end %}>停用</option></select></label>
+    </div>
+    <footer><button type="button" data-dialog-close>取消</button><button class="v02-button" type="submit">保存设置</button></footer>
+</form></dialog>
+{% end %}
+{% end %}
+
+<dialog class="management-dialog v02-dialog extra-wide" id="model-chat" aria-labelledby="model-chat-title">
+    <form method="dialog" data-model-chat-form>
+        <header><div><h3 id="model-chat-title" data-model-chat-title>模型对话</h3><p>响应由 SSE 流式返回；关闭窗口不会伪造成功结果。</p></div><button type="button" data-dialog-close aria-label="关闭">×</button></header>
+        <div class="dialog-body">
+            <input type="hidden" name="model_id" data-chat-model-id>
+            {% raw xsrf_form_html() %}
+            <div class="model-chat-layout">
+                <div class="model-transcript" data-model-transcript aria-live="polite"><div class="v02-feedback"><i class="layui-icon layui-icon-dialogue"></i><h4>发送一条测试消息</h4><p>用于验证模型端点和流式响应，不会写入用户侧历史记录。</p></div></div>
+                <aside class="model-stream-stats"><h4>本次调用</h4><dl><div><dt>连接状态</dt><dd data-stream-status>未连接</dd></div><div><dt>输入 Token</dt><dd data-prompt-tokens>0</dd></div><div><dt>输出 Token</dt><dd data-completion-tokens>0</dd></div><div><dt>总 Token</dt><dd data-total-tokens>0</dd></div></dl></aside>
+            </div>
+            <div class="model-chat-composer"><label class="visually-hidden" for="model-chat-message">测试消息</label><textarea class="v02-textarea" id="model-chat-message" name="message" rows="2" maxlength="2000" required placeholder="输入测试问题，模型将以流式方式回答"></textarea><button class="v02-button" type="submit">发送</button><button class="v02-button-secondary" type="button" data-cancel-stream disabled>停止</button></div>
+        </div>
+    </form>
+</dialog>
+{% end %}
+{% block admin_scripts %}<script src="{{ static_url('js/models.js') }}"></script>{% end %}

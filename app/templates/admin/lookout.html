@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block admin_content %}
+<section class="v02-page lookout-page">
+    <header class="v02-heading">
+        <div>
+            <p class="section-kicker">公开信息采集工作台</p>
+            <h2>瞭望采集</h2>
+            <p>选择已审核的瞭源规则，按关键词采集公开信息；确认结果后再批量保存到数据仓库。</p>
+        </div>
+        {% if not can_write %}<span class="v02-readonly"><i class="layui-icon layui-icon-auz"></i>只读角色</span>{% end %}
+    </header>
+
+    <nav class="collection-pipeline" aria-label="采集流程">
+        <div class="pipeline-step active" data-pipeline-step="query"><span>1</span>关键词</div>
+        <div class="pipeline-step" data-pipeline-step="rule"><span>2</span>规则</div>
+        <div class="pipeline-step" data-pipeline-step="result"><span>3</span>结果</div>
+        <div class="pipeline-step" data-pipeline-step="warehouse"><span>4</span>入仓</div>
+    </nav>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>A · 输入采集主题</h3><p>使用具体、可检索的关键词，例如“人工智能 产业政策”</p></div></header>
+        <div class="collection-query">
+            <form class="collection-query-form" id="lookout-collect-form" data-lookout-form action="/admin/lookout/collect" method="post">
+                {% raw xsrf_form_html() %}
+                <label class="visually-hidden" for="lookout-keyword">采集关键词</label>
+                <input class="v02-input" id="lookout-keyword" name="keyword" maxlength="80" required placeholder="输入需要瞭望的关键词" {% if not can_write %}disabled{% end %}>
+                <button class="v02-button" type="submit" {% if not can_write or not available_rules %}disabled{% end %}><i class="layui-icon layui-icon-search"></i>开始采集</button>
+            </form>
+        </div>
+    </article>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>B · 选择规则并配置参数</h3><p>参数来自瞭源规则，可在本次采集中调整页码和每页条数</p></div><a class="v02-button-secondary" href="/admin/sources">管理瞭源</a></header>
+        <div class="v02-panel-body">
+            <div class="rule-visual-grid">
+                <label class="v02-field"><span>采集规则</span>
+                    <select class="v02-select" name="rule_id" form="lookout-collect-form" data-rule-select {% if not can_write %}disabled{% end %}>
+                        {% for rule in available_rules %}<option value="{{ rule['id'] }}" data-source="{{ rule['source_name'] }}" data-keyword-param="{{ rule['keyword_param'] }}" data-page-param="{{ rule['page_param'] }}" data-page-step="{{ rule['page_step'] }}" data-page-size="{{ rule['page_size'] }}">{{ rule["source_name"] }} · {{ rule["name"] }}</option>{% end %}
+                    </select>
+                </label>
+                <label class="v02-field narrow"><span>采集页码</span><input class="v02-input" type="number" name="page" form="lookout-collect-form" min="1" max="20" value="1" data-page-input {% if not can_write %}disabled{% end %}></label>
+                <label class="v02-field narrow"><span>每页条数</span><input class="v02-input" type="number" name="page_size" form="lookout-collect-form" min="1" max="12" value="12" data-page-size-input {% if not can_write %}disabled{% end %}></label>
+            </div>
+            <p class="rule-context" data-rule-context>{% if available_rules %}当前规则：{{ available_rules[0]["source_name"] }}；关键词参数 {{ available_rules[0]["keyword_param"] }}，页码参数 {{ available_rules[0]["page_param"] }}，分页步长 {{ available_rules[0]["page_step"] }}。{% else %}当前没有可用采集规则，请先在“瞭源管理”中建立并启用规则。{% end %}</p>
+        </div>
+    </article>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>C · 检查采集结果</h3><p>本页最多显示 12 条；选择可信结果后再保存</p></div><span class="v02-count" data-result-count>尚未采集</span></header>
+        <div class="collection-toolbar">
+            <label><input type="checkbox" data-select-all disabled>全选当前结果</label>
+            <span class="selection-count" data-selection-count>已选择 0 条</span>
+            <button class="v02-button" type="button" data-import-results disabled><i class="layui-icon layui-icon-upload-drag"></i>保存到数据仓库</button>
+        </div>
+        <div data-result-region aria-live="polite" aria-busy="false">
+            <div class="v02-feedback">
+                <i class="layui-icon layui-icon-chart-screen"></i>
+                <h4>等待采集任务</h4>
+                <p>输入关键词并选择规则后，结果将在这里以三列卡片展示。采集结果来自公开网页，请入仓前人工核对。</p>
+            </div>
+        </div>
+    </article>
+
+    {% if recent_runs %}
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>最近采集任务</h3><p>用于确认采集状态，不代表内容已经入仓</p></div></header>
+        <div class="v02-table-wrap"><table class="v02-table"><caption>最近采集任务</caption><thead><tr><th>任务编号</th><th>关键词</th><th>规则</th><th>结果数</th><th>状态</th><th>时间</th></tr></thead><tbody>
+            {% for run in recent_runs %}<tr><td><code>#{{ run["id"] }}</code></td><td>{{ run["keyword"] }}</td><td>{{ run["rule_name"] }}</td><td>{{ run["result_count"] }}</td><td><span class="v02-status {{ 'enabled' if run['status'] == 'success' else 'disabled' }}">{{ run["status_text"] }}</span></td><td>{{ run["created_at"][:16] }}</td></tr>{% end %}
+        </tbody></table></div>
+    </article>
+    {% end %}
+</section>
+{% end %}
+{% block admin_scripts %}<script src="{{ static_url('js/lookout.js') }}"></script>{% end %}

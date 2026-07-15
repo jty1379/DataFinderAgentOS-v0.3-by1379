@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block admin_content %}
+<section class="management-page task2-management-page">
+    <header class="management-heading">
+        <div>
+            <p class="section-kicker">授权策略</p>
+            <h2>角色管理</h2>
+            <p>用户与角色保持一对一关系；角色通过功能树获得后台能力，功能授权同时决定该角色最终可见的菜单。</p>
+        </div>
+        {% if not can_write %}<span class="v02-readonly"><i class="layui-icon layui-icon-auz"></i>只读角色</span>{% end %}
+    </header>
+
+    {% if not can_write %}<div class="readonly-banner">当前角色只能查看角色与授权信息；新增、编辑、授权和删除仅限默认超级管理员。</div>{% end %}
+
+    <div class="task2-toolbar" aria-label="角色功能区">
+        <form class="filter-bar compact-filter" method="get" action="/admin/roles">
+            <label><span>搜索角色</span><input class="layui-input" name="q" value="{{ keyword }}" placeholder="角色名称或编码"></label>
+            <button class="filter-submit" type="submit"><i class="layui-icon layui-icon-search"></i>查询</button>
+            <a class="filter-reset" href="/admin/roles">重置</a>
+        </form>
+        {% if can_write %}<div class="task2-toolbar-actions"><button class="management-primary" type="button" data-dialog-open="create-role"><i class="layui-icon layui-icon-add-1"></i>新增角色</button></div>{% end %}
+    </div>
+
+    <div class="management-card">
+        <div class="management-summary"><b>角色列表</b><span>共 {{ pager["total"] }} 条，每页 {{ pager["page_size"] }} 条</span></div>
+        <div class="table-responsive">
+            <table class="management-table task2-table">
+                <caption class="sr-only">系统角色列表</caption>
+                <thead><tr><th>角色</th><th>允许登录</th><th>关联用户</th><th>功能权限</th><th>状态</th><th>说明</th><th>操作</th></tr></thead>
+                <tbody>
+                    {% for item in roles %}
+                    <tr>
+                        <td><div class="feature-cell"><i class="layui-icon {{ 'layui-icon-auz' if item['access_scope'] == 'admin' else 'layui-icon-user' }}"></i><div><b>{{ item["name"] }}</b><small><code>{{ item["code"] }}</code>{% if item["is_system"] %} · 默认角色{% end %}</small></div></div></td>
+                        <td><span class="role-scope {{ item['access_scope'] }}">{{ "管理侧" if item["access_scope"] == "admin" else "用户侧" }}</span></td>
+                        <td>{{ item["user_count"] }} 人</td>
+                        <td>{{ item["feature_count"] }} 项</td>
+                        <td><span class="state-badge {{ 'enabled' if item['enabled'] else 'disabled' }}">{{ "启用" if item["enabled"] else "停用" }}</span></td>
+                        <td><span class="table-description" title="{{ item['description'] or '暂无角色说明' }}">{{ item["description"] or "暂无角色说明" }}</span></td>
+                        <td>
+                            {% if item["code"] == "admin" %}<span class="v02-readonly"><i class="layui-icon layui-icon-auz"></i>系统管理员锁定</span>
+                            {% elif can_write %}<div class="row-actions"><button type="button" data-dialog-open="permissions-role-{{ item['id'] }}">配置权限</button><button type="button" data-dialog-open="edit-role-{{ item['id'] }}">编辑</button>{% if not item["is_system"] %}<form method="post" data-confirm="确认删除角色“{{ item['name'] }}”？"><input type="hidden" name="action" value="delete"><input type="hidden" name="role_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="danger" type="submit">删除</button></form>{% end %}</div>
+                            {% else %}<span class="state-badge disabled">只读</span>{% end %}
+                        </td>
+                    </tr>
+                    {% end %}
+                    {% if not roles %}<tr><td colspan="7"><div class="empty-state"><i class="layui-icon layui-icon-face-surprised"></i><b>没有找到角色</b><span>请调整搜索条件或新增角色。</span></div></td></tr>{% end %}
+                </tbody>
+            </table>
+        </div>
+        <nav class="v02-pagination task2-pagination" aria-label="角色列表分页">
+            <span class="pager-meta">第 {{ pager["page"] }} / {{ pager["total_pages"] }} 页</span>
+            {% if pager["prev_url"] %}<a href="{{ pager['prev_url'] }}" aria-label="上一页">上一页</a>{% else %}<span aria-disabled="true">上一页</span>{% end %}
+            {% for link in pager["page_links"] %}{% if link["current"] %}<span class="current" aria-current="page">{{ link["number"] }}</span>{% else %}<a href="{{ link['url'] }}">{{ link["number"] }}</a>{% end %}{% end %}
+            {% if pager["next_url"] %}<a href="{{ pager['next_url'] }}" aria-label="下一页">下一页</a>{% else %}<span aria-disabled="true">下一页</span>{% end %}
+        </nav>
+    </div>
+</section>
+
+{% if can_write %}
+<dialog class="management-dialog" id="create-role"><form method="post"><header><h3>新增角色</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header><div class="dialog-body"><input type="hidden" name="action" value="create">{% raw xsrf_form_html() %}<label>角色名称<input class="layui-input" name="name" required maxlength="30"></label><label>角色编码<input class="layui-input" name="code" required pattern="[a-z][a-z0-9_]{2,40}" placeholder="例如 useradmin"></label><label>允许登录<select name="access_scope"><option value="user">用户侧</option><option value="admin">管理侧</option></select></label><label>角色说明<textarea class="layui-textarea" name="description" maxlength="200"></textarea></label></div><footer><button type="button" data-dialog-close>取消</button><button class="management-primary" type="submit">创建角色</button></footer></form></dialog>
+
+<script type="application/json" id="feature-tree-data">{% raw feature_tree_json %}</script>
+{% for item in roles %}{% if item["code"] != "admin" %}
+<dialog class="management-dialog" id="edit-role-{{ item['id'] }}"><form method="post"><header><h3>编辑角色</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header><div class="dialog-body"><input type="hidden" name="action" value="update"><input type="hidden" name="role_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<label>角色名称<input class="layui-input" name="name" value="{{ item['name'] }}" required maxlength="30"></label><label>角色编码<input class="layui-input" value="{{ item['code'] }}" disabled><small>角色编码创建后不可修改。</small></label><label>允许登录{% if item["is_system"] %}<input type="hidden" name="access_scope" value="{{ item['access_scope'] }}"><input class="layui-input" value="{{ '管理侧' if item['access_scope'] == 'admin' else '用户侧' }}" disabled>{% else %}<select name="access_scope"><option value="user" {% if item['access_scope'] == 'user' %}selected{% end %}>用户侧</option><option value="admin" {% if item['access_scope'] == 'admin' %}selected{% end %}>管理侧</option></select>{% end %}</label><label>状态<select name="enabled"><option value="1" {% if item['enabled'] %}selected{% end %}>启用</option><option value="0" {% if not item['enabled'] %}selected{% end %}>停用</option></select></label><label>角色说明<textarea class="layui-textarea" name="description" maxlength="200">{{ item["description"] }}</textarea></label></div><footer><button type="button" data-dialog-close>取消</button><button class="management-primary" type="submit">保存修改</button></footer></form></dialog>
+
+<dialog class="management-dialog wide permission-tree-dialog" id="permissions-role-{{ item['id'] }}"><form method="post" data-permission-form data-tree-id="role-feature-tree-{{ item['id'] }}"><header><div><h3>{{ item["name"] }} · 功能权限</h3><p>按一级、二级功能勾选。被停用的功能不可授权，也不会出现在该角色菜单中。</p></div><button type="button" data-dialog-close aria-label="关闭">×</button></header><div class="dialog-body"><input type="hidden" name="action" value="permissions"><input type="hidden" name="role_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}{% for feature_id in item["feature_ids"] %}<input type="hidden" data-initial-feature-id value="{{ feature_id }}">{% end %}<div class="permission-tree-meta"><span><i class="layui-icon layui-icon-tree"></i>角色功能树</span><small>父子节点联动；灰色节点表示功能已停用。</small></div><div class="role-feature-tree" id="role-feature-tree-{{ item['id'] }}" data-role-feature-tree><div class="tree-loading">正在加载权限树…</div></div><noscript><p class="tree-error">需要启用 JavaScript 才能配置功能权限。</p></noscript></div><footer><button type="button" data-dialog-close>取消</button><button class="management-primary" type="submit" data-permission-submit disabled>保存授权</button></footer></form></dialog>
+{% end %}{% end %}
+{% end %}
+{% end %}
+{% block admin_scripts %}<script src="{{ static_url('js/admin-task2.js') }}"></script>{% end %}

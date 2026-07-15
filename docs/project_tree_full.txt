@@ -1,0 +1,55 @@
+# 完整结构边界
+
+- `app.py`：入口、路由、安全设置和启动初始化。
+- `config/settings.py`：端口、数据库、Cookie 和模型运行环境配置；不存真实密钥。
+- `app/controllers/admin.py`：用户、角色、功能、菜单和旧模块路由兼容跳转。
+- `app/controllers/sources.py`：`/admin/sources` 瞭源与采集规则管理。
+- `app/controllers/lookout.py`：`/admin/lookout` 与 `/admin/lookout/collect`。
+- `app/controllers/warehouse.py`：`/admin/warehouse` 与 `/admin/warehouse/import`。
+- `app/controllers/digital_employee.py`：`/admin/agents` 与后台预览接口。
+- `app/controllers/model_engine.py`：`/admin/models` 与 `/admin/models/chat` SSE。
+- `app/models/db.py`：SQLite 连接、v0.1 → v0.5 迁移和系统基础数据。
+- `app/models/analytics.py`：数据仓库概览、来源、趋势、深采、近期数据与关系图的固定只读查询。
+- `app/models/conversation.py`：用户会话、消息、自动标题与用户隔离 Repository。
+- `app/models/user.py`：用户 Repository、20 条分页、批量操作与超级管理员身份/改密保护。
+- `app/models/rbac.py`：角色、两级功能、菜单、20 条分页和角色—功能授权关系。
+- `app/models/source.py`：`SourceRepository`、`RuleRepository`，对应 `lookout_sources` 与 `collection_rules`。
+- `app/models/lookout.py`：`CollectionRepository`，对应 `collection_runs` 与 `collection_results`。
+- `app/models/warehouse.py`：`WarehouseRepository`，对应 `warehouse_items`。
+- `app/models/deep_collection.py`：深采任务、日志与结果 Repository。
+- `app/models/digital_employee.py`：模型型/API 型数字员工 Repository。
+- `app/models/model_engine.py`：`ModelRepository`，对应 `model_configs` 与 `model_usage`。
+- `app/services/collector.py`：`CollectorService` / `CollectionError`，负责安全外部采集和解析。
+- `app/services/llm.py`：`LLMService` / `LLMError`，负责 OpenAI API 兼容调用、SSE 事件和 usage。
+- `app/services/user_chat.py`：用户会话、员工/模型调度、消息持久化、耗时与 usage 编排。
+- `app/services/query_intent.py`：安全意图识别、注入拒绝、仓库分析卡片和报告规格。
+- `app/services/employee_knowledge.py`：员工 Markdown 校验、按 ID 隔离保存和 Prompt 上下文读取。
+- `app/services/deep_collection.py`：采集专员通过 Crawl4AI 真实网页深采、正文 Markdown 解析和任务推进。
+- `app/services/digital_employee.py`：数字员工模型/API 统一预览与调度。
+- `app/templates/`：用户侧页面。
+- `app/static/css/user-workspace.css`：浅色政务问数工作台、天气/分析卡片、Canvas 图表和响应式抽屉。
+- `app/static/js/user-workspace.js`：会话历史、SSE、模型选择、员工命令、天气、图表与关系文字替代。
+- `app/templates/admin/sources.html`：瞭源和规则的双列表管理页。
+- `app/templates/admin/lookout.html`：关键词、规则参数、三列采集结果与入仓操作。
+- `app/templates/admin/warehouse.html`：仓库列表、批量/更新深采、任务进度日志和结果详情。
+- `app/templates/admin/digital_employees.html`：数字员工目录、配置与后台预览。
+- `app/templates/admin/models.html`：两列模型卡片、分类、参数设置和 SSE 对话弹窗。
+- `app/static/css/admin-v02.css`：v0.2 管理模块布局与响应式样式。
+- `app/static/js/admin-common.js`：管理端弹窗、busy、Toast、XSRF 和 JSON 公共逻辑。
+- `app/static/js/admin-task2.js`：用户批量选择、Layui Tree 角色授权和任务 2 管理交互。
+- `app/static/js/lookout.js`：采集、选择和批量入仓交互。
+- `app/static/js/models.js`：模型 loading、分类页状态、SSE 解析和 token 展示。
+- `app/static/js/warehouse.js`：深采选择、任务创建、轮询、日志和结果交互。
+- `app/static/js/digital-employees.js`：员工类型配置切换与后台预览。
+- `app/static/dist/`：本地 Layui、Bootstrap 和字体。
+- `docs/`：角色、约束、需求、模板、测试和项目结构。
+- `docs/task2_acceptance.md`：老师任务 2、2.1—2.4 的逐条实现与验收映射。
+- `test/test_task2_permissions.py`：20 条分页、`useradmin` 登录只读、admin 保护、两级功能、授权与菜单联动专项测试。
+- `test/test_v02_models.py`：迁移、超级管理员、瞭源、采集、仓库和模型 Repository 测试。
+- `test/test_v02_web.py`：v0.2 页面、只读权限、mock 采集入仓、分类和 SSE HTTP 测试。
+- `test/test_v03_employees_deep.py`：数字员工 CRUD/预览、深采持久化与 HTTP 接口专项测试。
+- `test/test_v04_user_workspace.py`：Crawl4AI、天气卡片、会话持久化与用户聊天专项测试。
+- `setup.ps1` / `run.ps1`：项目 venv 依赖安装、浏览器准备和启动入口。
+- `tools/package.ps1`：生成独立 v0.5 收尾源码 ZIP 并扫描禁入文件与员工运行资料。
+
+运行目录还会出现数据库、WAL、Cookie Secret、模型密钥和缓存，它们不属于源码结构，也不进入提交包。
