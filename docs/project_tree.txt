@@ -21,6 +21,6 @@ DataFinderAgentOS/
 |       `-- admin/    (base / dashboard / RBAC / sources / lookout / warehouse / models / digital_employees)
 |-- docs/
 |-- skills/
-|-- test/             (v0.1—v0.5 Repository、HTTP、SSE 与前端源检查)
+|-- test/             (v0.1—v0.3 Repository、HTTP、SSE 与前端源检查)
 `-- tools/
     `-- package.ps1

@@ -1,4 +1,4 @@
-"""v0.4 Crawl4AI、天气员工、会话持久化与用户工作台回归。"""
+"""v0.3 Crawl4AI、天气员工、会话持久化与用户工作台回归。"""
 
 from __future__ import annotations
 
@@ -24,16 +24,16 @@ from app.services.digital_employee import DigitalEmployeeService
 
 
 ENTRY_PATH = Path(__file__).resolve().parents[1] / "app.py"
-SPEC = importlib.util.spec_from_file_location("datafinder_v04_entry", ENTRY_PATH)
+SPEC = importlib.util.spec_from_file_location("datafinder_v03_workspace_entry", ENTRY_PATH)
 ENTRY = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
 SPEC.loader.exec_module(ENTRY)
 
 
-class V04RepositoryTest(unittest.IsolatedAsyncioTestCase):
+class V03WorkspaceRepositoryTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.patch = patch.object(db, "DATABASE_PATH", Path(self.temp_dir.name) / "v04.db")
+        self.patch = patch.object(db, "DATABASE_PATH", Path(self.temp_dir.name) / "v03-workspace.db")
         self.patch.start()
         db.init_db()
         UserRepository.create_user("student", "123456")
@@ -111,10 +111,10 @@ class V04RepositoryTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(metadata["parser"], "crawl4ai")
 
 
-class V04WebTest(AsyncHTTPTestCase):
+class V03WorkspaceWebTest(AsyncHTTPTestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.patch = patch.object(db, "DATABASE_PATH", Path(self.temp_dir.name) / "v04-web.db")
+        self.patch = patch.object(db, "DATABASE_PATH", Path(self.temp_dir.name) / "v03-workspace-web.db")
         self.patch.start()
         db.init_db()
         UserRepository.create_user("student", "123456")

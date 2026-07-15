@@ -1,4 +1,4 @@
-开发 DataFinderAgentOS v0.5 时，先完整阅读 role.md、constraint.md、requirement.md、template.md 和 test_case.md。
+开发 DataFinderAgentOS v0.3 时，先完整阅读 role.md、constraint.md、requirement.md、template.md 和 test_case.md。
 实现顺序遵循老师的 2.x → 3.x → 4.x：先修复超级管理员和只读管理角色，再实现瞭源、瞭望采集与数据仓库，最后实现 OpenAI 兼容模型引擎和 SSE。
 保持 MVC + Service 分层、安全基线、本地化 UI 和双端模板边界；新增功能必须同步维护数据库迁移、权限功能、菜单、测试和文档。
 默认 admin 禁止被修改或删除，只有该账号能写入用户、角色、功能、菜单四个权限配置模块；其他管理角色在这些模块只读。瞭源、瞭望采集、数据仓库、模型引擎和模型聊天按 role_feature 授权，获授权的管理角色可以使用和维护。

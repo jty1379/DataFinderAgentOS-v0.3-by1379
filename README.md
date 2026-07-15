@@ -1,6 +1,6 @@
-# 瞭望与问数系统 DataFinderAgentOS v0.5
+# 瞭望与问数系统 DataFinderAgentOS v0.3
 
-基于 Tornado + SQLite 的政务数据采集与智能问数系统。v0.5 在权限、采集、仓库、模型引擎、数字员工和 Crawl4AI 深采基础上，补齐 OpenAI 兼容 SSE 问答、真实仓库统计分析、数据报告、关系图谱及数字员工 Markdown 资料。
+基于 Tornado + SQLite 的政务数据采集与智能问数系统。v0.3 已集成权限、采集、仓库、模型引擎、数字员工、Crawl4AI 深采、OpenAI 兼容 SSE 问答、真实仓库统计分析、数据报告、关系图谱及数字员工 Markdown 资料。
 
 ## 技术栈
 
@@ -32,7 +32,7 @@ powershell -ExecutionPolicy Bypass -File .\run.ps1
 
 首次启动会自动创建或迁移数据库，初始化系统角色、功能、菜单和演示超级管理员。数据库、Cookie Secret、模型密钥、虚拟环境和缓存不进入源码 ZIP。
 
-## v0.5 已实现范围
+## v0.3 已实现范围
 
 ### 用户侧问数工作台
 
@@ -183,7 +183,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\package.ps1
 
 脚本默认在项目上一级生成不覆盖旧作业包的收尾归档：
 
-`零界-齐语林-瞭望与问数系统v0.5收尾源码.zip`
+`零界-齐语林-瞭望与问数系统v0.3源码.zip`
 
 ZIP 根目录固定为 `DataFinderAgentOS/`，并自动排除 venv、数据库、密钥、缓存、日志、浏览器测试产物和旧 ZIP。
 

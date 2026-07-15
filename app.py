@@ -1,4 +1,4 @@
-"""瞭望与问数系统 v0.5 的 Tornado 应用入口。"""
+"""瞭望与问数系统 v0.3 的 Tornado 应用入口。"""
 
 from __future__ import annotations
 
@@ -108,7 +108,7 @@ def main() -> None:
     server = HTTPServer(make_app())
     server.listen(APP_PORT)
     print("=" * 62, flush=True)
-    print("  瞭望与问数系统 DataFinderAgentOS v0.5", flush=True)
+    print("  瞭望与问数系统 DataFinderAgentOS v0.3", flush=True)
     print(f"  用户端: http://localhost:{APP_PORT}/", flush=True)
     print(f"  管理端: http://localhost:{APP_PORT}/admin/login", flush=True)
     if admin_created:

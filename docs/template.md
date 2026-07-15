@@ -237,7 +237,7 @@ class UserChatHandler(UserJsonHandler):
 
 前端 JSON 请求从 `_xsrf` Cookie 读取令牌并写入 `X-Xsrftoken`。消息文本使用 `textContent` 渲染；天气等卡片只按允许字段创建 DOM，不直接注入外部 HTML。
 
-## v0.5 OpenAI SSE 请求模板
+## v0.3 OpenAI SSE 请求模板
 
 ```python
 payload = {

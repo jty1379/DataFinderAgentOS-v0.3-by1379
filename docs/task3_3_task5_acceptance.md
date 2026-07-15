@@ -29,7 +29,7 @@
 | @xxx 调度 | `mention` 唯一字段 | 页面显示 `@调度名`，服务按员工 ID 加载同一配置 |
 | 后台预览 | `/admin/agents/preview` | 模型文本或 API JSON/数据卡片，失败显示真实原因 |
 | 深采分派 | 系统 `collection_specialist` | `@采集专员` 绑定每个深采任务 |
-| v0.3 当时暂不开发用户侧 | 历史版本边界 | 该边界已在 v0.4 任务 6 中解除，详见 `task3_4_task6_acceptance.md` |
+| 早期阶段暂不开发用户侧 | 历史版本边界 | 该边界已在任务 6 中解除，详见 `task3_4_task6_acceptance.md` |
 
 ## 自动验收
 

@@ -2,7 +2,7 @@
 
 ## 实现映射
 
-| 老师要求 | v0.5 实现 |
+| 老师要求 | v0.3 实现 |
 |---|---|
 | 数字员工上传一个或多个 Markdown | 管理表单 `multipart/form-data` + 多选 `.md`，按员工 ID 独立目录保存 |
 | OpenAI API + SSE | 上游 `/chat/completions` 使用 `stream=true`，用户端 `/api/chat/stream` 转发增量事件 |

@@ -8,7 +8,7 @@
 - `app/controllers/warehouse.py`：`/admin/warehouse` 与 `/admin/warehouse/import`。
 - `app/controllers/digital_employee.py`：`/admin/agents` 与后台预览接口。
 - `app/controllers/model_engine.py`：`/admin/models` 与 `/admin/models/chat` SSE。
-- `app/models/db.py`：SQLite 连接、v0.1 → v0.5 迁移和系统基础数据。
+- `app/models/db.py`：SQLite 连接、v0.1 → v0.3 迁移和系统基础数据。
 - `app/models/analytics.py`：数据仓库概览、来源、趋势、深采、近期数据与关系图的固定只读查询。
 - `app/models/conversation.py`：用户会话、消息、自动标题与用户隔离 Repository。
 - `app/models/user.py`：用户 Repository、20 条分页、批量操作与超级管理员身份/改密保护。
@@ -48,8 +48,8 @@
 - `test/test_v02_models.py`：迁移、超级管理员、瞭源、采集、仓库和模型 Repository 测试。
 - `test/test_v02_web.py`：v0.2 页面、只读权限、mock 采集入仓、分类和 SSE HTTP 测试。
 - `test/test_v03_employees_deep.py`：数字员工 CRUD/预览、深采持久化与 HTTP 接口专项测试。
-- `test/test_v04_user_workspace.py`：Crawl4AI、天气卡片、会话持久化与用户聊天专项测试。
+- `test/test_v03_user_workspace.py`：Crawl4AI、天气卡片、会话持久化与用户聊天专项测试。
 - `setup.ps1` / `run.ps1`：项目 venv 依赖安装、浏览器准备和启动入口。
-- `tools/package.ps1`：生成独立 v0.5 收尾源码 ZIP 并扫描禁入文件与员工运行资料。
+- `tools/package.ps1`：生成独立 v0.3 源码 ZIP 并扫描禁入文件与员工运行资料。
 
 运行目录还会出现数据库、WAL、Cookie Secret、模型密钥和缓存，它们不属于源码结构，也不进入提交包。

@@ -1,4 +1,4 @@
-"""v0.5 task 5.1 and task 6.1—6.4 acceptance regression tests."""
+"""v0.3 task 5.1 and task 6.1—6.4 acceptance regression tests."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from app.services.query_intent import QueryIntentService, UnsafeQueryError
 
 
 ENTRY_PATH = Path(__file__).resolve().parents[1] / "app.py"
-SPEC = importlib.util.spec_from_file_location("datafinder_v05_entry", ENTRY_PATH)
+SPEC = importlib.util.spec_from_file_location("datafinder_v03_finish_entry", ENTRY_PATH)
 ENTRY = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
 SPEC.loader.exec_module(ENTRY)
@@ -45,15 +45,15 @@ def seed_warehouse():
                 """INSERT INTO warehouse_items
                    (title,url,summary,source_name,deep_collected,created_at)
                    VALUES (?,?,?,?,?,date('now'))""",
-                (f"测试材料{index}", f"https://example.com/v05/{index}", "公开摘要", source, index == 1),
+                (f"测试材料{index}", f"https://example.com/v03-finish/{index}", "公开摘要", source, index == 1),
             )
         connection.commit()
 
 
-class V05ServiceTest(unittest.IsolatedAsyncioTestCase):
+class V03FinishServiceTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.db_patch = patch.object(db, "DATABASE_PATH", Path(self.temp_dir.name) / "v05.db")
+        self.db_patch = patch.object(db, "DATABASE_PATH", Path(self.temp_dir.name) / "v03-finish.db")
         self.knowledge_patch = patch(
             "app.services.employee_knowledge.KNOWLEDGE_ROOT",
             Path(self.temp_dir.name) / "dgUser",
@@ -136,10 +136,10 @@ class V05ServiceTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["total_tokens"], 5)
 
 
-class V05WebTest(AsyncHTTPTestCase):
+class V03FinishWebTest(AsyncHTTPTestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.patch = patch.object(db, "DATABASE_PATH", Path(self.temp_dir.name) / "v05-web.db")
+        self.patch = patch.object(db, "DATABASE_PATH", Path(self.temp_dir.name) / "v03-finish-web.db")
         self.knowledge_patch = patch(
             "app.services.employee_knowledge.KNOWLEDGE_ROOT",
             Path(self.temp_dir.name) / "dgUser",
@@ -215,7 +215,7 @@ class V05WebTest(AsyncHTTPTestCase):
 
     def test_admin_multipart_markdown_upload_is_persisted_by_employee_id(self):
         token, cookies = self.admin_login()
-        boundary = "----DataFinderV05Boundary"
+        boundary = "----DataFinderV03Boundary"
         fields = {
             "action": "create", "code": "multipart_helper", "name": "资料助手",
             "mention": "资料", "employee_type": "llm", "description": "上传测试",
