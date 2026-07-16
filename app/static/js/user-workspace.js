@@ -5,7 +5,8 @@
     const app = window.DataFinderApp;
     const sse = window.DataFinderSSE;
     const cards = window.DataFinderCards;
-    if (!root || !app || !sse || !cards) return;
+    const markdown = window.DataFinderMarkdown;
+    if (!root || !app || !sse || !cards || !markdown) return;
 
     const $ = (selector, scope = root) => app.qs(selector, scope);
     const $$ = (selector, scope = root) => app.qsa(selector, scope);
@@ -17,6 +18,10 @@
     const form = $("[data-question-composer]");
     const input = $("[data-question-input]");
     const sendButton = $("[data-send-button]");
+    const stopButton = $("[data-stop-button]");
+    const exportButton = $("[data-export-conversation]");
+    const deleteButton = $("[data-delete-conversation]");
+    const voiceButton = $("[data-voice-toggle]");
     const modelSelect = $("[data-model-select]");
     const title = $("[data-conversation-title]");
     const command = $("[data-employee-command]");
@@ -30,6 +35,40 @@
     let employeeMention = "";
     let commandIndex = 0;
     let loading = false;
+    let streamController = null;
+    let voiceEnabled = window.localStorage.getItem("datafinder-voice") === "1";
+    const modelAvailable = Array.from(modelSelect.options).some((option) => Boolean(option.value));
+
+    function setConversationActions(enabled) {
+        exportButton.disabled = !enabled;
+        deleteButton.disabled = !enabled;
+    }
+
+    function setGenerating(active) {
+        loading = active;
+        sendButton.hidden = active;
+        stopButton.hidden = !active;
+        input.disabled = active;
+        modelSelect.disabled = active || !modelAvailable;
+        if (active) stopButton.focus({preventScroll: true});
+    }
+
+    function updateVoiceButton() {
+        voiceButton.setAttribute("aria-pressed", String(voiceEnabled));
+        voiceButton.title = voiceEnabled ? "关闭语音播报" : "开启语音播报";
+    }
+
+    function speak(text) {
+        if (!voiceEnabled || !text || !("speechSynthesis" in window)) return;
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(String(text).replace(/[`*_#>-]/g, " ").slice(0, 3000));
+        utterance.lang = "zh-CN";
+        utterance.rate = 1;
+        window.speechSynthesis.speak(utterance);
+    }
+
+    updateVoiceButton();
+    setConversationActions(false);
 
     function closeRail() {
         rail.classList.remove("open");
@@ -159,7 +198,7 @@
         } else if (message.content_type === "card") {
             content.append(messageCard(message));
         } else {
-            content.textContent = message.content || "";
+            content.append(markdown.render(message.content || ""));
         }
         if (!temporary && message.metadata) {
             const source = message.metadata.employee || message.metadata.model || "系统服务";
@@ -173,12 +212,45 @@
         return wrapper;
     }
 
+    function appendRecoverableError(error, submission) {
+        const wrapper = appendMessage({
+            role: "assistant",
+            content_type: "error",
+            content: app.errorMessage(error, "问数服务暂时不可用，请稍后重试。")
+        });
+        const recovery = document.createElement("div");
+        recovery.className = "message-recovery";
+        const retry = textNode("button", "", "重新生成");
+        retry.type = "button";
+        retry.addEventListener("click", () => submitMessage(submission.message, {...submission, retry: true}));
+        recovery.append(retry);
+        wrapper.querySelector(".message-content").append(recovery);
+    }
+
+    function appendAudio(data) {
+        const wrapper = appendMessage({role: "assistant", content_type: "text", content: data.text || "语音结果"});
+        const content = wrapper.querySelector(".message-content");
+        const url = markdown.safeUrl(data.url || data.audio_url);
+        if (url) {
+            const audio = document.createElement("audio");
+            audio.controls = true;
+            audio.preload = "metadata";
+            audio.src = url;
+            audio.setAttribute("aria-label", data.title || "语音结果播放器");
+            content.append(audio);
+            if (voiceEnabled) audio.play().catch(() => {});
+        } else if (data.text) {
+            speak(data.text);
+        }
+    }
+
     function resetWorkspace() {
         conversationId = null;
         employeeId = null;
         employeeMention = "";
         activeEmployee.hidden = true;
         title.textContent = "新建问数任务";
+        setConversationActions(false);
         stream.replaceChildren();
         stream.classList.remove("active");
         welcome.hidden = false;
@@ -218,6 +290,7 @@
             const data = await app.request(`/api/conversations/${button.dataset.conversationId}`);
             stream.replaceChildren();
             conversationId = data.conversation.id;
+            setConversationActions(true);
             title.textContent = data.conversation.title;
             modelSelect.value = data.conversation.model_id || modelSelect.value;
             employeeId = data.conversation.employee_id || null;
@@ -231,22 +304,60 @@
     }
     $$(".history-item", historyList).forEach((button) => button.addEventListener("click", () => loadConversation(button)));
 
-    form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        const message = input.value.trim();
+    voiceButton.addEventListener("click", () => {
+        voiceEnabled = !voiceEnabled;
+        window.localStorage.setItem("datafinder-voice", voiceEnabled ? "1" : "0");
+        if (!voiceEnabled && "speechSynthesis" in window) window.speechSynthesis.cancel();
+        updateVoiceButton();
+        app.announce(voiceEnabled ? "已开启回答语音播报" : "已关闭回答语音播报", "info");
+    });
+
+    exportButton.addEventListener("click", () => {
+        if (!conversationId) return;
+        window.location.assign(`/api/conversations/${conversationId}/export.pdf`);
+    });
+
+    deleteButton.addEventListener("click", async () => {
+        if (!conversationId || loading) return;
+        if (!window.confirm("删除后无法恢复，确认删除当前会话？")) return;
+        const deletedId = conversationId;
+        try {
+            await app.request(`/api/conversations/${deletedId}`, {method: "DELETE"});
+            $(`[data-conversation-id="${deletedId}"]`, historyList)?.remove();
+            if (!$(".history-item", historyList)) historyEmpty.classList.remove("hidden");
+            resetWorkspace();
+            app.announce("会话已删除", "success");
+        } catch (error) {
+            app.announce(app.errorMessage(error, "删除会话失败"), "error");
+        }
+    });
+
+    stopButton.addEventListener("click", () => {
+        streamController?.abort("user_stop");
+        stopButton.disabled = true;
+        stopButton.querySelector("span").textContent = "正在停止";
+    });
+
+    async function submitMessage(message, submission = null) {
         if (!message || loading) return;
-        loading = true;
-        app.setBusy(sendButton, true, "处理中…");
-        appendMessage({role: "user", content_type: "text", content: message});
+        const request = submission || {
+            message,
+            model_id: modelSelect.value || null,
+            employee_id: employeeId
+        };
+        setGenerating(true);
+        if (!request.retry) appendMessage({role: "user", content_type: "text", content: message});
         const pending = appendMessage({role: "assistant"}, true);
         let reply = {role: "assistant", content_type: "text", content: "", metadata: {}};
+        streamController = new AbortController();
         input.value = "";
         resizeInput();
         setCommandVisible(false);
         try {
             await sse.stream("/api/chat/stream", {
                 method: "POST",
-                json: {message, conversation_id: conversationId, model_id: modelSelect.value || null, employee_id: employeeId},
+                signal: streamController.signal,
+                json: {message, conversation_id: conversationId, model_id: request.model_id, employee_id: request.employee_id},
                 onEvent: ({event: eventName, data}) => {
                     if (eventName === "delta") {
                         reply.content += data.text || "";
@@ -255,11 +366,14 @@
                         target.textContent = reply.content;
                     } else if (eventName === "card") {
                         reply = data;
+                    } else if (eventName === "audio") {
+                        appendAudio(data);
                     } else if (eventName === "done") {
                         const usage = data.usage || {};
                         reply.metadata = {...(reply.metadata || {}), usage: {total_tokens: usage.total_tokens || 0}, elapsed_seconds: usage.elapsed_seconds || 0, employee: usage.source};
                         if (data.conversation) {
                             conversationId = data.conversation.id;
+                            setConversationActions(true);
                             addOrUpdateHistory(data.conversation);
                         }
                     }
@@ -267,14 +381,32 @@
             });
             pending.remove();
             appendMessage(reply);
+            if (reply.content_type === "text") speak(reply.content);
         } catch (error) {
             pending.remove();
-            if (error.details?.conversation_id) conversationId = error.details.conversation_id;
-            appendMessage({role: "assistant", content_type: "error", content: app.errorMessage(error, "问数服务暂时不可用")});
+            if (error.name === "AbortError") {
+                if (reply.content) appendMessage(reply);
+                appendMessage({role: "assistant", content_type: "text", content: "已停止生成。你可以修改问题后重新发送。"});
+            } else {
+                if (error.details?.conversation_id) {
+                    conversationId = error.details.conversation_id;
+                    setConversationActions(true);
+                }
+                appendRecoverableError(error, request);
+            }
         } finally {
-            loading = false;
-            app.setBusy(sendButton, false);
+            streamController = null;
+            stopButton.disabled = false;
+            stopButton.querySelector("span").textContent = "停止";
+            setGenerating(false);
             input.focus();
         }
+    }
+
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const message = input.value.trim();
+        if (!message || loading) return;
+        await submitMessage(message);
     });
 })();

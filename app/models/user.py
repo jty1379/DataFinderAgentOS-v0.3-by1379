@@ -11,7 +11,6 @@ from collections import Counter
 from app.models.db import connection_scope
 from app.models.rbac import RoleRepository
 
-
 PBKDF2_ITERATIONS = 100_000
 
 
@@ -121,6 +120,16 @@ class UserRepository:
         return _public_user(row)
 
     @staticmethod
+    def get_active_user_by_username(username: str):
+        with connection_scope() as connection:
+            row = connection.execute(
+                USER_SELECT
+                + " WHERE u.username = ? AND u.status = 'enabled' AND r.enabled = 1",
+                (username,),
+            ).fetchone()
+        return _public_user(row)
+
+    @staticmethod
     def list_users(keyword: str = "", role_id: int | None = None, status: str = "") -> list[dict]:
         pattern = f"%{keyword}%"
         clauses = ["(? = '' OR u.username LIKE ?)"]
@@ -136,8 +145,11 @@ class UserRepository:
                 """
                 SELECT u.id, u.username, u.role_id, u.status, u.is_superadmin,
                        u.created_at, u.updated_at,
-                       r.code AS role_code, r.name AS role_name, r.access_scope AS role_scope
+                       r.code AS role_code, r.name AS role_name, r.access_scope AS role_scope,
+                       CASE WHEN fp.user_id IS NULL THEN 0 ELSE 1 END AS face_enrolled,
+                       COALESCE(fp.enabled, 0) AS face_enabled
                 FROM users u JOIN roles r ON r.id = u.role_id
+                LEFT JOIN face_profiles fp ON fp.user_id=u.id
                 WHERE """ + " AND ".join(clauses) + " ORDER BY u.id DESC",
                 params,
             ).fetchall()
@@ -173,8 +185,11 @@ class UserRepository:
                 SELECT u.id, u.username, u.role_id, u.status, u.is_superadmin,
                        u.created_at, u.updated_at,
                        r.code AS role_code, r.name AS role_name,
-                       r.access_scope AS role_scope
+                       r.access_scope AS role_scope,
+                       CASE WHEN fp.user_id IS NULL THEN 0 ELSE 1 END AS face_enrolled,
+                       COALESCE(fp.enabled, 0) AS face_enabled
                 FROM users u JOIN roles r ON r.id = u.role_id
+                LEFT JOIN face_profiles fp ON fp.user_id=u.id
                 WHERE """ + where_sql + " ORDER BY u.id DESC LIMIT ? OFFSET ?",
                 [
                     *params,

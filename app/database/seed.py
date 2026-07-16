@@ -18,8 +18,8 @@ DEFAULT_FEATURES = (
     ("collection_management", "瞭源管理", "/admin/sources", "layui-icon-download-circle", "数据与智能", "维护公开数据源、请求头和采集规则", 80, 1),
     ("digital_employees", "数字员工", "/admin/agents", "layui-icon-username", "数据与智能", "配置模型型与接口型数字员工，并支持后台任务调度", 90, 1),
     ("model_engine", "模型引擎", "/admin/models", "layui-icon-engine", "数据与智能", "配置 OpenAI 兼容模型、默认服务和生成参数", 100, 1),
-    ("intelligence_screen", "数智大屏", "/admin/modules/intelligence", "layui-icon-chart", "数据与智能", "呈现核心业务指标", 110, 1),
-    ("opinion_screen", "舆情大屏", "/admin/modules/opinion", "layui-icon-fire", "数据与智能", "聚合热点事件与舆情趋势", 120, 1),
+    ("intelligence_screen", "数智大屏", "/admin/screens/intelligence", "layui-icon-chart", "数据与智能", "呈现核心业务指标", 110, 1),
+    ("opinion_screen", "舆情大屏", "/admin/screens/opinion", "layui-icon-fire", "数据与智能", "聚合热点事件与舆情趋势", 120, 1),
     ("user_portal", "用户侧门户", "/index", "layui-icon-dialogue", "用户侧", "用户登录、问数与数字员工入口", 130, 1),
 )
 
@@ -125,6 +125,26 @@ def _seed_employees(connection: sqlite3.Connection) -> None:
         (code,name,mention,employee_type,description,use_default_model,skills,api_method,api_url,request_headers,request_params,response_mode,timeout_seconds,enabled,is_system)
         VALUES ('weather','天气专员','天气','api',?,1,?,'GET','https://wttr.in/{{input_url}}','{}',?,'card',20,1,1)""",
         ("通过 wttr.in 公共接口查询城市当前天气与未来三日预报。", json.dumps(["实时天气", "三日预报", "城市气象"], ensure_ascii=False), '{"format":"j1","lang":"zh"}'),
+    )
+    connection.executemany(
+        """INSERT OR IGNORE INTO digital_employees
+        (code,name,mention,employee_type,description,use_default_model,system_prompt,
+         prompt_template,skills,enabled,is_system)
+        VALUES (?,?,?,?,?,1,?,'{{input}}',?,1,1)""",
+        (
+            (
+                "news_assistant", "新闻专员", "新闻", "llm",
+                "基于已入库内容和默认模型整理新闻摘要，并明确数据时效。",
+                "你是新闻专员。优先基于系统提供的上下文整理摘要，标注时间和待核实信息。",
+                json.dumps(["新闻摘要", "热点梳理", "来源核验"], ensure_ascii=False),
+            ),
+            (
+                "music_assistant", "音乐专员", "音乐", "llm",
+                "根据场景和偏好生成音乐推荐，不调用未经配置的外部播放服务。",
+                "你是音乐专员。给出简洁、分场景的音乐推荐，并说明推荐理由。",
+                json.dumps(["音乐推荐", "场景歌单", "偏好分析"], ensure_ascii=False),
+            ),
+        ),
     )
 
 

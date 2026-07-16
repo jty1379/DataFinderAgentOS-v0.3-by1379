@@ -56,6 +56,13 @@
         <header class="conversation-header">
             <button class="rail-open" type="button" data-rail-open aria-label="打开会话栏"><i class="layui-icon layui-icon-spread-left"></i></button>
             <div><p>当前任务</p><h1 data-conversation-title>新建问数任务</h1></div>
+            <div class="conversation-actions" aria-label="会话操作">
+                <button type="button" data-biometric-open="gesture" title="使用手势快捷调度"><i class="layui-icon layui-icon-camera"></i><span>手势</span></button>
+                <button type="button" data-biometric-open="enroll" title="管理我的人脸登录"><i class="layui-icon layui-icon-face-smile"></i><span>人脸</span></button>
+                <button type="button" data-voice-toggle aria-pressed="false" title="开启语音播报"><i class="layui-icon layui-icon-speaker"></i><span>播报</span></button>
+                <button type="button" data-export-conversation disabled title="导出当前会话 PDF"><i class="layui-icon layui-icon-export"></i><span>导出</span></button>
+                <button class="danger" type="button" data-delete-conversation disabled title="删除当前会话"><i class="layui-icon layui-icon-delete"></i><span>删除</span></button>
+            </div>
             <span class="service-state"><i></i>服务可用</span>
         </header>
 
@@ -101,12 +108,23 @@
                 <label class="sr-only" for="question-input">输入问数问题</label>
                 <textarea id="question-input" rows="1" maxlength="8000" autocomplete="off" placeholder="输入问题，或键入 @ / 调度数字员工" data-question-input></textarea>
                 <button type="submit" data-send-button><i class="layui-icon layui-icon-release"></i><span>发送</span></button>
+                <button class="stop-generation" type="button" data-stop-button hidden><i class="layui-icon layui-icon-pause"></i><span>停止</span></button>
             </form>
             <p class="composer-note">仓库问数来自本地只读统计；天气数据由 wttr.in 提供。回答请结合来源复核。</p>
         </section>
     </main>
 </div>
+<dialog class="biometric-dialog workspace-biometric" data-biometric-dialog>
+    <div class="biometric-dialog-card">
+        <header><div><p data-biometric-kicker>摄像头快捷操作</p><h3 data-biometric-title>生物识别</h3></div><button type="button" data-biometric-close aria-label="关闭">×</button></header>
+        <div class="camera-stage"><video data-biometric-video autoplay muted playsinline></video><canvas data-biometric-canvas hidden></canvas><span data-camera-hint>请将人脸或单手置于取景框中央</span></div>
+        <label class="biometric-password" data-biometric-password>录入前验证当前密码<input type="password" autocomplete="current-password" data-face-password minlength="6" maxlength="64"></label>
+        <p class="biometric-status" data-biometric-status role="status">摄像头仅在本次操作期间开启。</p>
+        <footer><button class="danger-text" type="button" data-face-delete hidden>删除人脸档案</button><button type="button" data-biometric-close>取消</button><button class="primary-action compact" type="button" data-biometric-capture>开始采集</button></footer>
+    </div>
+</dialog>
 {% end %}
 {% block scripts %}
 <script src="{{ static_url('js/user-workspace.js') }}"></script>
+<script src="{{ static_url('js/biometric-ui.js') }}"></script>
 {% end %}

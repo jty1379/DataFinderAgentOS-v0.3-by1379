@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block admin_head %}<link rel="stylesheet" href="{{ static_url('css/screens.css') }}">{% end %}
+{% block admin_content %}
+<section class="screen-page opinion-layout" data-opinion-screen>
+    <header class="screen-command">
+        <div><h2>舆情风险处置台</h2><p>预警从真实用户消息和采集内容中识别；每条记录保留来源、命中词、分析和处置备注。</p></div>
+        <span class="screen-refreshed" data-screen-refreshed>等待刷新</span>
+        <div class="screen-command-actions"><button type="button" data-screen-pause aria-pressed="false"><i class="layui-icon layui-icon-pause"></i>暂停刷新</button><button class="primary" type="button" data-screen-refresh><i class="layui-icon layui-icon-refresh"></i>立即刷新</button><button type="button" data-screen-fullscreen><i class="layui-icon layui-icon-screen-full"></i>全屏</button></div>
+    </header>
+    <div class="screen-kpis opinion-summary" data-opinion-kpis aria-label="舆情指标"></div>
+    <div class="screen-grid">
+        <article class="screen-panel span-4"><header><h3>风险等级分布</h3><small>重大/高/中/低</small></header><div class="screen-chart" data-chart="risk"></div><details class="chart-fallback"><summary>查看风险数据表</summary><table><thead><tr><th>等级</th><th>数量</th></tr></thead><tbody data-table="risk"></tbody></table></details></article>
+        <article class="screen-panel span-4"><header><h3>七日风险趋势</h3><small>按预警生成时间</small></header><div class="screen-chart" data-chart="trend"></div><details class="chart-fallback"><summary>查看趋势数据表</summary><table><thead><tr><th>日期</th><th>数量</th></tr></thead><tbody data-table="trend"></tbody></table></details></article>
+        <article class="screen-panel span-4"><header><h3>预警处理状态</h3><small>新建/处理中/已解决/误报</small></header><div class="screen-chart" data-chart="status"></div><details class="chart-fallback"><summary>查看状态数据表</summary><table><thead><tr><th>状态</th><th>数量</th></tr></thead><tbody data-table="status"></tbody></table></details></article>
+        <article class="screen-panel span-4"><header><h3>敏感词排行</h3><small>当前预警命中词</small></header><div class="word-cloud" data-sensitive-words></div></article>
+        <article class="screen-panel span-3"><header><h3>内容来源占比</h3><small>用户消息 / 采集内容</small></header><div class="screen-chart" data-chart="source"></div></article>
+        <article class="screen-panel span-5"><header><h3>处置说明</h3><small>智能识别 + 人工复核</small></header><div class="screen-empty opinion-guide"><p>系统只根据明确风险词建立预警，不调用未配置的外部模型。<br>“AI 风险分析”区域会说明命中原因；管理员必须查看原始摘要后再更新状态。</p></div></article>
+        <article class="screen-panel span-12"><header><h3>最新预警与 AI 风险分析</h3><small>可标记处理中、已解决或误报</small></header><ol class="alert-list" data-alert-list></ol></article>
+    </div>
+    <dialog class="alert-handler" data-alert-dialog>
+        <form method="dialog" data-alert-form>
+            <header><h3 data-alert-dialog-title>处理预警</h3><button type="button" data-alert-close aria-label="关闭">×</button></header>
+            <div class="dialog-body"><input type="hidden" data-alert-id><input type="hidden" data-alert-status><label for="alert-note">处理备注</label><textarea id="alert-note" data-alert-note maxlength="1000" required placeholder="说明核查过程、证据或处理结果"></textarea></div>
+            <footer><button type="button" data-alert-close>取消</button><button class="primary" type="submit">保存处置结果</button></footer>
+        </form>
+    </dialog>
+</section>
+{% end %}
+{% block admin_scripts %}<script src="{{ static_url('dist/echarts/echarts.min.js') }}"></script><script src="{{ static_url('js/opinion-screen.js') }}"></script>{% end %}

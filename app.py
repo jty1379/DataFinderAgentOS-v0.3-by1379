@@ -8,6 +8,13 @@ import tornado.ioloop
 import tornado.web
 from tornado.httpserver import HTTPServer
 
+from app.controllers.admin import (
+    AdminFeaturesHandler,
+    AdminMenusHandler,
+    AdminModuleHandler,
+    AdminRolesHandler,
+    AdminUsersHandler,
+)
 from app.controllers.auth import (
     AdminLoginHandler,
     AdminLogoutHandler,
@@ -15,6 +22,25 @@ from app.controllers.auth import (
     UserLoginHandler,
     UserLogoutHandler,
 )
+from app.controllers.biometrics import (
+    AdminFaceSettingHandler,
+    FaceLoginHandler,
+    FaceProfileHandler,
+    GestureRecognizeHandler,
+)
+from app.controllers.dashboard import (
+    AdminDashboardApiHandler,
+    IntelligenceScreenApiHandler,
+    IntelligenceScreenHandler,
+    OpinionAlertActionHandler,
+    OpinionScreenApiHandler,
+    OpinionScreenHandler,
+)
+from app.controllers.digital_employee import (
+    AdminDigitalEmployeePreviewHandler,
+    AdminDigitalEmployeesHandler,
+)
+from app.controllers.export import ConversationPdfExportHandler
 from app.controllers.home import (
     AdminIndexHandler,
     UserChatHandler,
@@ -24,10 +50,6 @@ from app.controllers.home import (
 )
 from app.controllers.lookout import AdminLookoutCollectHandler, AdminLookoutHandler
 from app.controllers.model_engine import AdminModelChatHandler, AdminModelsHandler
-from app.controllers.digital_employee import (
-    AdminDigitalEmployeePreviewHandler,
-    AdminDigitalEmployeesHandler,
-)
 from app.controllers.sources import AdminSourcesHandler
 from app.controllers.warehouse import (
     AdminWarehouseDeepCollectHandler,
@@ -36,17 +58,10 @@ from app.controllers.warehouse import (
     AdminWarehouseHandler,
     AdminWarehouseImportHandler,
 )
-from app.controllers.admin import (
-    AdminFeaturesHandler,
-    AdminMenusHandler,
-    AdminModuleHandler,
-    AdminRolesHandler,
-    AdminUsersHandler,
-)
+from app.core.logging import configure_logging
 from app.models.db import init_db
 from app.models.deep_collection import DeepCollectionRepository
 from app.models.user import UserRepository
-from app.core.logging import configure_logging
 from config.settings import BASE_DIR, SETTINGS
 
 LOGGER = logging.getLogger("app")
@@ -62,12 +77,18 @@ def make_app() -> tornado.web.Application:
             (r"/index", UserIndexHandler),
             (r"/api/chat", UserChatHandler),
             (r"/api/chat/stream", UserChatStreamHandler),
+            (r"/api/auth/face-login", FaceLoginHandler),
+            (r"/api/profile/face", FaceProfileHandler),
+            (r"/api/gestures/recognize", GestureRecognizeHandler),
             (r"/api/conversations/([0-9]+)", UserConversationHandler),
+            (r"/api/conversations/([0-9]+)/export\.pdf", ConversationPdfExportHandler),
             (r"/logout", UserLogoutHandler),
             (r"/admin/?", AdminIndexHandler),
+            (r"/api/admin/dashboard", AdminDashboardApiHandler),
             (r"/admin/login", AdminLoginHandler),
             (r"/admin/logout", AdminLogoutHandler),
             (r"/admin/users", AdminUsersHandler),
+            (r"/api/admin/face-settings", AdminFaceSettingHandler),
             (r"/admin/roles", AdminRolesHandler),
             (r"/admin/features", AdminFeaturesHandler),
             (r"/admin/menus", AdminMenusHandler),
@@ -83,6 +104,11 @@ def make_app() -> tornado.web.Application:
             (r"/admin/models/chat", AdminModelChatHandler),
             (r"/admin/agents", AdminDigitalEmployeesHandler),
             (r"/admin/agents/preview", AdminDigitalEmployeePreviewHandler),
+            (r"/admin/screens/intelligence", IntelligenceScreenHandler),
+            (r"/api/admin/screens/intelligence", IntelligenceScreenApiHandler),
+            (r"/admin/screens/opinion", OpinionScreenHandler),
+            (r"/api/admin/screens/opinion", OpinionScreenApiHandler),
+            (r"/api/admin/opinion/alerts/([0-9]+)", OpinionAlertActionHandler),
             (r"/admin/modules/agents", tornado.web.RedirectHandler, {"url": "/admin/agents", "permanent": True}),
             (r"/admin/modules/([a-z]+)", AdminModuleHandler),
         ],

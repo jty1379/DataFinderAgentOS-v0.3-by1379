@@ -1,7 +1,14 @@
 """后台用户管理控制器。"""
 
-from app.controllers.admin.common import USERNAME_PATTERN, integer, pager_context, positive_integers, query_page
+from app.controllers.admin.common import (
+    USERNAME_PATTERN,
+    integer,
+    pager_context,
+    positive_integers,
+    query_page,
+)
 from app.controllers.base import AdminBaseHandler
+from app.models.biometrics import BiometricRepository
 from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
 
@@ -25,6 +32,7 @@ class AdminUsersHandler(AdminBaseHandler):
             keyword=keyword,
             selected_role_id=role_id or 0,
             selected_status=status,
+            face_login_enabled=BiometricRepository.face_login_enabled(),
         )
 
     def post(self) -> None:

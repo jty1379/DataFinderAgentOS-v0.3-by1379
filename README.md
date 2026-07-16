@@ -6,13 +6,14 @@
 
 ## 技术栈
 
-- Python 3.12 / Tornado 6.5.7
+- Python 3.12 / Tornado 6.5.7 / ReportLab 5
 - Crawl4AI 0.8.5 / Playwright Chromium
+- MediaPipe 0.10.32 / OpenCV（多帧手势与人脸活体校验）
 - SQLite3 + Repository 模式
 - Tornado Template
 - Layui 2.9.8（主要组件）
 - Bootstrap 5.3.8（响应式辅助）
-- 原生 CSS / JavaScript / Canvas
+- 原生 CSS / JavaScript / Canvas / 本地 ECharts + ECharts-GL
 
 Layui、Bootstrap 和字体均位于 `app/static/dist/`，后台界面断网时仍可加载本地 UI 资源。外部新闻采集和模型对话本身需要目标服务可访问。
 
@@ -51,6 +52,18 @@ powershell -ExecutionPolicy Bypass -File .\run.ps1
 - 统计只执行服务端固定只读 SQL；拒绝用户 SQL、提示词泄露和越权注入，不向前端暴露真实 SQL
 - 报表按命中意图渲染 KPI、柱状图、折线图、环形图、关系图和明细表；普通闲聊不强制生成图表
 - 未配置大模型时如实提示，并仍允许使用无需模型的 API 数字员工
+- 支持安全 Markdown、回答语音播报、音频结果播放器、停止生成、失败重试、当前/指定会话删除与 PDF 导出
+- 支持人脸档案录入/重录/删除、指定账号多帧活体人脸登录，并始终保留密码登录兜底
+- 支持 MediaPipe 多帧手势快捷调度：胜利手势查询天气、握拳调度音乐、张开手掌调度新闻；同手势具有 5 秒冷却
+
+### 管理工作台与双大屏
+
+- 工作台指标全部读取 SQLite：可用用户、今日会话、模型调用、今日采集、采集成功率、高风险预警和启用数字员工
+- 最近任务、模型错误、系统服务状态和安全基线均来自实际记录或明确的运行配置，不填充演示数字
+- 数智大屏使用本地 ECharts/ECharts-GL 展示三维地球来源点、来源分布、采集/模型/用户趋势、词频、热点和风险分布
+- 舆情大屏由用户消息和仓库内容规则命中生成可追溯预警，支持处理中、已解决、误报及处理备注
+- 两块大屏提供刷新、暂停刷新、全屏、图表数据表替代和 reduced-motion 降级
+- 用户管理可由超级管理员全局启停人脸登录，或对已录入用户单独启停
 
 ### 权限管理
 
