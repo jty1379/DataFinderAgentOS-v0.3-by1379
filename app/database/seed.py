@@ -205,6 +205,58 @@ def _seed_employees(connection: sqlite3.Connection) -> None:
     )
 
 
+def _seed_employee_runtime_bindings(connection: sqlite3.Connection) -> None:
+    """Upgrade built-in employees to managed interfaces and an executable query Skill."""
+    columns = {row["name"] for row in connection.execute("PRAGMA table_info(digital_employees)")}
+    if "interface_id" not in columns:
+        return
+    for code in ("weather", "music"):
+        employee = connection.execute(
+            "SELECT * FROM digital_employees WHERE code=?", (code,)
+        ).fetchone()
+        if not employee:
+            continue
+        interface_code = f"employee_{code}"
+        connection.execute(
+            """INSERT OR IGNORE INTO api_interfaces
+               (code,name,api_url,request_method,request_headers,request_params,
+                response_path,timeout_seconds,retry_count,description,enabled)
+               VALUES (?,?,?,?,?,?,?, ?,1,?,1)""",
+            (
+                interface_code,
+                f"{employee['name']}托管接口",
+                employee["api_url"],
+                employee["api_method"],
+                employee["request_headers"],
+                employee["request_params"],
+                "",
+                employee["timeout_seconds"],
+                f"由数字员工 {employee['name']} 使用的公开接口。",
+            ),
+        )
+        connection.execute(
+            """UPDATE digital_employees
+               SET interface_id=(SELECT id FROM api_interfaces WHERE code=?),
+                   updated_at=CURRENT_TIMESTAMP
+               WHERE id=? AND interface_id IS NULL""",
+            (interface_code, employee["id"]),
+        )
+
+    connection.execute(
+        """INSERT OR IGNORE INTO skills
+           (code,name,description,system_prompt,trigger_condition,tools,triggers,enabled)
+           VALUES ('database_query','数据库问数','读取仓库的白名单聚合统计，返回结论、KPI、图表和表格。',
+                   '仅根据系统只读统计回答，不生成或执行用户 SQL。','绑定后直接执行问数工具',
+                   '{"query_intent":{"service":"QueryIntentService.query"}}',
+                   '{"always":true}',1)"""
+    )
+    connection.execute(
+        """INSERT OR IGNORE INTO employee_skills(employee_id,skill_id)
+           SELECT d.id,s.id FROM digital_employees d CROSS JOIN skills s
+           WHERE d.code='analyst' AND s.code='database_query'"""
+    )
+
+
 def seed_database(connection: sqlite3.Connection) -> None:
     """幂等写入系统运行所需的最小初始数据。"""
     _seed_permissions(connection)
@@ -212,6 +264,7 @@ def seed_database(connection: sqlite3.Connection) -> None:
     _upgrade_legacy_users(connection)
     _seed_source(connection)
     _seed_employees(connection)
+    _seed_employee_runtime_bindings(connection)
     _seed_settings(connection)
     _seed_opinion(connection)
     # 2—5 是早期课堂版已并入基线表结构的历史版本；7 以后均由正式迁移器记录，

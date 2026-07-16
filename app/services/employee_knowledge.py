@@ -36,6 +36,12 @@ def list_files(employee_id: int) -> list[dict]:
 
 
 def save_uploads(employee_id: int, uploads: list, *, clear: bool = False) -> list[dict]:
+    from app.services.system_settings import SystemSettingsService
+
+    max_file_bytes = min(
+        100 * 1024 * 1024,
+        max(MAX_FILE_BYTES, SystemSettingsService.get_integer("max_upload_size", MAX_FILE_BYTES)),
+    )
     directory = _directory(employee_id)
     uploads = list(uploads or [])
     if not uploads:
@@ -51,8 +57,8 @@ def save_uploads(employee_id: int, uploads: list, *, clear: bool = False) -> lis
         if not original.lower().endswith(".md"):
             raise EmployeeKnowledgeError("Prompt 资料只允许上传 .md 文件")
         body = upload.get("body") or b""
-        if not isinstance(body, bytes) or not 1 <= len(body) <= MAX_FILE_BYTES:
-            raise EmployeeKnowledgeError("单个 Markdown 文件需为 1B—512KB")
+        if not isinstance(body, bytes) or not 1 <= len(body) <= max_file_bytes:
+            raise EmployeeKnowledgeError(f"单个 Markdown 文件需为 1B—{max_file_bytes // 1024}KB")
         try:
             body.decode("utf-8-sig")
         except UnicodeDecodeError as exc:

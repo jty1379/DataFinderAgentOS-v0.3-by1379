@@ -324,12 +324,120 @@ def _migrate_warehouse_duplicate_support(connection: sqlite3.Connection) -> None
     connection.execute("CREATE INDEX IF NOT EXISTS idx_warehouse_keywords ON warehouse_items(keywords)")
 
 
+def _create_collection_run_logs_table(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS collection_run_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id INTEGER NOT NULL REFERENCES collection_runs(id) ON DELETE CASCADE,
+            level TEXT NOT NULL DEFAULT 'info'
+                CHECK (level IN ('info','success','warning','error')),
+            step TEXT NOT NULL DEFAULT '',
+            message TEXT NOT NULL,
+            page_number INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )"""
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS ix_collection_run_logs_run ON collection_run_logs(run_id,id)"
+    )
+
+
+def _migrate_collection_task_lifecycle(connection: sqlite3.Connection) -> None:
+    """统一采集状态、进度与日志，并安全保留已有采集结果。"""
+    columns = _table_columns(connection, "collection_runs")
+    table_sql_row = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='collection_runs'"
+    ).fetchone()
+    table_sql = str(table_sql_row["sql"] if table_sql_row else "").lower()
+    lifecycle_columns = {
+        "task_type",
+        "total_pages",
+        "processed_pages",
+        "success_count",
+        "failed_count",
+        "retry_count",
+        "progress",
+        "started_at",
+        "cancelled_at",
+        "updated_at",
+    }
+    if lifecycle_columns.issubset(columns) and "partial" in table_sql and "cancelled" in table_sql:
+        _create_collection_run_logs_table(connection)
+        return
+
+    connection.execute(
+        """CREATE TABLE collection_runs_v23 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rule_id INTEGER REFERENCES collection_rules(id) ON DELETE SET NULL,
+            user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            task_type TEXT NOT NULL DEFAULT 'single'
+                CHECK (task_type IN ('single','batch')),
+            keyword TEXT NOT NULL,
+            page_number INTEGER NOT NULL DEFAULT 1 CHECK (page_number > 0),
+            page_size INTEGER NOT NULL DEFAULT 12 CHECK (page_size BETWEEN 1 AND 100),
+            total_pages INTEGER NOT NULL DEFAULT 1 CHECK (total_pages BETWEEN 1 AND 100),
+            processed_pages INTEGER NOT NULL DEFAULT 0 CHECK (processed_pages >= 0),
+            request_url TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','running','success','partial','failed','cancelled')),
+            result_count INTEGER NOT NULL DEFAULT 0 CHECK (result_count >= 0),
+            success_count INTEGER NOT NULL DEFAULT 0 CHECK (success_count >= 0),
+            failed_count INTEGER NOT NULL DEFAULT 0 CHECK (failed_count >= 0),
+            retry_count INTEGER NOT NULL DEFAULT 0 CHECK (retry_count >= 0),
+            progress INTEGER NOT NULL DEFAULT 0 CHECK (progress BETWEEN 0 AND 100),
+            error_message TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            started_at TEXT,
+            finished_at TEXT,
+            cancelled_at TEXT,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )"""
+    )
+    connection.execute(
+        """INSERT INTO collection_runs_v23 (
+            id,rule_id,user_id,task_type,keyword,page_number,page_size,total_pages,
+            processed_pages,request_url,status,result_count,success_count,failed_count,
+            retry_count,progress,error_message,created_at,started_at,finished_at,
+            cancelled_at,updated_at
+        )
+        SELECT id,rule_id,user_id,'single',keyword,page_number,page_size,1,
+               CASE WHEN status IN ('success','failed') THEN 1 ELSE 0 END,
+               request_url,status,result_count,result_count,
+               CASE WHEN status='failed' THEN 1 ELSE 0 END,0,
+               CASE WHEN status IN ('success','failed') THEN 100 ELSE 0 END,
+               error_message,created_at,
+               CASE WHEN status IN ('running','success','failed') THEN created_at ELSE NULL END,
+               finished_at,NULL,COALESCE(finished_at,created_at)
+        FROM collection_runs"""
+    )
+    connection.execute("DROP TABLE collection_runs")
+    connection.execute("ALTER TABLE collection_runs_v23 RENAME TO collection_runs")
+    connection.execute("CREATE INDEX IF NOT EXISTS ix_collection_runs_created ON collection_runs(created_at DESC)")
+    connection.execute("CREATE INDEX IF NOT EXISTS ix_collection_runs_status ON collection_runs(status,created_at DESC)")
+    connection.execute("CREATE INDEX IF NOT EXISTS ix_collection_runs_rule ON collection_runs(rule_id,created_at DESC)")
+    _create_collection_run_logs_table(connection)
+
+
+def _migrate_employee_interface_binding(connection: sqlite3.Connection) -> None:
+    _add_column_if_missing(
+        connection,
+        "digital_employees",
+        "interface_id",
+        "INTEGER REFERENCES api_interfaces(id) ON DELETE SET NULL",
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS ix_digital_employees_interface ON digital_employees(interface_id)"
+    )
+
+
 PYTHON_MIGRATIONS = {
     17: _migrate_employee_stats,
     19: _migrate_warehouse_extensions,
     20: _migrate_system_settings_biometrics,
     21: _migrate_opinion_security,
     22: _migrate_warehouse_duplicate_support,
+    23: _migrate_collection_task_lifecycle,
+    30: _migrate_employee_interface_binding,
 }
 
 
@@ -416,7 +524,7 @@ def run_migrations(connection_factory: Callable[[], sqlite3.Connection]) -> None
                     raise MigrationError(f"已执行迁移 {path.name} 的校验和发生变化")
                 continue
             LOGGER.info("applying migration version=%s name=%s", version, name)
-            disable_foreign_keys = version == 22
+            disable_foreign_keys = version in {22, 23}
             try:
                 if disable_foreign_keys:
                     connection.execute("PRAGMA foreign_keys=OFF")

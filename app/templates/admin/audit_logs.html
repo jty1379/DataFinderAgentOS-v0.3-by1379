@@ -1,107 +1,23 @@
 {% extends "base.html" %}
-
 {% block title %}{{ title }}{% end %}
-
 {% block admin_content %}
-<div class="layui-card">
-    <div class="layui-card-header">
-        <h3>审计日志</h3>
-    </div>
-    <div class="layui-card-body">
-        <form class="layui-form layui-form-pane" action="/admin/audit/logs" method="get">
-            <div class="layui-form-item layui-inline">
-                <label class="layui-form-label">操作类型</label>
-                <div class="layui-input-inline" style="width: 150px;">
-                    <select name="action_type">
-                        <option value="">全部</option>
-                        {% for at in action_types %}
-                        <option value="{{ at }}" {% if selected_action == at %}selected{% end %}>{{ at }}</option>
-                        {% end %}
-                    </select>
-                </div>
-            </div>
-            <div class="layui-form-item layui-inline">
-                <button class="layui-btn layui-btn-normal" lay-submit lay-filter="search">搜索</button>
-                <a href="/admin/audit/logs" class="layui-btn layui-btn-primary">重置</a>
-            </div>
-        </form>
-        
-        <table class="layui-table">
-            <thead>
-                <tr>
-                    <th>日志ID</th>
-                    <th>操作类型</th>
-                    <th>资源类型</th>
-                    <th>资源ID</th>
-                    <th>操作人</th>
-                    <th>IP地址</th>
-                    <th>结果</th>
-                    <th>时间</th>
-                    <th>详情</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for log in logs %}
-                <tr>
-                    <td>{{ log['id'] }}</td>
-                    <td>
-                        {% if log['action_type'] == 'login' %}
-                        <span class="layui-badge">登录</span>
-                        {% elif log['action_type'] == 'logout' %}
-                        <span class="layui-badge">登出</span>
-                        {% elif log['action_type'] == 'create' %}
-                        <span class="layui-badge layui-bg-green">创建</span>
-                        {% elif log['action_type'] == 'update' %}
-                        <span class="layui-badge layui-bg-blue">更新</span>
-                        {% elif log['action_type'] == 'delete' %}
-                        <span class="layui-badge layui-bg-red">删除</span>
-                        {% else %}
-                        <span class="layui-badge">{{ log['action_type'] }}</span>
-                        {% end %}
-                    </td>
-                    <td>{{ log['resource_type'] }}</td>
-                    <td>{{ log['resource_id'] or '-' }}</td>
-                    <td>{{ log['user_name'] or '-' }}</td>
-                    <td>{{ log['ip_address'] or '-' }}</td>
-                    <td>
-                        {% if log['success'] == 1 %}
-                        <span class="layui-badge layui-bg-green">成功</span>
-                        {% else %}
-                        <span class="layui-badge layui-bg-red">失败</span>
-                        {% end %}
-                    </td>
-                    <td>{{ log['created_at'] }}</td>
-                    <td>
-                        <button type="button" class="layui-btn layui-btn-xs" onclick="showDetail({{ log['id'] }}, '{{ log['action_before'] }}', '{{ log['action_after'] }}', '{{ log['detail'] }}', '{{ log['error_message'] }}')">查看</button>
-                    </td>
-                </tr>
-                {% end %}
-            </tbody>
-        </table>
-        
-        {{ pager }}
-    </div>
-</div>
-
-<script>
-function showDetail(id, before, after, detail, error) {
-    var content = '<div style="padding: 15px;">';
-    content += '<p><strong>详情:</strong> ' + (detail || '无') + '</p>';
-    content += '<p><strong>操作前:</strong></p><pre>' + (before || '{}') + '</pre>';
-    content += '<p><strong>操作后:</strong></p><pre>' + (after || '{}') + '</pre>';
-    if (error) {
-        content += '<p><strong>错误信息:</strong> ' + error + '</p>';
-    }
-    content += '</div>';
-    
-    layui.use('layer', function() {
-        var layer = layui.layer;
-        layer.open({
-            title: '日志详情 - ID: ' + id,
-            content: content,
-            area: ['600px', '400px'],
-        });
-    });
-}
-</script>
+<section class="v02-page-head"><div><span class="v02-eyebrow">系统内操作留痕</span><h2>操作审计日志</h2><p>记录管理端写操作的操作者、资源、结果和请求编号；外部代码扫描由 MonkeyScan 独立完成。</p></div></section>
+<section class="v02-panel">
+  <form class="v02-filter-grid" action="/admin/audit/logs" method="get">
+    <label class="v02-field"><span>操作类型</span><select class="v02-select" name="action_type"><option value="">全部</option>{% for at in action_types %}<option value="{{ at }}" {% if selected_action == at %}selected{% end %}>{{ at }}</option>{% end %}</select></label>
+    <label class="v02-field"><span>用户 ID</span><input class="v02-input" name="user_id" value="{{ filters['user_id'] }}" inputmode="numeric"></label>
+    <label class="v02-field"><span>资源类型</span><input class="v02-input" name="resource_type" value="{{ filters['resource_type'] }}" placeholder="users / settings"></label>
+    <label class="v02-field"><span>资源 ID</span><input class="v02-input" name="resource_id" value="{{ filters['resource_id'] }}" inputmode="numeric"></label>
+    <label class="v02-field"><span>开始日期</span><input class="v02-input" type="date" name="start_date" value="{{ filters['start_date'] }}"></label>
+    <label class="v02-field"><span>结束日期</span><input class="v02-input" type="date" name="end_date" value="{{ filters['end_date'] }}"></label>
+    <div class="v02-filter-actions"><button class="v02-button" type="submit">查询</button><a class="v02-button-secondary" href="/admin/audit/logs">重置</a></div>
+  </form>
+</section>
+<section class="v02-panel"><header class="v02-panel-header"><div><h3>审计记录</h3><p>日志不保存密码、Token、密钥或完整请求体</p></div><span class="v02-count">{{ pager['total'] }} 条</span></header>
+  <div class="v02-table-wrap"><table class="v02-table"><thead><tr><th>ID / 时间</th><th>动作</th><th>资源</th><th>操作者</th><th>请求来源</th><th>结果</th><th>详情</th></tr></thead><tbody>
+  {% for log in logs %}<tr><td><div class="v02-cell-title"><b>#{{ log['id'] }}</b><small>{{ log['created_at'] }}</small></div></td><td><span class="v02-status {{ 'error' if log['action_type']=='delete' else 'enabled' }}">{{ log['action_type'] }}</span></td><td><div class="v02-cell-title"><b>{{ log['resource_type'] }}</b><small>ID {{ log['resource_id'] or '-' }}</small></div></td><td><div class="v02-cell-title"><b>{{ log['user_name'] or '-' }}</b><small>用户 {{ log['user_id'] or '-' }}</small></div></td><td>{{ log['ip_address'] or '-' }}</td><td><span class="v02-status {{ 'enabled' if log['success'] else 'error' }}">{{ '成功' if log['success'] else '失败' }}</span></td><td><small>{{ log['detail'] or '-' }}{% if log['error_message'] %}<br>{{ log['error_message'] }}{% end %}</small></td></tr>{% end %}
+  {% if not logs %}<tr><td colspan="7">没有符合条件的审计记录</td></tr>{% end %}
+  </tbody></table></div>
+  {% if pager['total_pages'] > 1 %}<nav class="v02-pagination" aria-label="审计日志分页">{% if pager['prev_url'] %}<a href="{{ pager['prev_url'] }}">上一页</a>{% end %}{% for link in pager['page_links'] %}{% if link['current'] %}<span class="current" aria-current="page">{{ link['number'] }}</span>{% else %}<a href="{{ link['url'] }}">{{ link['number'] }}</a>{% end %}{% end %}{% if pager['next_url'] %}<a href="{{ pager['next_url'] }}">下一页</a>{% end %}</nav>{% end %}
+</section>
 {% end %}

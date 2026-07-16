@@ -198,7 +198,7 @@ async def _validate_public_url(url: str) -> None:
             asyncio.to_thread(socket.getaddrinfo, hostname, port, 0, socket.SOCK_STREAM),
             timeout=5,
         )
-    except (OSError, asyncio.TimeoutError) as exc:
+    except (OSError, TimeoutError) as exc:
         raise CollectionError("瞭源域名无法解析") from exc
     addresses = {record[4][0].split("%")[0] for record in records}
     if not addresses or any(not _public_ip(address) for address in addresses):
@@ -235,7 +235,14 @@ class CollectorService:
         if not rule.get("enabled", True) or not rule.get("source_enabled", True):
             raise CollectionError("采集规则或所属瞭源已停用")
         page = max(1, int(page or 1))
-        page_size = min(100, max(1, int(page_size or rule.get("page_size") or 12)))
+        from app.services.system_settings import SystemSettingsService
+
+        max_count = SystemSettingsService.get_integer("max_collect_count", 100)
+        page_size = min(max_count, 100, max(1, int(page_size or rule.get("page_size") or 12)))
+        timeout = min(
+            120,
+            max(3, SystemSettingsService.get_integer("default_collect_timeout", REQUEST_TIMEOUT_SECONDS)),
+        )
         url = _request_url(rule, keyword, page)
         await _validate_public_url(url)
         headers = _sanitized_headers(
@@ -252,8 +259,8 @@ class CollectorService:
             url=url,
             method="GET",
             headers=headers,
-            connect_timeout=min(10, REQUEST_TIMEOUT_SECONDS),
-            request_timeout=REQUEST_TIMEOUT_SECONDS,
+            connect_timeout=min(10, timeout),
+            request_timeout=timeout,
             follow_redirects=False,
             decompress_response=True,
             streaming_callback=receive_chunk,

@@ -7,8 +7,8 @@ import importlib.util
 import json
 import re
 import tempfile
-import urllib.parse
 import unittest
+import urllib.parse
 from http.cookies import SimpleCookie
 from pathlib import Path
 from types import SimpleNamespace
@@ -23,7 +23,6 @@ from app.models.model_engine import ModelRepository
 from app.models.user import UserRepository
 from app.services.deep_collection import DeepCollectionService
 from app.services.digital_employee import DigitalEmployeeService
-
 
 ENTRY_PATH = Path(__file__).resolve().parents[1] / "app.py"
 SPEC = importlib.util.spec_from_file_location("datafinder_v03_entry", ENTRY_PATH)
@@ -115,7 +114,7 @@ class V03RepositoryTest(unittest.TestCase):
         )
 
         async def fake_fetch(request, raise_error=False):
-            request.streaming_callback('{"city":"成都","value":28}'.encode("utf-8"))
+            request.streaming_callback('{"city":"成都","value":28}'.encode())
             return SimpleNamespace(code=200)
 
         client = SimpleNamespace(fetch=fake_fetch)
@@ -188,8 +187,10 @@ class V03WebTest(AsyncHTTPTestCase):
     def cookies_from(response):
         result = {}
         for value in response.headers.get_list("Set-Cookie"):
-            cookie = SimpleCookie(); cookie.load(value)
-            for key, morsel in cookie.items(): result[key] = morsel.value
+            cookie = SimpleCookie()
+            cookie.load(value)
+            for key, morsel in cookie.items():
+                result[key] = morsel.value
         return result
 
     @staticmethod

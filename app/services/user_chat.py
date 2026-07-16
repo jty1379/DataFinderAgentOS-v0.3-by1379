@@ -11,7 +11,9 @@ from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.model_engine import ModelRepository
 from app.services.digital_employee import DigitalEmployeeError, DigitalEmployeeService
 from app.services.llm import LLMService
+from app.services.opinion import OpinionSecurityService
 from app.services.query_intent import QueryIntentService, UnsafeQueryError
+from app.services.system_settings import SystemSettingsService
 
 LOGGER = logging.getLogger("model")
 
@@ -55,7 +57,7 @@ class UserChatService:
         ):
             raise UserChatError("所选数字员工不存在或不可用于用户问数")
 
-        model = ModelRepository.get(model_id) if model_id else ModelRepository.get_default()
+        model = ModelRepository.get(model_id) if model_id else SystemSettingsService.get_default_model()
         if model and (not model.get("enabled") or model.get("model_type") not in {"text", "multimodal"}):
             raise UserChatError("所选模型当前不可用于文本对话")
         selected_model_id = model["id"] if model else None
@@ -71,10 +73,15 @@ class UserChatService:
             ConversationRepository.update_context(
                 conversation_id, user_id, selected_model_id, employee_id
             )
-        ConversationRepository.add_message(
+        user_message_id = ConversationRepository.add_message(
             conversation_id, "user", prompt, "text",
             {"model_id": selected_model_id, "employee_id": employee_id},
         )
+        user_security = OpinionSecurityService.analyze_and_record(
+            "chat", user_message_id, prompt, user_id,
+            {"conversation_id": conversation_id, "role": "user"},
+        )
+        ConversationRepository.update_message_security(user_message_id, user_security)
 
         try:
             result = await UserChatService._answer(
@@ -91,9 +98,20 @@ class UserChatService:
             )
             metadata["usage"] = usage
             metadata["elapsed_seconds"] = round(usage["latency_ms"] / 1000, 2)
-            ConversationRepository.add_message(
+            assistant_message_id = ConversationRepository.add_message(
                 conversation_id, "assistant", result["answer"], result["content_type"], metadata
             )
+            if employee:
+                # DigitalEmployeeService 已按 employee 来源完成持久化；消息仍保留同一风险结果。
+                assistant_security = metadata.get("security") or {
+                    "risk_level": "low", "matched_words": []
+                }
+            else:
+                assistant_security = OpinionSecurityService.analyze_and_record(
+                    "chat", assistant_message_id, result["answer"], user_id,
+                    {"conversation_id": conversation_id, "role": "assistant"},
+                )
+            ConversationRepository.update_message_security(assistant_message_id, assistant_security)
             return {
                 "ok": True,
                 "conversation": ConversationRepository.get_for_user(conversation_id, user_id),
@@ -117,9 +135,14 @@ class UserChatService:
                 "usage": {"total_tokens": 0, "latency_ms": int((time.monotonic() - started) * 1000)},
                 "elapsed_seconds": round(time.monotonic() - started, 2),
             }
-            ConversationRepository.add_message(
+            assistant_message_id = ConversationRepository.add_message(
                 conversation_id, "assistant", message, "error", metadata
             )
+            assistant_security = OpinionSecurityService.analyze_and_record(
+                "chat", assistant_message_id, message, user_id,
+                {"conversation_id": conversation_id, "role": "assistant", "error": True},
+            )
+            ConversationRepository.update_message_security(assistant_message_id, assistant_security)
             status = 400 if isinstance(
                 exc, (ValueError, DigitalEmployeeError, UnsafeQueryError)
             ) else 502

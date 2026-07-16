@@ -68,13 +68,20 @@ class CollectionRepository:
 
     @staticmethod
     def save_results(run_id: int, items: list[dict]) -> list[dict]:
+        """兼容旧的同步采集入口：保存结果并立即完成任务。"""
+        rows = CollectionRepository.append_results(run_id, items)
+        CollectionRepository.finish_run(run_id, len(rows))
+        return rows
+
+    @staticmethod
+    def append_results(run_id: int, items: list[dict]) -> list[dict]:
+        """幂等追加一页结果，不提前改变任务终态。"""
         with connection_scope() as connection:
             run = connection.execute(
                 "SELECT rule_id FROM collection_runs WHERE id = ?", (run_id,)
             ).fetchone()
             if run is None:
                 raise ValueError("采集批次不存在")
-            accepted_urls: list[str] = []
             for item in items[:100]:
                 title = str(item.get("title", "")).strip()[:300]
                 url = str(item.get("url", "")).strip()[:2000]
@@ -108,22 +115,6 @@ class CollectionRepository:
                         raw_json,
                     ),
                 )
-                accepted_urls.append(url)
-            count = int(
-                connection.execute(
-                    "SELECT COUNT(*) AS count FROM collection_results WHERE run_id = ?",
-                    (run_id,),
-                ).fetchone()["count"]
-            )
-            connection.execute(
-                """
-                UPDATE collection_runs
-                SET status = 'success', result_count = ?, error_message = '',
-                    finished_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-                """,
-                (count, run_id),
-            )
             rows = connection.execute(
                 "SELECT * FROM collection_results WHERE run_id = ? ORDER BY id",
                 (run_id,),
@@ -137,7 +128,8 @@ class CollectionRepository:
             cursor = connection.execute(
                 """
                 UPDATE collection_runs
-                SET status = 'failed', error_message = ?, finished_at = CURRENT_TIMESTAMP
+                SET status = 'failed', error_message = ?, progress = 100,
+                    finished_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
                 (message.strip()[:500], run_id),
@@ -160,10 +152,12 @@ class CollectionRepository:
                 """
                 UPDATE collection_runs
                 SET status = 'success', result_count = ?, error_message = '',
-                    finished_at = COALESCE(finished_at, CURRENT_TIMESTAMP)
+                    success_count = ?, progress = 100,
+                    finished_at = COALESCE(finished_at, CURRENT_TIMESTAMP),
+                    updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
-                (max(0, int(result_count)), run_id),
+                (max(0, int(result_count)), max(0, int(result_count)), run_id),
             )
             connection.commit()
         return cursor.rowcount == 1

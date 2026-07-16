@@ -209,11 +209,13 @@ class LLMService:
         def receive_chunk(chunk: bytes) -> None:
             if len(raw) + len(chunk) > 4 * 1024 * 1024:
                 raise LLMError("模型服务响应超过 4MB 限制")
-            raw.extend(chunk); pending.extend(chunk)
+            raw.extend(chunk)
+            pending.extend(chunk)
             while b"\n\n" in pending or b"\r\n\r\n" in pending:
                 normalized = pending.replace(b"\r\n", b"\n")
                 frame, rest = normalized.split(b"\n\n", 1)
-                pending.clear(); pending.extend(rest)
+                pending.clear()
+                pending.extend(rest)
                 consume(frame)
 
         request = HTTPRequest(

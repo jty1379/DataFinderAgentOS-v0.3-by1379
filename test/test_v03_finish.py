@@ -30,7 +30,6 @@ from app.services.employee_knowledge import (
 from app.services.llm import LLMService
 from app.services.query_intent import QueryIntentService, UnsafeQueryError
 
-
 ENTRY_PATH = Path(__file__).resolve().parents[1] / "app.py"
 SPEC = importlib.util.spec_from_file_location("datafinder_v03_finish_entry", ENTRY_PATH)
 ENTRY = importlib.util.module_from_spec(SPEC)
@@ -58,11 +57,15 @@ class V03FinishServiceTest(unittest.IsolatedAsyncioTestCase):
             "app.services.employee_knowledge.KNOWLEDGE_ROOT",
             Path(self.temp_dir.name) / "dgUser",
         )
-        self.db_patch.start(); self.knowledge_patch.start()
-        db.init_db(); seed_warehouse()
+        self.db_patch.start()
+        self.knowledge_patch.start()
+        db.init_db()
+        seed_warehouse()
 
     def tearDown(self):
-        self.knowledge_patch.stop(); self.db_patch.stop(); self.temp_dir.cleanup()
+        self.knowledge_patch.stop()
+        self.db_patch.stop()
+        self.temp_dir.cleanup()
 
     def test_safe_warehouse_intents_and_visualizations(self):
         overview = QueryIntentService.analyze("统计数据仓库概览")
@@ -144,13 +147,19 @@ class V03FinishWebTest(AsyncHTTPTestCase):
             "app.services.employee_knowledge.KNOWLEDGE_ROOT",
             Path(self.temp_dir.name) / "dgUser",
         )
-        self.patch.start(); self.knowledge_patch.start(); db.init_db()
+        self.patch.start()
+        self.knowledge_patch.start()
+        db.init_db()
         UserRepository.ensure_admin("admin", "123456")
-        UserRepository.create_user("student", "123456"); seed_warehouse()
+        UserRepository.create_user("student", "123456")
+        seed_warehouse()
         super().setUp()
 
     def tearDown(self):
-        super().tearDown(); self.knowledge_patch.stop(); self.patch.stop(); self.temp_dir.cleanup()
+        super().tearDown()
+        self.knowledge_patch.stop()
+        self.patch.stop()
+        self.temp_dir.cleanup()
 
     def get_app(self):
         return ENTRY.make_app()
@@ -159,8 +168,10 @@ class V03FinishWebTest(AsyncHTTPTestCase):
     def cookies_from(response):
         result = {}
         for value in response.headers.get_list("Set-Cookie"):
-            cookie = SimpleCookie(); cookie.load(value)
-            for key, morsel in cookie.items(): result[key] = morsel.value
+            cookie = SimpleCookie()
+            cookie.load(value)
+            for key, morsel in cookie.items():
+                result[key] = morsel.value
         return result
 
     @staticmethod
@@ -168,24 +179,28 @@ class V03FinishWebTest(AsyncHTTPTestCase):
         return "; ".join(f"{key}={value}" for key, value in cookies.items())
 
     def login(self):
-        page = self.fetch("/"); cookies = self.cookies_from(page)
+        page = self.fetch("/")
+        cookies = self.cookies_from(page)
         token = re.search(r'name="_xsrf" value="([^"]+)"', page.body.decode()).group(1)
         response = self.fetch(
             "/login", method="POST", follow_redirects=False,
             headers={"Content-Type": "application/x-www-form-urlencoded", "Cookie": self.cookie_header(cookies)},
             body=urllib.parse.urlencode({"username": "student", "password": "123456", "_xsrf": token}),
         )
-        cookies.update(self.cookies_from(response)); return token, cookies
+        cookies.update(self.cookies_from(response))
+        return token, cookies
 
     def admin_login(self):
-        page = self.fetch("/admin/login"); cookies = self.cookies_from(page)
+        page = self.fetch("/admin/login")
+        cookies = self.cookies_from(page)
         token = re.search(r'name="_xsrf" value="([^"]+)"', page.body.decode()).group(1)
         response = self.fetch(
             "/admin/login", method="POST", follow_redirects=False,
             headers={"Content-Type": "application/x-www-form-urlencoded", "Cookie": self.cookie_header(cookies)},
             body=urllib.parse.urlencode({"username": "admin", "password": "123456", "_xsrf": token}),
         )
-        cookies.update(self.cookies_from(response)); return token, cookies
+        cookies.update(self.cookies_from(response))
+        return token, cookies
 
     def test_user_analytics_sse_has_usage_timing_and_real_card(self):
         token, cookies = self.login()

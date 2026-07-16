@@ -7,6 +7,7 @@ from collections import Counter
 from datetime import datetime
 
 from app.models.db import connection_scope
+from app.services.system_settings import SystemSettingsService
 
 RISK_WORDS = {
     "critical": ("爆炸", "死亡", "数据泄露", "重大事故"),
@@ -202,6 +203,7 @@ class DashboardRepository:
             "query_trend": query_trend,
             "collection_trend": collection_trend,
             "refreshed_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "refresh_interval": SystemSettingsService.get_screen_refresh_interval(),
         }
 
     @staticmethod

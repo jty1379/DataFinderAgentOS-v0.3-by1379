@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 
 from app.models.opinion import OpinionAlertRepository, SensitiveWordRepository
@@ -15,7 +16,36 @@ RISK_LEVELS = ["low", "medium", "high", "critical"]
 
 class OpinionSecurityService:
     @staticmethod
-    def analyze_content_security(content: str, source_type: str = "chat", source_id: int = 0, user_id: int = 0) -> dict:
+    def analyze_and_record(
+        source_type: str,
+        source_id: int,
+        content: str,
+        user_id: int | None = None,
+        metadata: dict | None = None,
+    ) -> dict:
+        source_type = source_type if source_type in {"chat", "collection", "employee", "news"} else "collection"
+        content = str(content or "")[:12000]
+        analysis = OpinionSecurityService.analyze_content_security(
+            content, source_type, int(source_id), int(user_id or 0),
+            content_hash=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+            metadata=metadata,
+        )
+        return {
+            "source_type": source_type,
+            "source_id": int(source_id),
+            **analysis,
+        }
+
+    @staticmethod
+    def analyze_content_security(
+        content: str,
+        source_type: str = "chat",
+        source_id: int = 0,
+        user_id: int = 0,
+        *,
+        content_hash: str = "",
+        metadata: dict | None = None,
+    ) -> dict:
         matched_words = SensitiveWordRepository.search(content)
         
         risk_level = "low"
@@ -44,6 +74,8 @@ class OpinionSecurityService:
                     matched_words=matched_words,
                     risk_level=risk_level,
                     ai_analysis=ai_analysis,
+                    content_hash=content_hash,
+                    metadata=metadata,
                 )
         
         return {

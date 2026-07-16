@@ -4,21 +4,25 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import urllib.parse
 import uuid
 
 import tornado.web
 
-from datetime import timedelta
-
-from config.settings import SETTINGS
 from app.core.contracts import error_response, success_response
-from app.core.permissions import require_admin, require_login, require_permission, require_superadmin
+from app.core.permissions import (
+    require_admin,
+    require_login,
+    require_permission,
+    require_superadmin,
+)
 from app.repositories.menu_repository import MenuRepository
 from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
 from app.services.system_settings import SystemSettingsService
+from config.settings import SETTINGS
 
 REQUEST_LOGGER = logging.getLogger("request")
 
@@ -31,6 +35,14 @@ class BaseHandler(tornado.web.RequestHandler):
         self.request_started = time.monotonic()
         self.set_header("X-Request-ID", self.request_id)
         self._set_security_headers()
+
+    def prepare(self) -> None:
+        if (
+            SystemSettingsService.is_maintenance_mode()
+            and not self.request.path.startswith("/admin")
+            and self.request.path not in {"/", "/login", "/logout"}
+        ):
+            raise tornado.web.HTTPError(503, reason="系统正在维护，请稍后再试")
 
     def _set_security_headers(self) -> None:
         self.set_header("X-Content-Type-Options", "nosniff")
@@ -77,6 +89,76 @@ class BaseHandler(tornado.web.RequestHandler):
             round((time.monotonic() - self.request_started) * 1000),
             extra={"request_id": self.request_id, "user_id": user.get("id", "-") if user else "-", "event": "request_finished"},
         )
+        if (
+            self.request.method in {"POST", "PUT", "PATCH", "DELETE"}
+            and user
+            and user.get("role_scope") == "admin"
+            and (self.request.path.startswith("/admin/") or self.request.path.startswith("/api/admin/"))
+            and self.request.path not in {"/admin/login", "/admin/logout"}
+        ):
+            from app.services.security import AuditLogService
+
+            raw_action = ""
+            values = self.request.arguments.get("action") or []
+            if values:
+                raw_action = values[0].decode("utf-8", errors="ignore").lower()
+            if raw_action == "batch":
+                batch_values = self.request.arguments.get("batch_action") or []
+                if batch_values:
+                    raw_action = batch_values[0].decode("utf-8", errors="ignore").lower()
+            lowered_path = self.request.path.lower()
+            if self.request.method == "DELETE" or "delete" in raw_action or "/delete" in lowered_path:
+                action_type = "delete"
+            elif any(
+                word in f"{raw_action} {lowered_path}"
+                for word in ("update", "save", "toggle", "archive", "enable", "disable", "default", "cancel", "retry")
+            ):
+                action_type = "update"
+            else:
+                action_type = "create" if self.request.method == "POST" else "update"
+            segments = [segment for segment in self.request.path.split("/") if segment]
+            admin_index = segments.index("admin") if "admin" in segments else 0
+            resource_type = segments[admin_index + 1] if len(segments) > admin_index + 1 else "system"
+            resource_id = next(
+                (int(segment) for segment in reversed(segments) if re.fullmatch(r"[1-9][0-9]*", segment)),
+                None,
+            )
+            if resource_id is None:
+                for key, raw_values in self.request.arguments.items():
+                    if key == "id" or key.endswith("_id"):
+                        candidate = raw_values[0].decode("utf-8", errors="ignore") if raw_values else ""
+                        if candidate.isdecimal() and int(candidate) > 0:
+                            resource_id = int(candidate)
+                            break
+            if resource_id is None and self.request.headers.get("Content-Type", "").startswith("application/json"):
+                try:
+                    body = json.loads(self.request.body.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    body = {}
+                if isinstance(body, dict):
+                    for key, value in body.items():
+                        if (key == "id" or key.endswith("_id")) and str(value).isdecimal() and int(value) > 0:
+                            resource_id = int(value)
+                            break
+            location = self._headers.get("Location", "")
+            business_success = self.get_status() < 400 and "level=error" not in location
+            try:
+                AuditLogService.log_action(
+                    action_type=action_type,
+                    resource_type=resource_type[:80],
+                    resource_id=resource_id,
+                    user_id=user["id"],
+                    user_name=user.get("username", ""),
+                    ip_address=self.get_client_ip(),
+                    detail=f"{self.request.method} {self.request.path}; status={self.get_status()}; request_id={self.request_id}",
+                    success=business_success,
+                    error_message="" if business_success else f"操作失败（HTTP {self.get_status()}）",
+                )
+            except Exception:
+                REQUEST_LOGGER.exception(
+                    "audit logging failed without affecting business response",
+                    extra={"request_id": self.request_id, "event": "audit_log_failed"},
+                )
 
     def write_error(self, status_code: int, **kwargs) -> None:
         if status_code >= 500:
@@ -181,6 +263,7 @@ class AdminJsonHandler(JsonResponseMixin, AdminBaseHandler):
 
 class UserJsonHandler(JsonResponseMixin, BaseHandler):
     def prepare(self) -> None:
+        BaseHandler.prepare(self)
         user = require_login(self)
         if user["role_scope"] != "user" or not RoleRepository.has_feature(user["role_id"], "user_portal"):
             raise tornado.web.HTTPError(403, reason="当前账号没有用户端访问权限")

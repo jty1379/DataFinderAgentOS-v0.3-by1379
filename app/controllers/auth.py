@@ -7,6 +7,7 @@ import tornado.web
 from app.controllers.base import BaseHandler
 from app.core.exceptions import AppError
 from app.services.security import AuditLogService
+from app.services.system_settings import SystemSettingsService
 from app.services.user_service import UserService
 
 
@@ -64,6 +65,8 @@ class RegisterHandler(BaseHandler):
     def get(self):
         if self.current_user:
             return self.redirect("/index" if self.current_user["role_scope"] == "user" else "/admin/")
+        if not SystemSettingsService.allow_register():
+            raise tornado.web.HTTPError(403, reason="系统当前已关闭用户注册")
         self.render(
             "register.html",
             title="创建账号 · 瞭望与问数系统",
@@ -74,6 +77,8 @@ class RegisterHandler(BaseHandler):
     def post(self):
         if self.current_user:
             return self.redirect("/index" if self.current_user["role_scope"] == "user" else "/admin/")
+        if not SystemSettingsService.allow_register():
+            raise tornado.web.HTTPError(403, reason="系统当前已关闭用户注册")
         username = self.get_body_argument("username", "").strip()
         password = self.get_body_argument("password", "")
         password_confirm = self.get_body_argument("password_confirm", "")

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 import tornado
 
 from app.controllers.base import AdminBaseHandler, AdminJsonHandler, UserJsonHandler
@@ -93,27 +91,15 @@ class AdminTTSPreviewHandler(AdminJsonHandler):
             return self.write_json({"ok": False, "message": "文本长度需为 1—5000 个字符"}, 400)
         try:
             result = await TTSService.synthesize(text, voice)
-            TTSCallRepository.record(
-                text_length=len(text),
-                voice=voice,
-                success=True,
-                from_cache=result.get("from_cache", False),
-            )
             return self.write_json(result)
         except TTSServiceError as exc:
-            TTSCallRepository.record(
-                text_length=len(text),
-                voice=voice,
-                success=False,
-                error_message=str(exc),
-            )
             return self.write_json({"ok": False, "message": str(exc)}, 500)
 
 
 class TTSAudioHandler(tornado.web.StaticFileHandler):
     def initialize(self):
-        from config.settings import SETTINGS
-        self.root = str(SETTINGS.data_dir / "tts_cache")
+        from config.settings import BASE_DIR
+        self.root = str(BASE_DIR / "data" / "tts_cache")
 
     def validate_absolute_path(self, root, absolute_path):
         if not absolute_path.startswith(root):
@@ -132,18 +118,6 @@ class UserTTSHandler(UserJsonHandler):
             return self.write_json({"ok": False, "message": "语音合成服务未启用"}, 400)
         try:
             result = await TTSService.synthesize(text, voice)
-            TTSCallRepository.record(
-                text_length=len(text),
-                voice=voice,
-                success=True,
-                from_cache=result.get("from_cache", False),
-            )
             return self.write_json(result)
         except TTSServiceError as exc:
-            TTSCallRepository.record(
-                text_length=len(text),
-                voice=voice,
-                success=False,
-                error_message=str(exc),
-            )
             return self.write_json({"ok": False, "message": str(exc)}, 500)

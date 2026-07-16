@@ -9,7 +9,6 @@ from urllib.parse import urlsplit
 
 from app.models.db import connection_scope
 
-
 CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{2,40}$")
 PARAM_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,63}$")
 FORBIDDEN_HEADER_NAMES = {
@@ -150,14 +149,47 @@ class SourceRepository:
                 f"""
                 SELECT s.*,
                        (SELECT COUNT(*) FROM collection_rules r WHERE r.source_id = s.id)
-                           AS rule_count
+                           AS rule_count,
+                       (SELECT r.id FROM collection_rules r
+                        WHERE r.source_id=s.id AND r.enabled=1 ORDER BY r.id LIMIT 1)
+                           AS first_enabled_rule_id,
+                       COALESCE(stats.run_count,0) AS run_count,
+                       COALESCE(stats.success_count,0) AS success_count,
+                       COALESCE(stats.failed_count,0) AS failed_count,
+                       COALESCE(stats.avg_latency_ms,0) AS avg_latency_ms,
+                       COALESCE(stats.last_collected_at,'') AS last_collected_at,
+                       COALESCE((
+                           SELECT cr2.error_message
+                           FROM collection_runs cr2
+                           JOIN collection_rules r2 ON r2.id=cr2.rule_id
+                           WHERE r2.source_id=s.id AND cr2.error_message<>''
+                           ORDER BY cr2.id DESC LIMIT 1
+                       ),'') AS last_error
                 FROM lookout_sources s
+                LEFT JOIN (
+                    SELECT r.source_id,COUNT(cr.id) AS run_count,
+                           SUM(CASE WHEN cr.status IN ('success','partial') THEN 1 ELSE 0 END)
+                               AS success_count,
+                           SUM(CASE WHEN cr.status='failed' THEN 1 ELSE 0 END) AS failed_count,
+                           AVG(CASE WHEN cr.started_at IS NOT NULL AND cr.finished_at IS NOT NULL
+                               THEN (julianday(cr.finished_at)-julianday(cr.started_at))*86400000 END)
+                               AS avg_latency_ms,
+                           MAX(COALESCE(cr.finished_at,cr.created_at)) AS last_collected_at
+                    FROM collection_rules r
+                    LEFT JOIN collection_runs cr ON cr.rule_id=r.id
+                    GROUP BY r.source_id
+                ) stats ON stats.source_id=s.id
                 WHERE {where}
                 ORDER BY s.id DESC LIMIT ? OFFSET ?
                 """,
                 (*params, page_size, offset),
             ).fetchall()
-        return [_decode(row, ("default_headers",)) for row in rows], total
+        output = [_decode(row, ("default_headers",)) for row in rows]
+        for item in output:
+            completed = int(item.get("success_count", 0)) + int(item.get("failed_count", 0))
+            item["success_rate"] = round(int(item.get("success_count", 0)) / completed * 100, 1) if completed else 0
+            item["avg_latency_ms"] = round(float(item.get("avg_latency_ms", 0) or 0))
+        return output, total
 
     @staticmethod
     def get(source_id: int):

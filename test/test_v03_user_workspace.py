@@ -22,7 +22,6 @@ from app.models.user import UserRepository
 from app.services.deep_collection import DeepCollectionService
 from app.services.digital_employee import DigitalEmployeeService
 
-
 ENTRY_PATH = Path(__file__).resolve().parents[1] / "app.py"
 SPEC = importlib.util.spec_from_file_location("datafinder_v03_workspace_entry", ENTRY_PATH)
 ENTRY = importlib.util.module_from_spec(SPEC)
@@ -132,8 +131,10 @@ class V03WorkspaceWebTest(AsyncHTTPTestCase):
     def cookies_from(response):
         result = {}
         for value in response.headers.get_list("Set-Cookie"):
-            cookie = SimpleCookie(); cookie.load(value)
-            for key, morsel in cookie.items(): result[key] = morsel.value
+            cookie = SimpleCookie()
+            cookie.load(value)
+            for key, morsel in cookie.items():
+                result[key] = morsel.value
         return result
 
     @staticmethod

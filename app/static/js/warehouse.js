@@ -5,6 +5,7 @@
     const itemChecks = api.qsa("[data-warehouse-item]");
     const selectAll = api.qs("[data-warehouse-select-all]");
     const selection = api.qs("[data-warehouse-selection]");
+    const batchDelete = api.qs("[data-warehouse-batch-delete]");
     const taskDialog = api.qs("#deep-task-dialog");
     const resultDialog = api.qs("#deep-result-dialog");
     let taskIds = [];
@@ -16,6 +17,7 @@
         const count = selectedIds().length;
         if (selection) selection.textContent = `已选 ${count} 条`;
         api.qsa("[data-batch-deep]").forEach((button) => button.disabled = count === 0);
+        if (batchDelete) batchDelete.disabled = count === 0;
         if (selectAll) { selectAll.checked = count > 0 && count === itemChecks.length; selectAll.indeterminate = count > 0 && count < itemChecks.length; }
     }
     itemChecks.forEach((input) => input.addEventListener("change", syncSelection));
@@ -85,6 +87,26 @@
     }
     api.qsa("[data-deep-start]").forEach((button) => button.addEventListener("click", () => startDeep([Number(button.dataset.deepStart)], button.dataset.deepUpdate === "1", button)));
     api.qsa("[data-batch-deep]").forEach((button) => button.addEventListener("click", () => startDeep(selectedIds(), button.dataset.batchDeep === "update", button)));
+    batchDelete?.addEventListener("click", async () => {
+        const ids = selectedIds();
+        if (!ids.length || !window.confirm(`确认删除选中的 ${ids.length} 条仓库数据？该操作不可撤销。`)) return;
+        api.setBusy(batchDelete, true, "正在删除…");
+        try {
+            const data = await api.fetchJson("/admin/warehouse/batch-delete", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({item_ids: ids})});
+            api.announce(data.message);
+            window.setTimeout(() => window.location.reload(), 450);
+        } catch (error) { api.announce(api.errorMessage(error), "error"); }
+        finally { api.setBusy(batchDelete, false); }
+    });
+    api.qsa("[data-warehouse-recollect]").forEach((button) => button.addEventListener("click", async () => {
+        if (!window.confirm("确认根据原采集规则重新采集该数据？新结果会进入采集任务列表。")) return;
+        api.setBusy(button, true, "创建任务…");
+        try {
+            const data = await api.fetchJson(`/admin/warehouse/${button.dataset.warehouseRecollect}/recollect`, {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"});
+            api.announce(data.message);
+        } catch (error) { api.announce(api.errorMessage(error), "error"); }
+        finally { api.setBusy(button, false); }
+    }));
     taskDialog?.addEventListener("close", () => window.clearTimeout(pollTimer));
 
     api.qsa("[data-deep-result]").forEach((button) => button.addEventListener("click", async () => {

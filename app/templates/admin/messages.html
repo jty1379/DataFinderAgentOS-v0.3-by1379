@@ -1,82 +1,11 @@
 {% extends "base.html" %}
-
 {% block title %}{{ title }}{% end %}
-
 {% block admin_content %}
-<div class="layui-card">
-    <div class="layui-card-header">
-        <h3>对话详情</h3>
-        <a href="/admin/sessions" class="layui-btn layui-btn-primary layui-btn-xs">返回会话列表</a>
-    </div>
-    <div class="layui-card-body">
-        <div class="layui-row">
-            <div class="layui-col-md6">
-                <table class="layui-table">
-                    <tr>
-                        <th>会话ID</th>
-                        <td>{{ conversation['id'] }}</td>
-                    </tr>
-                    <tr>
-                        <th>用户</th>
-                        <td>{{ conversation['user_name'] }}</td>
-                    </tr>
-                    <tr>
-                        <th>标题</th>
-                        <td>{{ conversation['title'] }}</td>
-                    </tr>
-                    <tr>
-                        <th>模型</th>
-                        <td>{{ conversation['model_name'] or '-' }}</td>
-                    </tr>
-                    <tr>
-                        <th>数字员工</th>
-                        <td>{{ conversation['employee_name'] or '-' }}</td>
-                    </tr>
-                    <tr>
-                        <th>创建时间</th>
-                        <td>{{ conversation['created_at'] }}</td>
-                    </tr>
-                    <tr>
-                        <th>更新时间</th>
-                        <td>{{ conversation['updated_at'] }}</td>
-                    </tr>
-                </table>
-            </div>
-        </div>
-        
-        <div class="layui-row layui-col-space10">
-            <div class="layui-col-md12">
-                <div class="layui-card">
-                    <div class="layui-card-header">消息列表</div>
-                    <div class="layui-card-body">
-                        {% for message in messages %}
-                        <div class="layui-row" style="margin-bottom: 15px;">
-                            <div class="layui-col-md1">
-                                <span class="layui-btn layui-btn-xs {% if message['role'] == 'user' %}layui-btn-normal{% else %}layui-btn-primary{% end %}">
-                                    {{ '用户' if message['role'] == 'user' else 'AI' }}
-                                </span>
-                            </div>
-                            <div class="layui-col-md11">
-                                <div class="layui-form-item">
-                                    <textarea class="layui-textarea" rows="3" readonly>{{ message['content'] }}</textarea>
-                                </div>
-                                <div class="layui-form-item">
-                                    <span class="layui-badge layui-bg-gray">类型: {{ message['content_type'] }}</span>
-                                    <span class="layui-badge layui-bg-gray">时间: {{ message['created_at'] }}</span>
-                                </div>
-                            </div>
-                        </div>
-                        {% else %}
-                        <div class="layui-row">
-                            <div class="layui-col-md12" style="text-align: center; padding: 50px;">
-                                暂无消息
-                            </div>
-                        </div>
-                        {% end %}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+<section class="v02-page message-audit-page">
+    <header class="v02-heading"><div><p class="section-kicker">会话 #{{ conversation['id'] }}</p><h2>{{ conversation['title'] }}</h2><p>{{ conversation['user_name'] }} · {{ conversation['model_name'] or '未指定模型' }} · {{ conversation['employee_name'] or '未使用数字员工' }}</p></div><div class="v02-heading-actions"><a class="v02-button-secondary" href="/admin/sessions/{{ conversation['id'] }}/export.pdf">导出 PDF</a><a class="v02-button" href="/admin/sessions">返回列表</a></div></header>
+    <article class="v02-panel"><header class="v02-panel-header"><div><h3>完整消息链</h3><p>风险、命中词、耗时和 Token 均为持久化数据</p></div><span class="v02-count">{{ len(messages) }} 条</span></header><div class="session-message-list">
+        {% for message in messages %}<article class="session-message {{ message['role'] }}"><header><b>{{ '用户' if message['role'] == 'user' else '系统回复' }}</b><time>{{ message['created_at'] }}</time></header><div class="session-message-content">{{ message['content'] }}</div><footer><span>类型 {{ message['content_type'] }}</span><span>风险 {{ {'low':'低','medium':'中','high':'高','critical':'严重'}.get(message['risk_level'],'低') }}</span><span>{{ message['latency_ms'] }} ms</span><span>{{ message['token_count'] }} tokens</span>{% if message['matched_words'] and message['matched_words'] != '[]' %}<span>命中 {{ message['matched_words'] }}</span>{% end %}</footer></article>{% end %}
+        {% if not messages %}<div class="v02-feedback"><p>暂无消息。</p></div>{% end %}
+    </div></article>
+</section>
 {% end %}

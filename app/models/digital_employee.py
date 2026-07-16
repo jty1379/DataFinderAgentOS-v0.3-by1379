@@ -9,7 +9,6 @@ from urllib.parse import urlsplit
 
 from app.models.db import connection_scope
 
-
 CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{2,39}$")
 EMPLOYEE_TYPES = {"llm", "api"}
 
@@ -105,9 +104,11 @@ class DigitalEmployeeRepository:
             ).fetchone()["count"])
             rows = connection.execute(
                 """
-                SELECT d.*, m.name AS model_name_display, m.model_name AS model_call_name
+                SELECT d.*, m.name AS model_name_display, m.model_name AS model_call_name,
+                       i.name AS interface_name, i.enabled AS interface_enabled
                 FROM digital_employees d
                 LEFT JOIN model_configs m ON m.id = d.model_id
+                LEFT JOIN api_interfaces i ON i.id = d.interface_id
                 WHERE """ + where +
                 " ORDER BY d.is_system DESC, d.id DESC LIMIT ? OFFSET ?",
                 (*params, page_size, (page - 1) * page_size),
@@ -119,9 +120,11 @@ class DigitalEmployeeRepository:
         with connection_scope() as connection:
             row = connection.execute(
                 """
-                SELECT d.*, m.name AS model_name_display, m.model_name AS model_call_name
+                SELECT d.*, m.name AS model_name_display, m.model_name AS model_call_name,
+                       i.name AS interface_name, i.enabled AS interface_enabled
                 FROM digital_employees d
                 LEFT JOIN model_configs m ON m.id = d.model_id
+                LEFT JOIN api_interfaces i ON i.id = d.interface_id
                 WHERE d.id = ?
                 """,
                 (employee_id,),
@@ -157,6 +160,13 @@ class DigitalEmployeeRepository:
             model_id = int(model_id) if model_id not in (None, "", 0, "0") else None
         except (TypeError, ValueError) as exc:
             raise ValueError("指定模型编号不正确") from exc
+        interface_id = values.get("interface_id", current.get("interface_id"))
+        try:
+            interface_id = (
+                int(interface_id) if interface_id not in (None, "", 0, "0") else None
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError("绑定接口编号不正确") from exc
         use_default_model = _bool(values.get("use_default_model", current.get("use_default_model", True)))
         system_prompt = str(values.get("system_prompt", current.get("system_prompt", ""))).strip()
         prompt_template = str(values.get("prompt_template", current.get("prompt_template", "{{input}}"))).strip()
@@ -177,12 +187,14 @@ class DigitalEmployeeRepository:
             api_url = ""
             request_headers = {}
             request_params = {}
+            interface_id = None
         else:
-            parsed = urlsplit(api_url)
-            if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
-                raise ValueError("接口型数字员工必须填写完整的 http/https 地址")
-            if parsed.username or parsed.password:
-                raise ValueError("接口地址不允许嵌入凭据")
+            if not interface_id:
+                parsed = urlsplit(api_url)
+                if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+                    raise ValueError("接口型数字员工必须绑定托管接口或填写完整的 http/https 地址")
+                if parsed.username or parsed.password:
+                    raise ValueError("接口地址不允许嵌入凭据")
             if api_method not in {"GET", "POST"} or response_mode not in {"json", "card"}:
                 raise ValueError("接口方法或响应模式无效")
             if any(str(key).lower() in {"cookie", "authorization", "proxy-authorization"} for key in request_headers):
@@ -198,7 +210,8 @@ class DigitalEmployeeRepository:
         return {
             "code": code, "name": name, "mention": mention,
             "employee_type": employee_type, "description": description[:500],
-            "model_id": model_id, "use_default_model": int(use_default_model),
+            "model_id": model_id, "interface_id": interface_id,
+            "use_default_model": int(use_default_model),
             "system_prompt": system_prompt[:10000], "prompt_template": prompt_template[:10000],
             "skills": json.dumps(skills, ensure_ascii=False),
             "crawl4ai_enabled": int(crawl_enabled),
@@ -219,12 +232,12 @@ class DigitalEmployeeRepository:
                 cursor = connection.execute(
                     """
                     INSERT INTO digital_employees
-                        (code, name, mention, employee_type, description, model_id,
+                        (code, name, mention, employee_type, description, model_id, interface_id,
                          use_default_model, system_prompt, prompt_template, skills,
                          crawl4ai_enabled, crawl4ai_config, api_method, api_url,
                          request_headers, request_params, response_mode, timeout_seconds,
                          enabled, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     tuple(data[key] for key in data),
                 )
@@ -250,7 +263,7 @@ class DigitalEmployeeRepository:
                 cursor = connection.execute(
                     """
                     UPDATE digital_employees SET
-                        code=?, name=?, mention=?, employee_type=?, description=?, model_id=?,
+                        code=?, name=?, mention=?, employee_type=?, description=?, model_id=?, interface_id=?,
                         use_default_model=?, system_prompt=?, prompt_template=?, skills=?,
                         crawl4ai_enabled=?, crawl4ai_config=?, api_method=?, api_url=?,
                         request_headers=?, request_params=?, response_mode=?, timeout_seconds=?,

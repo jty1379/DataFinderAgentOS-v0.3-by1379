@@ -1,474 +1,556 @@
-"""采集任务管理服务 - 支持批量、单条和深度采集，包括进度追踪和失败重试。"""
+"""可恢复的采集任务生命周期服务。"""
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from datetime import datetime
 from enum import Enum
-from typing import Optional
+
+import tornado.ioloop
 
 from app.models.db import connection_scope
+from app.models.lookout import CollectionRepository
+from app.models.source import RuleRepository
 from app.services.collector import CollectionError, CollectorService
-from app.services.security_analysis import SecurityAnalyzer
 
 LOGGER = logging.getLogger("collection_task")
 
 
 class CollectionType(Enum):
-    """采集类型枚举。"""
-    BATCH = "batch"  # 批量采集
-    SINGLE = "single"  # 单条采集
-    DEEP = "deep"  # 深度采集
+    SINGLE = "single"
+    BATCH = "batch"
+    DEEP = "deep"
 
 
 class TaskStatus(Enum):
-    """任务状态枚举。"""
     PENDING = "pending"
     RUNNING = "running"
     SUCCESS = "success"
+    PARTIAL = "partial"
     FAILED = "failed"
-    PAUSED = "paused"
+    CANCELLED = "cancelled"
+
+
+TERMINAL_STATUSES = {
+    TaskStatus.SUCCESS.value,
+    TaskStatus.PARTIAL.value,
+    TaskStatus.FAILED.value,
+    TaskStatus.CANCELLED.value,
+}
 
 
 class CollectionTaskService:
-    """采集任务管理服务。"""
+    """创建、执行、取消、重试、恢复并查询普通采集任务。"""
 
     MAX_RETRIES = 3
-    RETRY_DELAY = 1  # 秒
+    RETRY_DELAY = 1
 
     @staticmethod
+    def _log(
+        task_id: int,
+        level: str,
+        step: str,
+        message: str,
+        page_number: int | None = None,
+    ) -> None:
+        level = level if level in {"info", "success", "warning", "error"} else "info"
+        with connection_scope() as connection:
+            connection.execute(
+                """INSERT INTO collection_run_logs
+                   (run_id,level,step,message,page_number)
+                   VALUES (?,?,?,?,?)""",
+                (task_id, level, step[:80], message.strip()[:1000], page_number),
+            )
+            connection.commit()
+
+    @staticmethod
+    def _rule_available(rule_id: int) -> dict | None:
+        rule = RuleRepository.get(rule_id)
+        if not rule or not rule.get("enabled") or not rule.get("source_enabled"):
+            return None
+        return rule
+
+    @classmethod
     def create_batch_task(
+        cls,
         rule_id: int,
         keyword: str,
         pages: int = 1,
-        user_id: Optional[int] = None,
-    ) -> Optional[int]:
-        """创建批量采集任务。
-
-        Args:
-            rule_id: 采集规则ID
-            keyword: 关键词
-            pages: 采集页数
-            user_id: 用户ID
-
-        Returns:
-            任务ID或None
-        """
-        try:
-            with connection_scope() as connection:
-                # 验证规则存在
-                rule = connection.execute(
-                    "SELECT id FROM collection_rules WHERE id = ?", (rule_id,)
-                ).fetchone()
-                if not rule:
-                    return None
-
-                # 创建任务记录
-                cursor = connection.execute(
-                    """
-                    INSERT INTO collection_runs
-                        (rule_id, user_id, keyword, page_number, status)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (rule_id, user_id, keyword, pages, "pending"),
-                )
-                connection.commit()
-                return int(cursor.lastrowid)
-        except Exception as exc:
-            LOGGER.exception("Failed to create batch task", extra={"rule_id": rule_id})
+        user_id: int | None = None,
+        *,
+        start_page: int = 1,
+        page_size: int | None = None,
+    ) -> int | None:
+        keyword = str(keyword or "").strip()
+        if not 1 <= len(keyword) <= 100:
+            raise ValueError("采集关键词需为 1—100 个字符")
+        rule = cls._rule_available(int(rule_id))
+        if not rule:
             return None
+        pages = min(100, max(1, int(pages or 1)))
+        start_page = min(1000, max(1, int(start_page or 1)))
+        page_size = min(100, max(1, int(page_size or rule.get("page_size") or 12)))
+        task_type = CollectionType.BATCH.value if pages > 1 else CollectionType.SINGLE.value
+        with connection_scope() as connection:
+            cursor = connection.execute(
+                """INSERT INTO collection_runs
+                   (rule_id,user_id,task_type,keyword,page_number,page_size,total_pages,status)
+                   VALUES (?,?,?,?,?,?,?,'pending')""",
+                (rule_id, user_id, task_type, keyword, start_page, page_size, pages),
+            )
+            connection.commit()
+            task_id = int(cursor.lastrowid)
+        cls._log(task_id, "info", "created", f"已创建{pages}页采集任务，从第{start_page}页开始")
+        return task_id
 
-    @staticmethod
+    @classmethod
     def create_single_task(
+        cls,
         rule_id: int,
         keyword: str,
         page: int = 1,
-        user_id: Optional[int] = None,
-    ) -> Optional[int]:
-        """创建单条采集任务（单页采集）。
-
-        Args:
-            rule_id: 采集规则ID
-            keyword: 关键词
-            page: 页码
-            user_id: 用户ID
-
-        Returns:
-            任务ID或None
-        """
-        return CollectionTaskService.create_batch_task(
-            rule_id=rule_id,
-            keyword=keyword,
+        user_id: int | None = None,
+        *,
+        page_size: int | None = None,
+    ) -> int | None:
+        return cls.create_batch_task(
+            rule_id,
+            keyword,
             pages=1,
             user_id=user_id,
+            start_page=page,
+            page_size=page_size,
         )
 
     @staticmethod
     def create_deep_task(
         warehouse_item_id: int,
-        employee_id: Optional[int] = None,
-        user_id: Optional[int] = None,
-    ) -> Optional[int]:
-        """创建深度采集任务。
-
-        Args:
-            warehouse_item_id: 仓库项目ID
-            employee_id: 数字员工ID
-            user_id: 用户ID
-
-        Returns:
-            任务ID或None
-        """
+        employee_id: int | None = None,
+        user_id: int | None = None,
+    ) -> int | None:
         try:
             with connection_scope() as connection:
-                # 验证仓库项存在
                 item = connection.execute(
-                    "SELECT id FROM warehouse_items WHERE id = ?", (warehouse_item_id,)
+                    "SELECT id FROM warehouse_items WHERE id=?", (warehouse_item_id,)
                 ).fetchone()
                 if not item:
                     return None
-
-                # 创建深度采集任务
                 cursor = connection.execute(
-                    """
-                    INSERT INTO deep_collection_tasks
-                        (warehouse_item_id, employee_id, started_by, status)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (warehouse_item_id, employee_id, user_id, "pending"),
+                    """INSERT INTO deep_collection_tasks
+                       (warehouse_item_id,employee_id,started_by,status)
+                       VALUES (?,?,?,'pending')""",
+                    (warehouse_item_id, employee_id, user_id),
                 )
                 connection.commit()
                 return int(cursor.lastrowid)
-        except Exception as exc:
+        except Exception:
             LOGGER.exception(
-                "Failed to create deep task",
-                extra={"warehouse_item_id": warehouse_item_id},
+                "failed to create deep task",
+                extra={"warehouse_item_id": warehouse_item_id, "event": "deep_task_create_failed"},
             )
             return None
 
+    @classmethod
+    def schedule(cls, task_id: int) -> None:
+        """在当前 Tornado IOLoop 后台执行任务，HTTP 请求可立即返回。"""
+        tornado.ioloop.IOLoop.current().spawn_callback(cls.execute_task, int(task_id))
+
     @staticmethod
+    def _is_cancelled(task_id: int) -> bool:
+        with connection_scope() as connection:
+            row = connection.execute(
+                "SELECT status FROM collection_runs WHERE id=?", (task_id,)
+            ).fetchone()
+        return bool(row and row["status"] == TaskStatus.CANCELLED.value)
+
+    @classmethod
+    async def execute_task(cls, task_id: int) -> dict | None:
+        """从数据库读取完整配置并执行任务，可用于新建、重试和启动恢复。"""
+        with connection_scope() as connection:
+            task = connection.execute(
+                "SELECT * FROM collection_runs WHERE id=?", (int(task_id),)
+            ).fetchone()
+            if not task or task["status"] != TaskStatus.PENDING.value:
+                return cls.get_task_progress(task_id)
+            cursor = connection.execute(
+                """UPDATE collection_runs
+                   SET status='running',started_at=COALESCE(started_at,CURRENT_TIMESTAMP),
+                       finished_at=NULL,cancelled_at=NULL,error_message='',updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND status='pending'""",
+                (task_id,),
+            )
+            connection.commit()
+            if cursor.rowcount != 1:
+                return cls.get_task_progress(task_id)
+            task = dict(task)
+
+        rule = cls._rule_available(int(task["rule_id"] or 0))
+        if not rule:
+            cls._finish_failed(task_id, "采集规则不存在、所属瞭源已停用或规则已停用")
+            return cls.get_task_progress(task_id)
+
+        total_pages = max(1, int(task.get("total_pages") or 1))
+        start_page = max(1, int(task.get("page_number") or 1))
+        page_size = min(100, max(1, int(task.get("page_size") or 12)))
+        processed_pages = 0
+        failed_pages = 0
+        errors: list[str] = []
+        cls._log(task_id, "info", "started", f"开始执行，共{total_pages}页")
+
+        try:
+            for offset in range(total_pages):
+                page = start_page + offset
+                if cls._is_cancelled(task_id):
+                    cls._log(task_id, "warning", "cancelled", "任务已由管理员取消", page)
+                    break
+
+                page_error = ""
+                collected: list[dict] | None = None
+                for attempt in range(1, cls.MAX_RETRIES + 1):
+                    try:
+                        cls._log(
+                            task_id,
+                            "info",
+                            "request",
+                            f"请求第{page}页，第{attempt}次尝试",
+                            page,
+                        )
+                        collected = await CollectorService.collect(
+                            rule,
+                            str(task["keyword"]),
+                            page=page,
+                            page_size=page_size,
+                        )
+                        page_error = ""
+                        break
+                    except CollectionError as exc:
+                        page_error = str(exc)[:500]
+                        cls._log(
+                            task_id,
+                            "warning" if attempt < cls.MAX_RETRIES else "error",
+                            "request",
+                            f"第{page}页采集失败：{page_error}",
+                            page,
+                        )
+                        if attempt < cls.MAX_RETRIES:
+                            await asyncio.sleep(cls.RETRY_DELAY)
+                    except Exception as exc:
+                        page_error = "采集执行发生未预期错误"
+                        LOGGER.exception(
+                            "collection task page failed",
+                            extra={"task_id": task_id, "event": "collection_task_page_failed"},
+                        )
+                        cls._log(task_id, "error", "request", f"第{page}页：{page_error}", page)
+                        errors.append(str(exc)[:200])
+                        break
+
+                if cls._is_cancelled(task_id):
+                    cls._log(task_id, "warning", "cancelled", "收到取消信号，停止写入结果", page)
+                    break
+
+                processed_pages += 1
+                if collected is None:
+                    failed_pages += 1
+                    errors.append(page_error or f"第{page}页采集失败")
+                else:
+                    rows = CollectionRepository.append_results(task_id, collected)
+                    message = (
+                        f"第{page}页已完成，任务累计保存{len(rows)}条结果"
+                        if collected
+                        else f"第{page}页请求成功，但未解析到可用结果"
+                    )
+                    cls._log(
+                        task_id,
+                        "success" if collected else "warning",
+                        "saved",
+                        message,
+                        page,
+                    )
+
+                cls._update_progress(
+                    task_id,
+                    processed_pages=processed_pages,
+                    failed_pages=failed_pages,
+                    total_pages=total_pages,
+                    error_message=errors[-1] if errors else "",
+                )
+
+            if cls._is_cancelled(task_id):
+                return cls.get_task_progress(task_id)
+            cls._finish(task_id, failed_pages, errors)
+        except Exception as exc:
+            LOGGER.exception(
+                "collection task execution failed",
+                extra={"task_id": task_id, "event": "collection_task_failed"},
+            )
+            cls._finish_failed(task_id, str(exc)[:500] or "采集任务执行失败")
+        return cls.get_task_progress(task_id)
+
+    @classmethod
     async def execute_batch_task(
+        cls,
         task_id: int,
-        rule_dict: dict,
-        keyword: str,
+        rule_dict: dict | None = None,
+        keyword: str = "",
         pages: int = 1,
     ) -> tuple[int, int]:
-        """执行批量采集任务，支持多页采集和重试。
+        """兼容成员分支原有调用；执行参数以数据库任务记录为准。"""
+        result = await cls.execute_task(task_id)
+        if not result:
+            return 0, 1
+        return int(result["success_count"]), int(result["failed_count"])
 
-        Args:
-            task_id: 任务ID
-            rule_dict: 采集规则字典
-            keyword: 关键词
-            pages: 采集页数
+    @staticmethod
+    def _result_count(task_id: int, connection=None) -> int:
+        if connection is not None:
+            return int(
+                connection.execute(
+                    "SELECT COUNT(*) AS count FROM collection_results WHERE run_id=?",
+                    (task_id,),
+                ).fetchone()["count"]
+            )
+        with connection_scope() as scoped_connection:
+            return CollectionTaskService._result_count(task_id, scoped_connection)
 
-        Returns:
-            (成功数, 失败数)元组
-        """
-        success_count = 0
-        failed_count = 0
-
-        # 更新任务状态为运行中
+    @classmethod
+    def _update_progress(
+        cls,
+        task_id: int,
+        *,
+        processed_pages: int,
+        failed_pages: int,
+        total_pages: int,
+        error_message: str,
+    ) -> None:
         with connection_scope() as connection:
+            result_count = cls._result_count(task_id, connection)
+            progress = min(99, round(processed_pages / max(total_pages, 1) * 100))
             connection.execute(
-                "UPDATE collection_runs SET status = ? WHERE id = ?",
-                ("running", task_id),
+                """UPDATE collection_runs
+                   SET processed_pages=?,result_count=?,success_count=?,failed_count=?,
+                       progress=?,error_message=?,updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND status='running'""",
+                (
+                    processed_pages,
+                    result_count,
+                    result_count,
+                    failed_pages,
+                    progress,
+                    error_message[:500],
+                    task_id,
+                ),
             )
             connection.commit()
 
-        try:
-            for page in range(1, pages + 1):
-                retry_count = 0
-                while retry_count < CollectionTaskService.MAX_RETRIES:
-                    try:
-                        results = await CollectorService.collect(
-                            rule=rule_dict,
-                            keyword=keyword,
-                            page=page,
-                        )
+    @classmethod
+    def _finish(cls, task_id: int, failed_pages: int, errors: list[str]) -> None:
+        with connection_scope() as connection:
+            result_count = cls._result_count(task_id, connection)
+            if failed_pages == 0:
+                status = TaskStatus.SUCCESS.value
+            elif result_count:
+                status = TaskStatus.PARTIAL.value
+            else:
+                status = TaskStatus.FAILED.value
+            connection.execute(
+                """UPDATE collection_runs
+                   SET status=?,result_count=?,success_count=?,failed_count=?,progress=100,
+                       error_message=?,finished_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND status='running'""",
+                (status, result_count, result_count, failed_pages, (errors[-1] if errors else "")[:500], task_id),
+            )
+            connection.commit()
+        cls._log(
+            task_id,
+            "success" if status == TaskStatus.SUCCESS.value else "warning" if status == TaskStatus.PARTIAL.value else "error",
+            "finished",
+            f"任务结束：状态{status}，保存{result_count}条，失败页{failed_pages}个",
+        )
 
-                        # 保存采集结果
-                        with connection_scope() as connection:
-                            for result in results:
-                                try:
-                                    # 执行安全分析
-                                    risk_level, analysis = SecurityAnalyzer.analyze(
-                                        title=result.get("title", ""),
-                                        summary=result.get("summary", ""),
-                                    )
-
-                                    cursor = connection.execute(
-                                        """
-                                        INSERT INTO collection_results
-                                            (run_id, rule_id, title, url, summary,
-                                             source_name, published_at, raw_data)
-                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                                        """,
-                                        (
-                                            task_id,
-                                            rule_dict.get("id"),
-                                            result.get("title", "")[:300],
-                                            result.get("url", "")[:2000],
-                                            result.get("summary", "")[:2000],
-                                            result.get("source_name", "")[:100],
-                                            result.get("published_at", "")[:100],
-                                            json.dumps(
-                                                result.get("raw_data", {}),
-                                                ensure_ascii=False,
-                                                default=str,
-                                            ),
-                                        ),
-                                    )
-                                    result_id = cursor.lastrowid
-
-                                    # 也保存到仓库并关联安全分析
-                                    connection.execute(
-                                        """
-                                        INSERT OR IGNORE INTO warehouse_items
-                                            (source_result_id, rule_id, title, url, summary,
-                                             source_name, published_at, raw_data, risk_level,
-                                             security_analysis, keywords)
-                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                        """,
-                                        (
-                                            result_id,
-                                            rule_dict.get("id"),
-                                            result.get("title", "")[:300],
-                                            result.get("url", "")[:2000],
-                                            result.get("summary", "")[:2000],
-                                            result.get("source_name", "")[:100],
-                                            result.get("published_at", "")[:100],
-                                            json.dumps(
-                                                result.get("raw_data", {}),
-                                                ensure_ascii=False,
-                                                default=str,
-                                            ),
-                                            risk_level,
-                                            json.dumps(analysis, ensure_ascii=False, default=str),
-                                            ",".join(analysis.get("matched_words", []))[:500],
-                                        ),
-                                    )
-
-                                    success_count += 1
-                                except Exception as exc:
-                                    LOGGER.warning(
-                                        "Failed to insert collection result",
-                                        extra={"url": result.get("url"), "error": str(exc)},
-                                    )
-                                    failed_count += 1
-                            connection.commit()
-                        break
-
-                    except CollectionError as exc:
-                        retry_count += 1
-                        LOGGER.warning(
-                            "Collection attempt failed, will retry",
-                            extra={
-                                "task_id": task_id,
-                                "page": page,
-                                "retry": retry_count,
-                                "error": str(exc),
-                            },
-                        )
-                        if retry_count < CollectionTaskService.MAX_RETRIES:
-                            await asyncio.sleep(CollectionTaskService.RETRY_DELAY)
-                        else:
-                            failed_count += 1
-                    except Exception as exc:
-                        LOGGER.exception(
-                            "Unexpected error during collection",
-                            extra={"task_id": task_id, "page": page},
-                        )
-                        failed_count += 1
-                        break
-
-            # 更新任务状态和计数
-            with connection_scope() as connection:
-                status = "success" if failed_count == 0 else "failed" if success_count == 0 else "partial"
-                connection.execute(
-                    """
-                    UPDATE collection_runs
-                    SET status = ?, result_count = ?,
-                        finished_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (status if status in ("success", "failed") else "success", success_count, task_id),
-                )
-                connection.commit()
-
-        except Exception as exc:
-            LOGGER.exception("Batch task execution failed", extra={"task_id": task_id})
-            with connection_scope() as connection:
-                connection.execute(
-                    """
-                    UPDATE collection_runs
-                    SET status = ?, error_message = ?,
-                        finished_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    ("failed", str(exc)[:500], task_id),
-                )
-                connection.commit()
-            failed_count += 1
-
-        return success_count, failed_count
+    @classmethod
+    def _finish_failed(cls, task_id: int, message: str) -> None:
+        with connection_scope() as connection:
+            result_count = cls._result_count(task_id, connection)
+            status = TaskStatus.PARTIAL.value if result_count else TaskStatus.FAILED.value
+            connection.execute(
+                """UPDATE collection_runs
+                   SET status=?,result_count=?,success_count=?,failed_count=failed_count+1,
+                       progress=100,error_message=?,finished_at=CURRENT_TIMESTAMP,
+                       updated_at=CURRENT_TIMESTAMP WHERE id=? AND status!='cancelled'""",
+                (status, result_count, result_count, message.strip()[:500], task_id),
+            )
+            connection.commit()
+        cls._log(task_id, "error", "finished", message)
 
     @staticmethod
-    def get_task_progress(task_id: int) -> Optional[dict]:
-        """获取任务进度。
+    def list_tasks(
+        *,
+        keyword: str = "",
+        status: str = "",
+        task_type: str = "",
+        rule_id: int | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict], int]:
+        page = max(1, int(page or 1))
+        page_size = min(100, max(1, int(page_size or 20)))
+        clauses = ["(?='' OR cr.keyword LIKE ? OR r.name LIKE ? OR s.name LIKE ?)"]
+        pattern = f"%{keyword.strip()}%"
+        params: list[object] = [keyword.strip(), pattern, pattern, pattern]
+        if status in {item.value for item in TaskStatus}:
+            clauses.append("cr.status=?")
+            params.append(status)
+        if task_type in {CollectionType.SINGLE.value, CollectionType.BATCH.value}:
+            clauses.append("cr.task_type=?")
+            params.append(task_type)
+        if rule_id:
+            clauses.append("cr.rule_id=?")
+            params.append(int(rule_id))
+        where = " AND ".join(clauses)
+        offset = (page - 1) * page_size
+        with connection_scope() as connection:
+            total = int(
+                connection.execute(
+                    """SELECT COUNT(*) AS count FROM collection_runs cr
+                       LEFT JOIN collection_rules r ON r.id=cr.rule_id
+                       LEFT JOIN lookout_sources s ON s.id=r.source_id
+                       WHERE """ + where,
+                    params,
+                ).fetchone()["count"]
+            )
+            rows = connection.execute(
+                """SELECT cr.*,r.name AS rule_name,s.name AS source_name,u.username AS operator_name
+                   FROM collection_runs cr
+                   LEFT JOIN collection_rules r ON r.id=cr.rule_id
+                   LEFT JOIN lookout_sources s ON s.id=r.source_id
+                   LEFT JOIN users u ON u.id=cr.user_id
+                   WHERE """ + where + " ORDER BY cr.id DESC LIMIT ? OFFSET ?",
+                (*params, page_size, offset),
+            ).fetchall()
+        return [dict(row) for row in rows], total
 
-        Args:
-            task_id: 任务ID
-
-        Returns:
-            任务进度字典或None
-        """
+    @staticmethod
+    def get_task_progress(task_id: int) -> dict | None:
         with connection_scope() as connection:
             row = connection.execute(
-                """
-                SELECT id, status, result_count, error_message,
-                       created_at, finished_at
-                FROM collection_runs
-                WHERE id = ?
-                """,
-                (task_id,),
+                """SELECT cr.*,r.name AS rule_name,s.name AS source_name,u.username AS operator_name
+                   FROM collection_runs cr
+                   LEFT JOIN collection_rules r ON r.id=cr.rule_id
+                   LEFT JOIN lookout_sources s ON s.id=r.source_id
+                   LEFT JOIN users u ON u.id=cr.user_id
+                   WHERE cr.id=?""",
+                (int(task_id),),
             ).fetchone()
-
             if not row:
                 return None
+            logs = connection.execute(
+                """SELECT * FROM (
+                       SELECT * FROM collection_run_logs WHERE run_id=? ORDER BY id DESC LIMIT 80
+                   ) ORDER BY id""",
+                (task_id,),
+            ).fetchall()
+            results = connection.execute(
+                "SELECT * FROM collection_results WHERE run_id=? ORDER BY id LIMIT 100",
+                (task_id,),
+            ).fetchall()
+        payload = dict(row)
+        payload["logs"] = [dict(item) for item in logs]
+        payload["items"] = [dict(item) for item in results]
+        payload["terminal"] = payload["status"] in TERMINAL_STATUSES
+        return payload
 
-            return {
-                "id": int(row["id"]),
-                "status": str(row["status"]),
-                "result_count": int(row["result_count"]),
-                "error_message": str(row["error_message"]),
-                "created_at": str(row["created_at"]),
-                "finished_at": str(row["finished_at"] or ""),
-            }
+    @classmethod
+    def retry_failed_task(cls, task_id: int) -> bool:
+        with connection_scope() as connection:
+            cursor = connection.execute(
+                """UPDATE collection_runs
+                   SET status='pending',processed_pages=0,failed_count=0,progress=0,
+                       retry_count=retry_count+1,error_message='',started_at=NULL,
+                       finished_at=NULL,cancelled_at=NULL,updated_at=CURRENT_TIMESTAMP
+                   WHERE id=? AND status IN ('failed','partial','cancelled')""",
+                (int(task_id),),
+            )
+            connection.commit()
+        if cursor.rowcount == 1:
+            cls._log(task_id, "info", "retry", "任务已重置，等待重新执行")
+            return True
+        return False
 
-    @staticmethod
-    def retry_failed_task(task_id: int) -> bool:
-        """重新尝试失败的任务。
+    @classmethod
+    def cancel_task(cls, task_id: int) -> bool:
+        with connection_scope() as connection:
+            cursor = connection.execute(
+                """UPDATE collection_runs
+                   SET status='cancelled',cancelled_at=CURRENT_TIMESTAMP,
+                       finished_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP,
+                       error_message='任务由管理员取消'
+                   WHERE id=? AND status IN ('pending','running')""",
+                (int(task_id),),
+            )
+            connection.commit()
+        if cursor.rowcount == 1:
+            cls._log(task_id, "warning", "cancelled", "任务由管理员取消")
+            return True
+        return False
 
-        Args:
-            task_id: 任务ID
-
-        Returns:
-            是否成功重置任务状态
-        """
-        try:
-            with connection_scope() as connection:
-                task = connection.execute(
-                    "SELECT id FROM collection_runs WHERE id = ? AND status = ?",
-                    (task_id, "failed"),
-                ).fetchone()
-
-                if not task:
-                    return False
-
+    @classmethod
+    def recover_interrupted(cls) -> list[int]:
+        """把服务中断时仍为 running 的任务恢复为 pending，供启动后自动续跑。"""
+        with connection_scope() as connection:
+            rows = connection.execute(
+                "SELECT id FROM collection_runs WHERE status='running' ORDER BY id"
+            ).fetchall()
+            task_ids = [int(row["id"]) for row in rows]
+            if task_ids:
                 connection.execute(
-                    """
-                    UPDATE collection_runs
-                    SET status = ?, result_count = 0, error_message = '',
-                        finished_at = NULL
-                    WHERE id = ?
-                    """,
-                    ("pending", task_id),
+                    """UPDATE collection_runs
+                       SET status='pending',retry_count=retry_count+1,
+                           error_message='服务重启后自动恢复',updated_at=CURRENT_TIMESTAMP
+                       WHERE status='running'"""
                 )
                 connection.commit()
-                return True
-        except Exception as exc:
-            LOGGER.exception("Failed to retry task", extra={"task_id": task_id})
-            return False
+        for task_id in task_ids:
+            cls._log(task_id, "warning", "recovered", "检测到服务中断，任务已恢复并等待续跑")
+        return task_ids
 
-    @staticmethod
-    def cancel_task(task_id: int) -> bool:
-        """取消任务。
-
-        Args:
-            task_id: 任务ID
-
-        Returns:
-            是否成功取消
-        """
-        try:
-            with connection_scope() as connection:
-                task = connection.execute(
-                    "SELECT status FROM collection_runs WHERE id = ?", (task_id,)
-                ).fetchone()
-
-                if not task or task["status"] in ("success", "failed"):
-                    return False
-
-                connection.execute(
-                    """
-                    UPDATE collection_runs
-                    SET status = ?, finished_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    ("paused", task_id),
-                )
-                connection.commit()
-                return True
-        except Exception as exc:
-            LOGGER.exception("Failed to cancel task", extra={"task_id": task_id})
-            return False
+    @classmethod
+    def resume_pending_tasks(cls, limit: int = 50) -> list[int]:
+        with connection_scope() as connection:
+            rows = connection.execute(
+                "SELECT id FROM collection_runs WHERE status='pending' ORDER BY id LIMIT ?",
+                (min(200, max(1, int(limit))),),
+            ).fetchall()
+        task_ids = [int(row["id"]) for row in rows]
+        for task_id in task_ids:
+            cls.schedule(task_id)
+        return task_ids
 
     @staticmethod
     def batch_delete_items(item_ids: list[int]) -> int:
-        """批量删除仓库项。
-
-        Args:
-            item_ids: 仓库项ID列表
-
-        Returns:
-            删除的项数
-        """
-        if not item_ids:
+        ids: list[int] = []
+        for item_id in item_ids[:1000]:
+            try:
+                parsed = int(item_id)
+            except (TypeError, ValueError):
+                continue
+            if parsed > 0 and parsed not in ids:
+                ids.append(parsed)
+        if not ids:
             return 0
+        with connection_scope() as connection:
+            placeholders = ",".join("?" for _ in ids)
+            cursor = connection.execute(
+                f"DELETE FROM warehouse_items WHERE id IN ({placeholders})", ids
+            )
+            connection.commit()
+        return int(cursor.rowcount)
 
-        try:
-            # 限制最多删除1000条
-            ids_to_delete = item_ids[:1000]
-            with connection_scope() as connection:
-                placeholders = ",".join("?" * len(ids_to_delete))
-                cursor = connection.execute(
-                    f"DELETE FROM warehouse_items WHERE id IN ({placeholders})",
-                    ids_to_delete,
-                )
-                connection.commit()
-                return cursor.rowcount
-        except Exception as exc:
-            LOGGER.exception("Failed to batch delete items")
-            return 0
-
-    @staticmethod
-    def batch_mark_deep_collection(item_ids: list[int], employee_id: Optional[int] = None) -> int:
-        """批量标记仓库项为待深度采集。
-
-        Args:
-            item_ids: 仓库项ID列表
-            employee_id: 数字员工ID
-
-        Returns:
-            创建的任务数
-        """
-        if not item_ids:
-            return 0
-
-        created_count = 0
-        ids_to_process = item_ids[:500]  # 限制最多处理500条
-
-        try:
-            for item_id in ids_to_process:
-                task_id = CollectionTaskService.create_deep_task(
-                    warehouse_item_id=item_id,
-                    employee_id=employee_id,
-                )
-                if task_id:
-                    created_count += 1
-        except Exception as exc:
-            LOGGER.exception("Failed to batch mark deep collection")
-
-        return created_count
+    @classmethod
+    def batch_mark_deep_collection(
+        cls, item_ids: list[int], employee_id: int | None = None
+    ) -> int:
+        created = 0
+        for item_id in item_ids[:500]:
+            if cls.create_deep_task(int(item_id), employee_id=employee_id):
+                created += 1
+        return created

@@ -484,4 +484,5 @@ class FeatureRepository:
         return True, "功能已删除"
 
 
-from app.repositories.menu_repository import MenuRepository  # noqa: E402
+# 兼容旧导入路径；新代码应使用 app.repositories.menu_repository。
+from app.repositories.menu_repository import MenuRepository as MenuRepository  # noqa: E402,F401

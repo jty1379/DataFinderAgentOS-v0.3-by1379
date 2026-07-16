@@ -14,8 +14,16 @@ class AdminAuditLogsHandler(AdminBaseHandler):
         action_type = self.get_query_argument("action_type", "").strip()
         user_id = self.get_query_argument("user_id", "").strip()
         user_id_int = int(user_id) if user_id.isdecimal() else None
-        
-        logs, pager = AuditLogService.get_logs(action_type, user_id_int, query_page(self), 20)
+        resource_type = self.get_query_argument("resource_type", "").strip()[:80]
+        resource_id = self.get_query_argument("resource_id", "").strip()
+        resource_id_int = int(resource_id) if resource_id.isdecimal() else None
+        start_date = self.get_query_argument("start_date", "").strip()
+        end_date = self.get_query_argument("end_date", "").strip()
+
+        logs, pager = AuditLogService.get_logs(
+            action_type, user_id_int, resource_type, resource_id_int,
+            start_date, end_date, query_page(self), 20,
+        )
         
         for log in logs:
             try:
@@ -35,6 +43,14 @@ class AdminAuditLogsHandler(AdminBaseHandler):
             active_menu="audit_logs",
             logs=logs,
             action_types=action_types,
-            pager=pager_context("/admin/audit/logs", pager, action_type=action_type, user_id=user_id),
+            pager=pager_context(
+                "/admin/audit/logs", pager, action_type=action_type, user_id=user_id,
+                resource_type=resource_type, resource_id=resource_id,
+                start_date=start_date, end_date=end_date,
+            ),
             selected_action=action_type,
+            filters={
+                "user_id": user_id, "resource_type": resource_type,
+                "resource_id": resource_id, "start_date": start_date, "end_date": end_date,
+            },
         )

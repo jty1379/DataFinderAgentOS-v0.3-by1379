@@ -5,8 +5,8 @@ from __future__ import annotations
 import importlib.util
 import re
 import tempfile
-import urllib.parse
 import unittest
+import urllib.parse
 from http.cookies import SimpleCookie
 from pathlib import Path
 from unittest.mock import patch
@@ -16,7 +16,6 @@ from tornado.testing import AsyncHTTPTestCase
 from app.models import db
 from app.models.rbac import FeatureRepository, MenuRepository, RoleRepository
 from app.models.user import UserRepository
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ENTRY_PATH = PROJECT_ROOT / "app.py"
@@ -369,7 +368,7 @@ class Task2HTTPTest(AsyncHTTPTestCase):
             "/admin/users", headers={"Cookie": self._cookie_header(cookies)}
         )
         self.assertEqual(page.code, 200)
-        self.assertIn("只读".encode("utf-8"), page.body)
+        self.assertIn("只读".encode(), page.body)
 
         # 只读页面没有任何 POST 表单，因此不会重复输出隐藏 Token；登录页
         # 已设置的同源 XSRF Cookie 仍可用于验证伪造写请求会被权限层拒绝。

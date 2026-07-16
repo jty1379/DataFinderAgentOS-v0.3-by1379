@@ -220,7 +220,7 @@ class TestWarehouseOperations(unittest.TestCase):
     def test_duplicate_detection(self):
         """Test duplicate URL detection."""
         with connection_scope() as connection:
-            cursor = connection.execute(
+            connection.execute(
                 """
                 INSERT INTO warehouse_items
                     (title, url, summary, source_name)

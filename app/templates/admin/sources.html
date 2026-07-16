@@ -29,7 +29,7 @@
         <div class="v02-table-wrap">
             <table class="v02-table">
                 <caption>瞭源列表</caption>
-                <thead><tr><th>来源</th><th>编码</th><th>基础地址</th><th>规则数</th><th>状态</th><th>创建时间</th>{% if can_write %}<th>操作</th>{% end %}</tr></thead>
+                <thead><tr><th>来源</th><th>编码</th><th>基础地址</th><th>规则数</th><th>最近采集</th><th>成功率</th><th>最近失败</th><th>状态</th><th>创建时间</th>{% if can_write %}<th>操作</th>{% end %}</tr></thead>
                 <tbody>
                 {% for item in sources %}
                 <tr>
@@ -37,18 +37,21 @@
                     <td><code>{{ item["code"] }}</code></td>
                     <td><div class="v02-cell-title"><small title="{{ item['base_url'] }}">{{ item["base_url"] }}</small></div></td>
                     <td>{{ item["rule_count"] }}</td>
+                    <td>{{ item["last_collected_at"][:16] if item["last_collected_at"] else "尚未采集" }}</td>
+                    <td><div class="v02-cell-title"><b>{{ item["success_rate"] }}%</b><small>成功 {{ item["success_count"] }} · 失败 {{ item["failed_count"] }} · 平均 {{ item["avg_latency_ms"] }}ms</small></div></td>
+                    <td><div class="v02-cell-title"><small title="{{ item['last_error'] }}">{{ item["last_error"][:80] if item["last_error"] else "无失败记录" }}</small></div></td>
                     <td><span class="v02-status {{ 'enabled' if item['enabled'] else 'disabled' }}">{{ "可用" if item["enabled"] else "停用" }}</span></td>
                     <td>{{ item["created_at"][:16] }}</td>
                     {% if can_write %}
                     <td><div class="v02-row-actions">
-                        <button class="v02-row-action" type="button" data-dialog-open="edit-source-{{ item['id'] }}">编辑</button>
+                        {% if item["first_enabled_rule_id"] %}<a class="v02-row-action" href="/admin/lookout?rule_id={{ item['first_enabled_rule_id'] }}">执行采集</a>{% end %}<button class="v02-row-action" type="button" data-dialog-open="edit-source-{{ item['id'] }}">编辑</button>
                         <form method="post"><input type="hidden" name="action" value="toggle_source"><input type="hidden" name="source_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action" type="submit">{{ "停用" if item["enabled"] else "启用" }}</button></form>
                         <form method="post" data-confirm="确认删除瞭源“{{ item['name'] }}”？其采集规则也将删除。"><input type="hidden" name="action" value="delete_source"><input type="hidden" name="source_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action danger" type="submit">删除</button></form>
                     </div></td>
                     {% end %}
                 </tr>
                 {% end %}
-                {% if not sources %}<tr><td colspan="7"><div class="v02-feedback"><i class="layui-icon layui-icon-search"></i><h4>没有找到瞭源</h4><p>调整搜索条件，或由超级管理员新增公开数据来源。</p></div></td></tr>{% end %}
+                {% if not sources %}<tr><td colspan="{{ 10 if can_write else 9 }}"><div class="v02-feedback"><i class="layui-icon layui-icon-search"></i><h4>没有找到瞭源</h4><p>调整搜索条件，或由超级管理员新增公开数据来源。</p></div></td></tr>{% end %}
                 </tbody>
             </table>
         </div>

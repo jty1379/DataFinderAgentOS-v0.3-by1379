@@ -6,8 +6,8 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 from app.database.connection import managed_connection, open_connection
 from app.database.migration_runner import run_migrations

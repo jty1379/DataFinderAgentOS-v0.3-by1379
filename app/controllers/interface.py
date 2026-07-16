@@ -231,7 +231,7 @@ class AdminInterfaceTestHandler(AdminJsonHandler):
 
         try:
             data = json.loads(bytes(chunks).decode("utf-8", errors="replace"))
-        except json.JSONDecodeError as exc:
+        except json.JSONDecodeError:
             InterfaceCallRepository.record(
                 interface_id=interface_id,
                 user_id=self.current_user["id"],

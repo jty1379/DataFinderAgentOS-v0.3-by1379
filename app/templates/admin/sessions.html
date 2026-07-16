@@ -1,124 +1,29 @@
 {% extends "base.html" %}
-
 {% block title %}{{ title }}{% end %}
-
 {% block admin_content %}
-<div class="layui-card">
-    <div class="layui-card-header">
-        <h3>会话管理</h3>
-    </div>
-    <div class="layui-card-body">
-        <form class="layui-form layui-form-pane" action="/admin/sessions" method="get">
-            <div class="layui-form-item layui-inline">
-                <label class="layui-form-label">用户</label>
-                <div class="layui-input-inline" style="width: 200px;">
-                    <select name="user_id" lay-verify="">
-                        <option value="">全部用户</option>
-                        {% for u in users %}
-                        <option value="{{ u['id'] }}" {% if selected_user_id == u['id'] %}selected{% end %}>{{ u['username'] }}</option>
-                        {% end %}
-                    </select>
-                </div>
-            </div>
-            <div class="layui-form-item layui-inline">
-                <label class="layui-form-label">关键词</label>
-                <div class="layui-input-inline" style="width: 200px;">
-                    <input type="text" name="q" value="{{ keyword }}" placeholder="搜索会话标题" class="layui-input">
-                </div>
-            </div>
-            <div class="layui-form-item layui-inline">
-                <button class="layui-btn layui-btn-normal" lay-submit lay-filter="search">搜索</button>
-                <a href="/admin/sessions" class="layui-btn layui-btn-primary">重置</a>
-            </div>
-        </form>
-        
-        <form class="layui-form" action="/admin/sessions" method="post">
-            <input type="hidden" name="action" value="batch_delete">
-            {% raw xsrf_form_html() %}
-            
-            <table class="layui-table">
-                <thead>
-                    <tr>
-                        <th><input type="checkbox" lay-filter="selectAll"></th>
-                        <th>会话ID</th>
-                        <th>用户</th>
-                        <th>标题</th>
-                        <th>模型</th>
-                        <th>数字员工</th>
-                        <th>消息数</th>
-                        <th>创建时间</th>
-                        <th>更新时间</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for conv in conversations %}
-                    <tr>
-                        <td><input type="checkbox" name="conversation_ids" value="{{ conv['id'] }}"></td>
-                        <td>{{ conv['id'] }}</td>
-                        <td>{{ conv['user_name'] }}</td>
-                        <td><a href="/admin/messages?conversation_id={{ conv['id'] }}">{{ conv['title'] }}</a></td>
-                        <td>{{ conv['model_name'] or '-' }}</td>
-                        <td>{{ conv['employee_name'] or '-' }}</td>
-                        <td>{{ conv['message_count'] }}</td>
-                        <td>{{ conv['created_at'] }}</td>
-                        <td>{{ conv['updated_at'] }}</td>
-                        <td>
-                            <a href="/admin/messages?conversation_id={{ conv['id'] }}" class="layui-btn layui-btn-xs">查看</a>
-                            <button type="button" class="layui-btn layui-btn-xs layui-btn-danger" onclick="deleteSession({{ conv['id'] }})">删除</button>
-                        </td>
-                    </tr>
-                    {% end %}
-                </tbody>
-            </table>
-            
-            <div class="layui-btn-container">
-                <button class="layui-btn layui-btn-danger" lay-submit lay-filter="batchDelete">批量删除</button>
-            </div>
-            
-            {{ pager }}
-        </form>
-    </div>
-</div>
+<section class="v02-page session-page">
+    <header class="v02-heading"><div><p class="section-kicker">用户问数留痕</p><h2>会话管理</h2><p>按用户、时间、模型、数字员工和归档状态检索；风险、耗时与 Token 来自真实消息记录。</p></div><span class="v02-count">共 {{ pager['total'] }} 条</span></header>
+    <form class="v02-filter session-filter" method="get" action="/admin/sessions">
+        <label class="v02-field"><span>关键词</span><input class="v02-input" name="q" value="{{ filters['keyword'] }}" placeholder="标题或用户名"></label>
+        <label class="v02-field"><span>用户</span><select class="v02-select" name="user_id"><option value="">全部</option>{% for item in users %}<option value="{{ item['id'] }}" {% if filters['user_id'] == item['id'] %}selected{% end %}>{{ item['username'] }}</option>{% end %}</select></label>
+        <label class="v02-field"><span>模型</span><select class="v02-select" name="model_id"><option value="">全部</option>{% for item in models %}<option value="{{ item['id'] }}" {% if filters['model_id'] == item['id'] %}selected{% end %}>{{ item['name'] }}</option>{% end %}</select></label>
+        <label class="v02-field"><span>数字员工</span><select class="v02-select" name="employee_id"><option value="">全部</option>{% for item in employees %}<option value="{{ item['id'] }}" {% if filters['employee_id'] == item['id'] %}selected{% end %}>{{ item['name'] }}</option>{% end %}</select></label>
+        <label class="v02-field narrow"><span>状态</span><select class="v02-select" name="status"><option value="">全部</option><option value="active" {% if filters['status'] == 'active' %}selected{% end %}>活跃</option><option value="archived" {% if filters['status'] == 'archived' %}selected{% end %}>已归档</option></select></label>
+        <label class="v02-field"><span>开始日期</span><input class="v02-input" type="date" name="start_date" value="{{ filters['start_date'] }}"></label>
+        <label class="v02-field"><span>结束日期</span><input class="v02-input" type="date" name="end_date" value="{{ filters['end_date'] }}"></label>
+        <button class="v02-button" type="submit">筛选</button><a class="v02-button-secondary" href="/admin/sessions">重置</a>
+    </form>
 
-<script>
-layui.use(['form', 'layer'], function() {
-    var form = layui.form;
-    var layer = layui.layer;
-    
-    form.on('checkbox(selectAll)', function(data) {
-        var child = $(data.elem).parents('table').find('tbody input[type="checkbox"]');
-        child.each(function(index, item) {
-            item.checked = data.elem.checked;
-        });
-        form.render('checkbox');
-    });
-    
-    form.on('submit(search)', function(data) {
-        return true;
-    });
-    
-    form.on('submit(batchDelete)', function(data) {
-        var checked = $('input[name="conversation_ids"]:checked');
-        if (checked.length === 0) {
-            layer.msg('请至少选择一个会话');
-            return false;
-        }
-        return confirm('确定要删除选中的会话吗？');
-    });
-});
-
-function deleteSession(id) {
-    if (confirm('确定要删除该会话吗？')) {
-        var form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/admin/sessions';
-        form.innerHTML = '<input type="hidden" name="action" value="delete">' +
-                         '<input type="hidden" name="conversation_id" value="' + id + '">' +
-                         '<input type="hidden" name="_xsrf" value="{{ handler.xsrf_token }}">';
-        document.body.appendChild(form);
-        form.submit();
-    }
-}
-</script>
+    <article class="v02-panel">
+        <form method="post" data-session-batch>{% raw xsrf_form_html() %}
+            <div class="warehouse-batch-toolbar"><label><input type="checkbox" data-session-select-all>选择本页</label><span>批量操作仅影响勾选会话</span><button class="v02-button-secondary" name="action" value="archive" type="submit">归档</button><button class="v02-button-secondary" name="action" value="unarchive" type="submit">取消归档</button><button class="v02-button-secondary danger" name="action" value="batch_delete" type="submit" data-confirm="确认永久删除选中会话？">批量删除</button></div>
+            <div class="v02-table-wrap"><table class="v02-table"><caption>会话记录</caption><thead><tr><th>选择</th><th>会话 / 用户</th><th>执行资源</th><th>消息</th><th>风险</th><th>Token / 最长耗时</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>
+                {% for item in conversations %}<tr><td><input type="checkbox" name="conversation_ids" value="{{ item['id'] }}" data-session-check aria-label="选择 {{ item['title'] }}"></td><td><div class="v02-cell-title"><b>#{{ item['id'] }} · {{ item['title'] }}</b><small>{{ item['user_name'] }}</small></div></td><td><div class="v02-cell-title"><b>{{ item['model_name'] or '未指定模型' }}</b><small>{{ item['employee_name'] or '未使用数字员工' }}</small></div></td><td>{{ item['message_count'] }}</td><td><span class="v02-status {{ 'error' if item['risk_level'] in ('high','critical') else 'warning' if item['risk_level'] == 'medium' else 'enabled' }}">{{ {'low':'低','medium':'中','high':'高','critical':'严重'}.get(item['risk_level'] or 'low','低') }}</span></td><td><div class="v02-cell-title"><b>{{ item['total_tokens'] }} tokens</b><small>{{ item['max_latency_ms'] }} ms</small></div></td><td><span class="v02-status {{ 'enabled' if item['status'] == 'active' else 'disabled' }}">{{ '活跃' if item['status'] == 'active' else '已归档' }}</span></td><td><small>{{ item['created_at'][:16] }}<br>{{ item['updated_at'][:16] }}</small></td><td><div class="v02-row-actions"><a class="v02-row-action" href="/admin/messages?conversation_id={{ item['id'] }}">查看</a><a class="v02-row-action" href="/admin/sessions/{{ item['id'] }}/export.pdf">导出 PDF</a><button class="v02-row-action danger" type="submit" name="conversation_id" value="{{ item['id'] }}" formaction="/admin/sessions" data-session-delete>删除</button></div></td></tr>{% end %}
+                {% if not conversations %}<tr><td colspan="9"><div class="v02-feedback"><h4>没有匹配的会话</h4><p>请调整筛选条件。</p></div></td></tr>{% end %}
+            </tbody></table></div>
+        </form>
+        {% if pager['pages'] > 1 %}<nav class="v02-pagination" aria-label="会话分页">{% if pager['prev_url'] %}<a href="{{ pager['prev_url'] }}">上一页</a>{% end %}{% for link in pager['page_links'] %}{% if link['current'] %}<span class="current" aria-current="page">{{ link['number'] }}</span>{% else %}<a href="{{ link['url'] }}">{{ link['number'] }}</a>{% end %}{% end %}{% if pager['next_url'] %}<a href="{{ pager['next_url'] }}">下一页</a>{% end %}</nav>{% end %}
+    </article>
+</section>
 {% end %}
+{% block admin_scripts %}<script>window.addEventListener('DOMContentLoaded',function(){const all=document.querySelector('[data-session-select-all]');all?.addEventListener('change',()=>document.querySelectorAll('[data-session-check]').forEach(item=>item.checked=all.checked));document.querySelectorAll('[data-session-delete]').forEach(button=>button.addEventListener('click',event=>{if(!confirm('确认永久删除该会话？'))event.preventDefault();else{const action=document.createElement('input');action.type='hidden';action.name='action';action.value='delete';button.form.append(action);}}));document.querySelector('[data-session-batch]')?.addEventListener('submit',event=>{const submitter=event.submitter;if(submitter?.name==='conversation_id')return;if(!document.querySelector('[data-session-check]:checked')){event.preventDefault();alert('请至少选择一个会话');return;}if(submitter?.dataset.confirm&&!confirm(submitter.dataset.confirm))event.preventDefault();});});</script>{% end %}

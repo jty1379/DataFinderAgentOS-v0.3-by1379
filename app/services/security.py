@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from app.models.opinion import AuditLogRepository
+from app.repositories.user_repository import UserRepository
 
 LOGGER = logging.getLogger("app")
 
@@ -24,27 +25,48 @@ class AuditLogService:
         success: bool = True,
         error_message: str = "",
     ):
-        result = AuditLogRepository.create(
-            action_type=action_type,
-            resource_type=resource_type,
-            resource_id=resource_id,
-            user_id=user_id,
-            user_name=user_name,
-            ip_address=ip_address,
-            action_before=action_before,
-            action_after=action_after,
-            detail=detail,
-            success=success,
-            error_message=error_message,
-        )
+        try:
+            if user_id and not user_name:
+                user = UserRepository.get_user_by_id(int(user_id))
+                user_name = str(user.get("username") or "") if user else ""
+            result = AuditLogRepository.create(
+                action_type=action_type,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                user_id=user_id,
+                user_name=user_name,
+                ip_address=ip_address,
+                action_before=action_before,
+                action_after=action_after,
+                detail=detail,
+                success=success,
+                error_message=error_message,
+            )
+        except Exception:
+            LOGGER.exception(
+                "审计日志写入异常: %s %s %s", action_type, resource_type, resource_id,
+                extra={"event": "audit_log_failed", "action_type": action_type, "resource_type": resource_type},
+            )
+            return False
         if result:
             LOGGER.info("审计日志: %s %s %s", action_type, resource_type, resource_id,
                         extra={"event": "audit_log", "action_type": action_type, "resource_type": resource_type})
+        else:
+            LOGGER.error(
+                "审计日志写入失败: %s %s %s", action_type, resource_type, resource_id,
+                extra={"event": "audit_log_failed", "action_type": action_type, "resource_type": resource_type},
+            )
         return result
 
     @staticmethod
-    def get_logs(action_type: str = "", user_id: int = None, page: int = 1, page_size: int = 20):
-        return AuditLogRepository.list_logs(action_type, user_id, page, page_size)
+    def get_logs(
+        action_type: str = "", user_id: int = None, resource_type: str = "",
+        resource_id: int | None = None, start_date: str = "", end_date: str = "",
+        page: int = 1, page_size: int = 20,
+    ):
+        return AuditLogRepository.list_logs(
+            action_type, user_id, resource_type, resource_id, start_date, end_date, page, page_size
+        )
 
     @staticmethod
     def log_login(user_id: int, user_name: str, ip_address: str, success: bool = True, error_message: str = ""):

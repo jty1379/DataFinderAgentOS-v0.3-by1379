@@ -90,9 +90,16 @@
             });
             document.querySelector("[data-dashboard-time]").textContent = String(dashboard.refreshed_at || "").slice(11, 19);
             renderTrend(dashboard.query_trend || [], dashboard.collection_trend || []);
+            schedule(Number(dashboard.refresh_interval || 30));
         } catch (error) {
             app.announce(app.errorMessage(error, "控制台统计刷新失败"), "error");
         }
+    }
+
+    let refreshTimer;
+    function schedule(seconds) {
+        window.clearInterval(refreshTimer);
+        refreshTimer = window.setInterval(refresh, Math.max(5, Math.min(3600, seconds)) * 1000);
     }
 
     let resizeTimer;

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
+from urllib.parse import urlsplit
 
 from app.models.db import connection_scope
 
@@ -30,17 +32,34 @@ class TTSConfigRepository:
 
     @staticmethod
     def update_config(**values) -> bool:
-        enabled = bool(values.get("enabled", False))
+        raw_enabled = values.get("enabled", False)
+        enabled = (
+            raw_enabled.strip().lower() in {"1", "true", "yes", "on"}
+            if isinstance(raw_enabled, str)
+            else bool(raw_enabled)
+        )
         provider = str(values.get("provider", "volcengine")).lower()
-        default_voice = str(values.get("default_voice", "zh_female"))
-        api_key_env = str(values.get("api_key_env", ""))
-        api_secret_env = str(values.get("api_secret_env", ""))
-        base_url = str(values.get("base_url", ""))
+        if provider not in {"volcengine", "aliyun", "local"}:
+            raise ValueError("不支持的 TTS 提供商")
+        default_voice = str(values.get("default_voice", "zh_female")).strip()
+        api_key_env = str(values.get("api_key_env", "")).strip()
+        api_secret_env = str(values.get("api_secret_env", "")).strip()
+        env_pattern = re.compile(r"^[A-Z_][A-Z0-9_]{1,79}$")
+        for name in (api_key_env, api_secret_env):
+            if name and not env_pattern.fullmatch(name):
+                raise ValueError("密钥配置只能填写大写环境变量名称")
+        base_url = str(values.get("base_url", "")).strip()
+        if provider != "local" and base_url:
+            parsed = urlsplit(base_url)
+            if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+                raise ValueError("外部 TTS 服务地址必须是无凭据的 HTTPS URL")
         rate = int(values.get("rate", 0))
         volume = int(values.get("volume", 0))
         pitch = int(values.get("pitch", 0))
+        if not all(-100 <= value <= 100 for value in (rate, volume, pitch)):
+            raise ValueError("语速、音量和音调需在 -100—100 之间")
         with connection_scope() as connection:
-            cursor = connection.execute(
+            connection.execute(
                 """
                 INSERT OR REPLACE INTO tts_config
                     (id, enabled, provider, default_voice, api_key_env,

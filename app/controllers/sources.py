@@ -10,7 +10,6 @@ from app.controllers.base import AdminBaseHandler
 from app.repositories.source_repository import RuleRepository, SourceRepository
 from app.services.collector import CollectorService
 
-
 CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{2,40}$")
 PARAM_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,39}$")
 FORBIDDEN_HEADERS = {"authorization", "cookie", "host", "connection", "proxy-authorization"}

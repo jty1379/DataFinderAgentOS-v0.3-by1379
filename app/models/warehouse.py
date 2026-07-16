@@ -28,6 +28,14 @@ def _item(row) -> dict | None:
 
 class WarehouseRepository:
     @staticmethod
+    def get_by_source_result_id(result_id: int):
+        with connection_scope() as connection:
+            row = connection.execute(
+                "SELECT * FROM warehouse_items WHERE source_result_id=?", (int(result_id),)
+            ).fetchone()
+        return _item(row)
+
+    @staticmethod
     def import_results(result_ids, user_id: int | None) -> tuple[int, int]:
         ids: list[int] = []
         for value in result_ids or []:
@@ -67,6 +75,10 @@ class WarehouseRepository:
     def list(
         keyword: str = "",
         deep_status: str = "",
+        source_name: str = "",
+        risk_level: str = "",
+        start_date: str = "",
+        end_date: str = "",
         page: int = 1,
         page_size: int = 10,
     ) -> tuple[list[dict], int]:
@@ -82,6 +94,19 @@ class WarehouseRepository:
             clauses.append("w.deep_collected = 1")
         elif normalized_status in {"0", "no", "false", "pending"}:
             clauses.append("w.deep_collected = 0")
+        source_name = source_name.strip()
+        if source_name:
+            clauses.append("w.source_name = ?")
+            params.append(source_name)
+        if risk_level in {"low", "normal", "high", "critical"}:
+            clauses.append("w.risk_level = ?")
+            params.append(risk_level)
+        if start_date:
+            clauses.append("date(w.created_at) >= date(?)")
+            params.append(start_date)
+        if end_date:
+            clauses.append("date(w.created_at) <= date(?)")
+            params.append(end_date)
         where = " AND ".join(clauses)
         with connection_scope() as connection:
             total = int(
@@ -102,6 +127,62 @@ class WarehouseRepository:
                 (*params, page_size, offset),
             ).fetchall()
         return [_item(row) for row in rows], total
+
+    @staticmethod
+    def source_names() -> list[str]:
+        with connection_scope() as connection:
+            rows = connection.execute(
+                """SELECT DISTINCT source_name FROM warehouse_items
+                   WHERE source_name<>'' ORDER BY source_name"""
+            ).fetchall()
+        return [str(row["source_name"]) for row in rows]
+
+    @staticmethod
+    def export_rows(
+        *,
+        keyword: str = "",
+        deep_status: str = "",
+        source_name: str = "",
+        risk_level: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        limit: int = 5000,
+    ) -> list[dict]:
+        maximum = min(5000, max(1, int(limit)))
+        output: list[dict] = []
+        page = 1
+        while len(output) < maximum:
+            rows, total = WarehouseRepository.list(
+                keyword=keyword,
+                deep_status=deep_status,
+                source_name=source_name,
+                risk_level=risk_level,
+                start_date=start_date,
+                end_date=end_date,
+                page=page,
+                page_size=100,
+            )
+            output.extend(rows)
+            if not rows or len(output) >= total:
+                break
+            page += 1
+        return output[:maximum]
+
+    @staticmethod
+    def recollection_context(item_id: int) -> dict | None:
+        with connection_scope() as connection:
+            row = connection.execute(
+                """SELECT w.id,w.rule_id,w.title,w.source_name,
+                          COALESCE(cr.keyword,w.title) AS keyword,
+                          COALESCE(cr.page_number,1) AS page_number,
+                          COALESCE(cr.page_size,12) AS page_size
+                   FROM warehouse_items w
+                   LEFT JOIN collection_results result ON result.id=w.source_result_id
+                   LEFT JOIN collection_runs cr ON cr.id=result.run_id
+                   WHERE w.id=?""",
+                (int(item_id),),
+            ).fetchone()
+        return dict(row) if row else None
 
     @staticmethod
     def get(item_id: int):

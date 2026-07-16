@@ -21,7 +21,11 @@ from app.controllers.admin.opinion import (
     AdminOpinionAlertsHandler,
     AdminSensitiveWordsHandler,
 )
-from app.controllers.admin.sessions import AdminMessagesHandler, AdminSessionsHandler
+from app.controllers.admin.sessions import (
+    AdminConversationPdfExportHandler,
+    AdminMessagesHandler,
+    AdminSessionsHandler,
+)
 from app.controllers.auth import (
     AdminLoginHandler,
     AdminLogoutHandler,
@@ -57,27 +61,21 @@ from app.controllers.home import (
     UserConversationHandler,
     UserIndexHandler,
 )
-from app.controllers.lookout import AdminLookoutCollectHandler, AdminLookoutHandler
-from app.controllers.model_engine import (
-    AdminModelChatHandler,
-    AdminModelUsageLogsHandler,
-    AdminModelsHandler,
-)
 from app.controllers.interface import (
     AdminInterfaceLogsHandler,
-    AdminInterfaceTestHandler,
     AdminInterfacesHandler,
+    AdminInterfaceTestHandler,
 )
-from app.controllers.skill import (
-    AdminSkillBindHandler,
-    AdminSkillSuggestHandler,
-    AdminSkillsHandler,
+from app.controllers.lookout import (
+    AdminLookoutCollectHandler,
+    AdminLookoutHandler,
+    AdminLookoutTaskActionHandler,
+    AdminLookoutTaskHandler,
 )
-from app.controllers.tts import (
-    AdminTTSHandler,
-    AdminTTSPreviewHandler,
-    TTSAudioHandler,
-    UserTTSHandler,
+from app.controllers.model_engine import (
+    AdminModelChatHandler,
+    AdminModelsHandler,
+    AdminModelUsageLogsHandler,
 )
 from app.controllers.multimodal import (
     AdminMultimodalConfigHandler,
@@ -86,25 +84,41 @@ from app.controllers.multimodal import (
     AdminMultimodalTaskDeleteHandler,
     AdminMultimodalTaskListHandler,
     AdminMultimodalTaskStatusHandler,
+    MultimodalAssetHandler,
     UserMultimodalGenerateHandler,
+    UserMultimodalTaskStatusHandler,
+)
+from app.controllers.skill import (
+    AdminSkillBindHandler,
+    AdminSkillsHandler,
+    AdminSkillSuggestHandler,
 )
 from app.controllers.sources import AdminSourcesHandler
+from app.controllers.tts import (
+    AdminTTSHandler,
+    AdminTTSPreviewHandler,
+    TTSAudioHandler,
+    UserTTSHandler,
+)
 from app.controllers.warehouse import (
+    AdminWarehouseBatchDeleteHandler,
+    AdminWarehouseDeduplicationHandler,
     AdminWarehouseDeepCollectHandler,
     AdminWarehouseDeepResultHandler,
     AdminWarehouseDeepTaskHandler,
+    AdminWarehouseExportHandler,
     AdminWarehouseHandler,
-    AdminWarehouseImportHandler,
-    WarehouseStatsHandler,
-    AdminWarehouseRiskAnalysisHandler,
     AdminWarehouseHighRiskHandler,
-    AdminWarehouseBatchDeleteHandler,
-    AdminWarehouseDeduplicationHandler,
+    AdminWarehouseImportHandler,
+    AdminWarehouseRecollectHandler,
+    AdminWarehouseRiskAnalysisHandler,
+    WarehouseStatsHandler,
 )
 from app.core.logging import configure_logging
 from app.models.db import init_db
 from app.models.deep_collection import DeepCollectionRepository
 from app.models.user import UserRepository
+from app.services.collection_task import CollectionTaskService
 from config.settings import BASE_DIR, SETTINGS
 
 LOGGER = logging.getLogger("app")
@@ -137,9 +151,13 @@ def make_app() -> tornado.web.Application:
             (r"/admin/menus", AdminMenusHandler),
             (r"/admin/lookout", AdminLookoutHandler),
             (r"/admin/lookout/collect", AdminLookoutCollectHandler),
+            (r"/admin/lookout/tasks/([0-9]+)", AdminLookoutTaskHandler),
+            (r"/admin/lookout/tasks/([0-9]+)/(cancel|retry)", AdminLookoutTaskActionHandler),
             (r"/admin/sources", AdminSourcesHandler),
             (r"/admin/warehouse", AdminWarehouseHandler),
+            (r"/admin/warehouse/export", AdminWarehouseExportHandler),
             (r"/admin/warehouse/import", AdminWarehouseImportHandler),
+            (r"/admin/warehouse/([0-9]+)/recollect", AdminWarehouseRecollectHandler),
             (r"/admin/warehouse/deep-collect", AdminWarehouseDeepCollectHandler),
             (r"/admin/warehouse/deep-tasks/([0-9]+)", AdminWarehouseDeepTaskHandler),
             (r"/admin/warehouse/deep-results/([0-9]+)", AdminWarehouseDeepResultHandler),
@@ -178,9 +196,12 @@ def make_app() -> tornado.web.Application:
             (r"/admin/multimodal/tasks/([a-zA-Z0-9-]+)", AdminMultimodalTaskStatusHandler),
             (r"/admin/multimodal/tasks/([a-zA-Z0-9-]+)/delete", AdminMultimodalTaskDeleteHandler),
             (r"/api/multimodal/generate", UserMultimodalGenerateHandler),
+            (r"/api/multimodal/tasks/([a-zA-Z0-9-]+)", UserMultimodalTaskStatusHandler),
+            (r"/multimodal/assets/(.*)", MultimodalAssetHandler),
             (r"/admin/modules/([a-z]+)", AdminModuleHandler),
             (r"/admin/settings", AdminSettingsHandler),
             (r"/admin/sessions", AdminSessionsHandler),
+            (r"/admin/sessions/([0-9]+)/export\.pdf", AdminConversationPdfExportHandler),
             (r"/admin/messages", AdminMessagesHandler),
             (r"/admin/opinion/alerts", AdminOpinionAlertsHandler),
             (r"/admin/opinion/words", AdminSensitiveWordsHandler),
@@ -200,6 +221,7 @@ def prepare_runtime() -> bool:
     """初始化数据库并确保课堂演示管理员存在。"""
     init_db()
     DeepCollectionRepository.recover_interrupted()
+    CollectionTaskService.recover_interrupted()
     return UserRepository.ensure_admin("admin", "123456")
 
 
@@ -208,6 +230,7 @@ def main() -> None:
     admin_created = prepare_runtime()
     server = HTTPServer(make_app(), max_buffer_size=SETTINGS.upload_size_limit)
     server.listen(SETTINGS.port, address=SETTINGS.host)
+    CollectionTaskService.resume_pending_tasks()
     LOGGER.info("application started config=%s", SETTINGS.public_summary(), extra={"event": "application_started"})
     if admin_created:
         LOGGER.info("demo administrator created", extra={"event": "administrator_seeded"})

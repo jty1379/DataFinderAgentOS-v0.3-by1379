@@ -6,7 +6,6 @@ import json
 
 from app.models.db import connection_scope
 
-
 DEFAULT_SETTINGS = [
     ("system_name", "智能瞭望与智能问数系统", "string", "系统名称", 0),
     ("system_logo", "", "string", "Logo地址", 0),

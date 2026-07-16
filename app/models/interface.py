@@ -9,7 +9,6 @@ from urllib.parse import urlsplit
 
 from app.models.db import connection_scope
 
-
 CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{2,39}$")
 REQUEST_METHODS = {"GET", "POST"}
 FORBIDDEN_HEADERS = {"authorization", "cookie", "host", "connection", "proxy-authorization"}

@@ -1,6 +1,13 @@
 """后台功能权限控制器。"""
 
-from app.controllers.admin.common import CODE_PATTERN, ICON_PATTERN, integer, pager_context, query_page, validate_text
+from app.controllers.admin.common import (
+    CODE_PATTERN,
+    ICON_PATTERN,
+    integer,
+    pager_context,
+    query_page,
+    validate_text,
+)
 from app.controllers.base import AdminBaseHandler
 from app.repositories.feature_repository import FeatureRepository
 

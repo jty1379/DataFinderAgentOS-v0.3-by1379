@@ -134,7 +134,7 @@ class TestCollectionSources(unittest.TestCase):
         """Test listing rules by source."""
         source_id = SourceRepository.create(**self.sources[0], enabled=True)
 
-        rule_id = RuleRepository.create(
+        RuleRepository.create(
             source_id=source_id,
             name="规则1",
             keyword_param="word",

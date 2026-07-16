@@ -6,6 +6,7 @@ import json
 
 from app.controllers.base import AdminBaseHandler, AdminJsonHandler
 from app.models.digital_employee import DigitalEmployeeRepository
+from app.models.interface import InterfaceRepository
 from app.models.model_engine import ModelRepository
 from app.services.digital_employee import DigitalEmployeeService
 from app.services.employee_knowledge import (
@@ -42,11 +43,12 @@ class AdminDigitalEmployeesHandler(AdminBaseHandler):
         for employee in employees:
             employee["prompt_files"] = list_files(employee["id"])
         models, _ = ModelRepository.list(status="enabled", page=1, page_size=100)
+        interfaces, _ = InterfaceRepository.list(status="enabled", page=1, page_size=100)
         self.render_admin(
             "admin/digital_employees.html",
             title="数字员工 · 瞭望与问数系统",
             active_menu="digital_employees",
-            employees=employees, models=models, keyword=keyword,
+            employees=employees, models=models, interfaces=interfaces, keyword=keyword,
             selected_type=employee_type, selected_status=status,
             page=page, pages=max(1, (total + 7) // 8), total=total,
         )
@@ -65,6 +67,7 @@ class AdminDigitalEmployeesHandler(AdminBaseHandler):
                     "employee_type": self.get_body_argument("employee_type", "llm"),
                     "description": self.get_body_argument("description", ""),
                     "model_id": self.get_body_argument("model_id", ""),
+                    "interface_id": self.get_body_argument("interface_id", ""),
                     "use_default_model": self.get_body_argument("use_default_model", "0"),
                     "system_prompt": self.get_body_argument("system_prompt", ""),
                     "prompt_template": self.get_body_argument("prompt_template", "{{input}}"),

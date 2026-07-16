@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 
 from app.models.analytics import AnalyticsRepository
 
@@ -61,6 +62,67 @@ class QueryIntentService:
         if any(term in text for term in ("统计", "总数", "概览", "数据仓库", "采集数据", "数据分析")):
             return cls._overview()
         return None
+
+    @classmethod
+    def query(cls, question: str, user_id: int | None = None) -> dict:
+        """Return the stable read-only analytics contract consumed by Skills.
+
+        ``user_id`` is reserved for permission-aware analytics.  v0.3 only exposes
+        aggregate, allowlisted repository queries and never accepts SQL from callers.
+        """
+        del user_id
+        routed = cls.analyze(question)
+        if routed is None:
+            return {
+                "intent": "unrecognized",
+                "conclusion": (
+                    "暂未识别该问数目标。可询问今日采集量、来源分布、失败率、"
+                    "采集耗时、高风险内容、关键词频率或近七日趋势。"
+                ),
+                "kpis": [],
+                "charts": [],
+                "table": {"columns": [], "labels": [], "rows": []},
+                "generated_at": datetime.now(UTC).isoformat(),
+            }
+
+        data = routed["data"]
+        kpis: list[dict] = []
+        charts: list[dict] = []
+        table = {"columns": [], "labels": [], "rows": []}
+        for visualization in data.get("visualizations") or []:
+            kind = str(visualization.get("type") or "")
+            if kind == "kpi":
+                kpis.extend(visualization.get("data") or [])
+            elif kind == "table":
+                table = {
+                    "columns": list(visualization.get("columns") or []),
+                    "labels": list(visualization.get("labels") or []),
+                    "rows": list(visualization.get("data") or []),
+                }
+            else:
+                charts.append(
+                    {
+                        "type": kind,
+                        "title": str(visualization.get("title") or ""),
+                        "data": visualization.get("data") or [],
+                        **(
+                            {
+                                "nodes": visualization.get("nodes") or [],
+                                "edges": visualization.get("edges") or [],
+                            }
+                            if kind == "graph"
+                            else {}
+                        ),
+                    }
+                )
+        return {
+            "intent": str(data["intent"]),
+            "conclusion": str(data.get("narrative") or ""),
+            "kpis": kpis,
+            "charts": charts,
+            "table": table,
+            "generated_at": datetime.now(UTC).isoformat(),
+        }
 
     @staticmethod
     def _base(intent: str, title: str, narrative: str, visualizations: list[dict]) -> dict:

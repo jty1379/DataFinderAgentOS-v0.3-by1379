@@ -14,6 +14,7 @@ from app.models.dashboard import DashboardRepository
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.model_engine import ModelRepository
 from app.models.rbac import RoleRepository
+from app.services.system_settings import SystemSettingsService
 from app.services.user_chat import UserChatError, UserChatService
 
 
@@ -41,7 +42,7 @@ class UserIndexHandler(BaseHandler):
             title="智能问数 · 瞭望与问数系统",
             user=self.current_user,
             models=models,
-            default_model=ModelRepository.get_default(),
+            default_model=SystemSettingsService.get_default_model(),
             employees=employees,
             conversations=ConversationRepository.list_for_user(self.current_user["id"]),
         )

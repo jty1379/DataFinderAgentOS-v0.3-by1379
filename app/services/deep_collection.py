@@ -10,6 +10,7 @@ from app.models.deep_collection import DeepCollectionRepository
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.warehouse import WarehouseRepository
 from app.services.collector import CollectionError, _validate_public_url
+from app.services.opinion import OpinionSecurityService
 
 LOGGER = logging.getLogger("collection")
 
@@ -120,6 +121,22 @@ class DeepCollectionService:
             DeepCollectionRepository.complete(
                 task_id, title or item["title"], content,
                 content[:500], metadata,
+            )
+            security = OpinionSecurityService.analyze_and_record(
+                "collection",
+                item["id"],
+                f"{title or item['title']}\n{content}",
+                detail.get("created_by"),
+                {"stage": "deep_collection", "task_id": task_id},
+            )
+            risk = {"medium": "high", "high": "high", "critical": "critical", "low": "low"}.get(
+                security["risk_level"], "normal"
+            )
+            WarehouseRepository.update_risk_level(item["id"], risk, security)
+            WarehouseRepository.update_keywords(
+                item["id"],
+                ",".join(word["word"] for word in security["matched_words"]),
+                str(security["matched_words"]),
             )
         except Exception as exc:
             LOGGER.exception("deep collection task failed", extra={"task_id": task_id, "event": "deep_collection_task_failed"})

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import tempfile
 import sqlite3
-from contextlib import closing
+import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 

@@ -2,7 +2,15 @@
 
 import json
 
-from app.controllers.admin.common import CODE_PATTERN, integer, layui_feature_tree, pager_context, positive_integers, query_page, validate_text
+from app.controllers.admin.common import (
+    CODE_PATTERN,
+    integer,
+    layui_feature_tree,
+    pager_context,
+    positive_integers,
+    query_page,
+    validate_text,
+)
 from app.controllers.base import AdminBaseHandler
 from app.repositories.feature_repository import FeatureRepository
 from app.repositories.role_repository import RoleRepository

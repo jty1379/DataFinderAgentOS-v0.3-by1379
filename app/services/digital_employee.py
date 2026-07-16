@@ -11,10 +11,15 @@ from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 
 from app.models.digital_employee import DigitalEmployeeRepository
+from app.models.interface import InterfaceCallRepository, InterfaceRepository
 from app.models.model_engine import ModelRepository
+from app.models.skill import EmployeeSkillRepository
 from app.services.collector import _validate_public_url
 from app.services.employee_knowledge import prompt_context
 from app.services.llm import LLMService
+from app.services.opinion import OpinionSecurityService
+from app.services.query_intent import QueryIntentService
+from app.services.system_settings import SystemSettingsService
 
 LOGGER = logging.getLogger("model")
 
@@ -29,17 +34,12 @@ class DigitalEmployeeError(ValueError):
 
 
 async def _validate_employee_url(url: str) -> None:
-    """数字员工专用的URL验证，允许 localhost/127.0.0.1 内部调用。"""
+    """Apply the same public-network SSRF boundary used by collectors."""
     parsed = urlsplit(url)
     if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
         raise DigitalEmployeeError("接口地址仅支持 http/https")
     if parsed.username or parsed.password:
         raise DigitalEmployeeError("接口地址不允许携带用户凭据")
-    hostname = parsed.hostname.rstrip(".").lower()
-    # 数据分析员工需要访问本服务的只读统计接口；其余地址复用采集层
-    # 的 DNS 与私网校验，避免两套 SSRF 规则发生漂移。
-    if hostname in {"localhost", "127.0.0.1", "::1", "0.0.0.0"}:
-        return
     try:
         await _validate_public_url(url)
     except Exception as exc:
@@ -58,7 +58,7 @@ def _replace(value, text: str):
 
 class DigitalEmployeeService:
     @staticmethod
-    async def preview(employee_id: int, text: str, user_id: int | None = None) -> dict:
+    async def execute(employee_id: int, text: str, user_id: int | None = None) -> dict:
         employee = DigitalEmployeeRepository.get(employee_id)
         if not employee or not employee.get("enabled"):
             raise DigitalEmployeeError("数字员工不存在或已停用")
@@ -72,13 +72,46 @@ class DigitalEmployeeService:
         start_time = time.time()
         response_data = None
         tokens_used = 0
+        enabled_skills = [
+            skill
+            for skill in EmployeeSkillRepository.list_by_employee(employee_id)
+            if skill.get("enabled")
+        ]
+        skill_codes = [str(skill["code"]) for skill in enabled_skills]
 
         try:
-            if employee["employee_type"] == "llm":
-                result, tokens_used = await DigitalEmployeeService._preview_llm_with_retry(employee, text, user_id)
+            query_skill = next(
+                (
+                    skill
+                    for skill in enabled_skills
+                    if DigitalEmployeeService._is_database_query_skill(skill)
+                ),
+                None,
+            )
+            if query_skill:
+                result = {
+                    "mode": "card",
+                    "employee": employee["name"],
+                    "mention": "@" + employee["mention"],
+                    "data": QueryIntentService.query(text, user_id=user_id),
+                }
+            elif employee["employee_type"] == "llm":
+                result, tokens_used = await DigitalEmployeeService._preview_llm_with_retry(
+                    employee, text, user_id, enabled_skills
+                )
             else:
-                result = await DigitalEmployeeService._preview_api_with_retry(employee, text)
-                response_data = json.dumps(result.get("data", {}), ensure_ascii=False)[:5000]
+                result = await DigitalEmployeeService._preview_api_with_retry(
+                    employee, text, user_id
+                )
+
+            result["skills_used"] = skill_codes
+            response_data = json.dumps(result, ensure_ascii=False)[:5000]
+            if skill_codes:
+                LOGGER.info(
+                    "digital employee skills applied employee_id=%s skills=%s",
+                    employee_id,
+                    ",".join(skill_codes),
+                )
 
             latency_ms = int((time.time() - start_time) * 1000)
             DigitalEmployeeRepository.record_call(employee_id, success=True)
@@ -91,6 +124,14 @@ class DigitalEmployeeService:
                 latency_ms=latency_ms,
                 tokens_used=tokens_used,
             )
+            security = OpinionSecurityService.analyze_and_record(
+                "employee",
+                employee_id,
+                response_data,
+                user_id,
+                {"employee_code": employee["code"], "skills_used": skill_codes},
+            )
+            result["security"] = security
             return result
         except DigitalEmployeeError as exc:
             latency_ms = int((time.time() - start_time) * 1000)
@@ -106,6 +147,31 @@ class DigitalEmployeeService:
             raise
 
     @staticmethod
+    async def preview(employee_id: int, text: str, user_id: int | None = None) -> dict:
+        """Backward-compatible admin preview entrypoint."""
+        return await DigitalEmployeeService.execute(employee_id, text, user_id)
+
+    @staticmethod
+    def _is_database_query_skill(skill: dict) -> bool:
+        if str(skill.get("code") or "") in {
+            "database_query",
+            "data_query",
+            "warehouse_query",
+        }:
+            return True
+        tools = skill.get("tools") or {}
+        if not isinstance(tools, dict):
+            return False
+        if any(key in tools for key in ("query_intent", "database_query")):
+            return True
+        return any(
+            isinstance(value, dict)
+            and str(value.get("service") or "").lower()
+            in {"queryintentservice.query", "query_intent"}
+            for value in tools.values()
+        )
+
+    @staticmethod
     def _sanitize_input(text: str) -> str:
         """清理输入文本中的控制字符和多余空白。"""
         import re
@@ -116,12 +182,16 @@ class DigitalEmployeeService:
         return text.strip()
 
     @staticmethod
-    async def _preview_llm_with_retry(employee: dict, text: str, user_id: int | None) -> tuple[dict, int]:
+    async def _preview_llm_with_retry(
+        employee: dict, text: str, user_id: int | None, skills: list[dict]
+    ) -> tuple[dict, int]:
         """带重试机制的LLM调用。"""
         last_error = None
         for attempt in range(LLM_MAX_RETRIES + 1):
             try:
-                result = await DigitalEmployeeService._preview_llm(employee, text, user_id)
+                result = await DigitalEmployeeService._preview_llm(
+                    employee, text, user_id, skills
+                )
                 tokens = result.get("usage", {}).get("total_tokens", 0)
                 return result, tokens
             except DigitalEmployeeError as exc:
@@ -138,18 +208,42 @@ class DigitalEmployeeService:
         raise last_error
 
     @staticmethod
-    async def _preview_api_with_retry(employee: dict, text: str) -> dict:
+    async def _preview_api_with_retry(
+        employee: dict, text: str, user_id: int | None
+    ) -> dict:
         """带重试机制的API调用。"""
         last_error = None
-        for attempt in range(API_MAX_RETRIES + 1):
+        config = DigitalEmployeeService._api_config(employee)
+        retry_count = int(config.get("retry_count", API_MAX_RETRIES))
+        for attempt in range(retry_count + 1):
             try:
-                return await DigitalEmployeeService._preview_api(employee, text)
+                result = await DigitalEmployeeService._preview_api(employee, text, config)
+                status_code = int(result.pop("_status_code", 200))
+                latency_ms = int(result.pop("_latency_ms", 0))
+                if config.get("interface_id"):
+                    InterfaceCallRepository.record(
+                        config["interface_id"],
+                        user_id=user_id,
+                        status_code=status_code,
+                        success=True,
+                        latency_ms=latency_ms,
+                    )
+                return result
             except DigitalEmployeeError as exc:
                 last_error = exc
+                if config.get("interface_id"):
+                    status_match = __import__("re").search(r"HTTP (\d{3})", str(exc))
+                    InterfaceCallRepository.record(
+                        config["interface_id"],
+                        user_id=user_id,
+                        status_code=int(status_match.group(1)) if status_match else 0,
+                        success=False,
+                        error_message=str(exc),
+                    )
                 # 只对网络错误和超时进行重试，不对业务错误重试
                 error_msg = str(exc).lower()
                 should_retry = any(keyword in error_msg for keyword in ["超时", "连接", "http 5", "http 429"])
-                if should_retry and attempt < API_MAX_RETRIES:
+                if should_retry and attempt < retry_count:
                     delay = RETRY_BASE_DELAY * (2 ** attempt)
                     LOGGER.warning(
                         "API调用失败，第%d次重试，延迟%.1f秒: %s",
@@ -160,19 +254,21 @@ class DigitalEmployeeService:
                     if not should_retry:
                         LOGGER.error("API调用业务错误，不重试: %s", str(exc))
                     else:
-                        LOGGER.error("API调用最终失败，已重试%d次: %s", API_MAX_RETRIES, str(exc))
+                        LOGGER.error("API调用最终失败，已重试%d次: %s", retry_count, str(exc))
                     break
         raise last_error
 
     @staticmethod
-    async def _preview_llm(employee: dict, text: str, user_id: int | None) -> dict:
+    async def _preview_llm(
+        employee: dict, text: str, user_id: int | None, skills: list[dict]
+    ) -> dict:
         model = (
-            ModelRepository.get_default()
+            SystemSettingsService.get_default_model()
             if employee.get("use_default_model")
             else ModelRepository.get(int(employee.get("model_id") or 0))
         )
         if not model or not model.get("enabled"):
-            model = ModelRepository.get_default()
+            model = SystemSettingsService.get_default_model()
         if not model or not model.get("enabled"):
             if employee.get("use_default_model"):
                 raise DigitalEmployeeError(
@@ -188,6 +284,15 @@ class DigitalEmployeeService:
             raise DigitalEmployeeError("关联模型不支持文本任务")
         model = dict(model)
         employee_prompt = str(employee.get("system_prompt") or "").strip()
+        skill_prompts = [
+            str(skill.get("system_prompt") or "").strip()
+            for skill in skills
+            if str(skill.get("system_prompt") or "").strip()
+        ]
+        if skill_prompts:
+            employee_prompt = "\n\n".join(
+                part for part in (employee_prompt, *skill_prompts) if part
+            )
         knowledge = prompt_context(employee["id"])
         if knowledge:
             employee_prompt = "\n\n".join((
@@ -223,19 +328,62 @@ class DigitalEmployeeService:
         }
 
     @staticmethod
-    async def _preview_api(employee: dict, text: str) -> dict:
-        url = str(_replace(employee["api_url"], text))
+    def _api_config(employee: dict) -> dict:
+        interface_id = employee.get("interface_id")
+        if interface_id:
+            interface = InterfaceRepository.get(int(interface_id))
+            if not interface:
+                raise DigitalEmployeeError("数字员工绑定的接口不存在")
+            if not interface.get("enabled"):
+                raise DigitalEmployeeError("数字员工绑定的接口已停用")
+            return {
+                "interface_id": int(interface["id"]),
+                "api_url": interface["api_url"],
+                "api_method": interface["request_method"],
+                "request_headers": interface.get("request_headers") or {},
+                "request_params": interface.get("request_params") or {},
+                "response_path": interface.get("response_path") or "",
+                "timeout_seconds": int(interface.get("timeout_seconds") or 15),
+                "retry_count": int(interface.get("retry_count") or 0),
+            }
+        return {
+            "interface_id": None,
+            "api_url": employee.get("api_url") or "",
+            "api_method": employee.get("api_method") or "GET",
+            "request_headers": employee.get("request_headers") or {},
+            "request_params": employee.get("request_params") or {},
+            "response_path": "",
+            "timeout_seconds": int(employee.get("timeout_seconds") or 20),
+            "retry_count": API_MAX_RETRIES,
+        }
+
+    @staticmethod
+    def _extract_response_path(data, response_path: str):
+        current = data
+        for part in (segment for segment in response_path.split(".") if segment):
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            elif isinstance(current, list) and part.isdigit() and int(part) < len(current):
+                current = current[int(part)]
+            else:
+                raise DigitalEmployeeError(f"接口响应中不存在路径：{response_path}")
+        return current
+
+    @staticmethod
+    async def _preview_api(employee: dict, text: str, config: dict) -> dict:
+        started = time.monotonic()
+        url = str(_replace(config["api_url"], text))
         await _validate_employee_url(url)
-        params = _replace(employee.get("request_params") or {}, text)
+        params = _replace(config.get("request_params") or {}, text)
         headers = {
             "Accept": "application/json",
             "User-Agent": "DataFinderAgentOS-DigitalEmployee/0.3",
         }
-        for key, value in (employee.get("request_headers") or {}).items():
+        for key, value in (config.get("request_headers") or {}).items():
             lowered = str(key).lower()
             if lowered not in {"cookie", "authorization", "proxy-authorization", "host", "content-length"}:
                 headers[str(key)] = str(_replace(value, text))[:1000]
-        method = employee.get("api_method", "GET")
+        method = config.get("api_method", "GET")
         body = None
         if method == "GET":
             parsed = urlsplit(url)
@@ -256,8 +404,8 @@ class DigitalEmployeeService:
             response = await AsyncHTTPClient().fetch(
                 HTTPRequest(
                     url=url, method=method, headers=headers, body=body,
-                    connect_timeout=min(10, employee["timeout_seconds"]),
-                    request_timeout=employee["timeout_seconds"],
+                    connect_timeout=min(10, config["timeout_seconds"]),
+                    request_timeout=config["timeout_seconds"],
                     follow_redirects=False, streaming_callback=receive,
                 ),
                 raise_error=False,
@@ -274,6 +422,11 @@ class DigitalEmployeeService:
         except json.JSONDecodeError as exc:
             raise DigitalEmployeeError("接口未返回有效 JSON") from exc
 
+        if config.get("response_path"):
+            data = DigitalEmployeeService._extract_response_path(
+                data, str(config["response_path"])
+            )
+
         # 响应数据清洗
         data = DigitalEmployeeService._sanitize_response_data(data)
 
@@ -287,6 +440,8 @@ class DigitalEmployeeService:
             "mode": employee.get("response_mode", "json"),
             "employee": employee["name"], "mention": "@" + employee["mention"],
             "data": data,
+            "_status_code": response.code,
+            "_latency_ms": int((time.monotonic() - started) * 1000),
         }
 
     @staticmethod

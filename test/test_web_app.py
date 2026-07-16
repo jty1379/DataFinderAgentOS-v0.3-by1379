@@ -5,8 +5,8 @@ from __future__ import annotations
 import importlib.util
 import re
 import tempfile
-import urllib.parse
 import unittest
+import urllib.parse
 from http.cookies import SimpleCookie
 from pathlib import Path
 from unittest.mock import patch
@@ -16,7 +16,6 @@ from tornado.testing import AsyncHTTPTestCase
 from app.models import db
 from app.models.rbac import FeatureRepository, RoleRepository
 from app.models.user import UserRepository
-
 
 ENTRY_PATH = Path(__file__).resolve().parents[1] / "app.py"
 ENTRY_SPEC = importlib.util.spec_from_file_location("datafinder_entry", ENTRY_PATH)
@@ -206,7 +205,6 @@ class WebAppTest(AsyncHTTPTestCase):
         self.assertEqual(root.code, 302)
         self.assertEqual(root.headers["Location"], "/admin/")
 
-        admin_role = RoleRepository.get_by_code("admin")
         feature = next(item for item in FeatureRepository.list_features() if item["code"] == "menu_management")
         FeatureRepository.set_enabled(feature["id"], False)
         forbidden = self.fetch("/admin/menus", headers={"Cookie": header}, follow_redirects=False)

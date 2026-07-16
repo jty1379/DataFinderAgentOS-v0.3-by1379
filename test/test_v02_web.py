@@ -6,8 +6,8 @@ import importlib.util
 import json
 import re
 import tempfile
-import urllib.parse
 import unittest
+import urllib.parse
 from http.cookies import SimpleCookie
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -20,7 +20,6 @@ from app.models.rbac import FeatureRepository, RoleRepository
 from app.models.source import RuleRepository, SourceRepository
 from app.models.user import UserRepository
 from app.models.warehouse import WarehouseRepository
-
 
 ENTRY_PATH = Path(__file__).resolve().parents[1] / "app.py"
 ENTRY_SPEC = importlib.util.spec_from_file_location("datafinder_v02_entry", ENTRY_PATH)
@@ -242,10 +241,7 @@ class V02WebTest(AsyncHTTPTestCase):
                 "published_at": "2026-07-13",
             },
         ]
-        collector_mock = AsyncMock(return_value=fixture)
-        with patch(
-            "app.controllers.lookout.CollectorService.collect", collector_mock
-        ):
+        with patch("app.controllers.lookout.CollectionTaskService.schedule") as schedule:
             response = self.post_form(
                 "/admin/lookout/collect",
                 {
@@ -257,13 +253,17 @@ class V02WebTest(AsyncHTTPTestCase):
                 token,
                 cookies,
             )
-        self.assertEqual(response.code, 200, response.body.decode("utf-8", errors="replace"))
+        self.assertEqual(response.code, 202, response.body.decode("utf-8", errors="replace"))
         payload = json.loads(response.body)
         self.assertTrue(payload["ok"])
-        self.assertEqual(len(payload["items"]), 2)
-        collector_mock.assert_awaited_once()
+        schedule.assert_called_once_with(payload["run_id"])
 
-        result_ids = [item["id"] for item in payload["items"]]
+        from app.models.lookout import CollectionRepository
+
+        items = CollectionRepository.append_results(payload["run_id"], fixture)
+        CollectionRepository.finish_run(payload["run_id"], len(items))
+
+        result_ids = [item["id"] for item in items]
         imported = self.post_json(
             "/admin/warehouse/import", {"result_ids": result_ids}, token, cookies
         )

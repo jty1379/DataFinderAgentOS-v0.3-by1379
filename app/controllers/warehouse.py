@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import csv
+import io
+import json
+from datetime import date
+
 import tornado.ioloop
 
 from app.controllers.base import AdminBaseHandler, AdminJsonHandler
 from app.models.deep_collection import DeepCollectionRepository
 from app.models.warehouse import WarehouseRepository
+from app.services.collection_task import CollectionTaskService
 from app.services.deep_collection import DeepCollectionService
+from app.services.opinion import OpinionSecurityService
 
 
 def _page(handler: AdminBaseHandler) -> int:
@@ -17,18 +24,41 @@ def _page(handler: AdminBaseHandler) -> int:
         return 1
 
 
+def _date_filter(handler: AdminBaseHandler, name: str) -> str:
+    value = handler.get_query_argument(name, "").strip()
+    if not value:
+        return ""
+    try:
+        return date.fromisoformat(value).isoformat()
+    except ValueError:
+        return ""
+
+
+def _filters(handler: AdminBaseHandler) -> dict:
+    deep_status = handler.get_query_argument("deep_status", "").strip()
+    if deep_status not in {"", "0", "1", "yes", "no"}:
+        deep_status = ""
+    risk_level = handler.get_query_argument("risk_level", "").strip()
+    if risk_level not in {"", "low", "normal", "high", "critical"}:
+        risk_level = ""
+    return {
+        "keyword": handler.get_query_argument("q", "").strip(),
+        "deep_status": deep_status,
+        "source_name": handler.get_query_argument("source", "").strip()[:100],
+        "risk_level": risk_level,
+        "start_date": _date_filter(handler, "start_date"),
+        "end_date": _date_filter(handler, "end_date"),
+    }
+
+
 class AdminWarehouseHandler(AdminBaseHandler):
     required_feature = "data_management"
 
     def get(self):
-        keyword = self.get_query_argument("q", "").strip()
-        deep_status = self.get_query_argument("deep_status", "").strip()
-        if deep_status not in {"", "0", "1", "yes", "no"}:
-            deep_status = ""
+        filters = _filters(self)
         page = _page(self)
         items, total = WarehouseRepository.list(
-            keyword=keyword,
-            deep_status=deep_status,
+            **filters,
             page=page,
             page_size=10,
         )
@@ -37,8 +67,8 @@ class AdminWarehouseHandler(AdminBaseHandler):
             title="数据仓库 · 瞭望与问数系统",
             active_menu="data_management",
             items=items,
-            keyword=keyword,
-            deep_status=deep_status,
+            source_names=WarehouseRepository.source_names(),
+            **filters,
             page=page,
             pages=max(1, (total + 9) // 10),
             total=total,
@@ -63,6 +93,73 @@ class AdminWarehouseHandler(AdminBaseHandler):
         self.redirect_with_message("/admin/warehouse", "未知操作", "error")
 
 
+class AdminWarehouseExportHandler(AdminBaseHandler):
+    required_feature = "data_management"
+
+    def get(self):
+        rows = WarehouseRepository.export_rows(**_filters(self), limit=5000)
+        output = io.StringIO(newline="")
+        writer = csv.writer(output)
+        writer.writerow(
+            ["ID", "标题", "来源", "原始地址", "摘要", "发布时间", "风险等级", "深度采集", "入仓时间"]
+        )
+        for item in rows:
+            writer.writerow(
+                [
+                    item["id"],
+                    item["title"],
+                    item["source_name"],
+                    item["url"],
+                    item["summary"],
+                    item["published_at"],
+                    item["risk_level"],
+                    "是" if item["deep_collected"] else "否",
+                    item["created_at"],
+                ]
+            )
+        self.set_header("Content-Type", "text/csv; charset=UTF-8")
+        self.set_header(
+            "Content-Disposition", f'attachment; filename="warehouse-{date.today().isoformat()}.csv"'
+        )
+        self.finish("\ufeff" + output.getvalue())
+
+
+class AdminWarehouseRecollectHandler(AdminJsonHandler):
+    required_feature = "data_management"
+
+    def post(self, item_id: str):
+        try:
+            context = WarehouseRepository.recollection_context(int(item_id))
+        except ValueError:
+            context = None
+        if not context:
+            return self.write_json({"ok": False, "message": "仓库数据不存在"}, 404)
+        if not context.get("rule_id"):
+            return self.write_json(
+                {"ok": False, "message": "该数据没有关联采集规则，无法重新采集"}, 409
+            )
+        task_id = CollectionTaskService.create_single_task(
+            int(context["rule_id"]),
+            str(context["keyword"] or context["title"]),
+            page=int(context["page_number"] or 1),
+            page_size=int(context["page_size"] or 12),
+            user_id=self.current_user["id"],
+        )
+        if not task_id:
+            return self.write_json(
+                {"ok": False, "message": "关联规则或瞭源已停用，无法重新采集"}, 409
+            )
+        CollectionTaskService.schedule(task_id)
+        return self.write_json(
+            {
+                "ok": True,
+                "task_id": task_id,
+                "message": f"重新采集任务 #{task_id} 已创建",
+            },
+            202,
+        )
+
+
 class AdminWarehouseImportHandler(AdminJsonHandler):
     required_feature = "data_management"
 
@@ -83,6 +180,26 @@ class AdminWarehouseImportHandler(AdminJsonHandler):
         inserted, skipped = WarehouseRepository.import_results(
             result_ids=result_ids, user_id=self.current_user["id"]
         )
+        for result_id in result_ids:
+            item = WarehouseRepository.get_by_source_result_id(result_id)
+            if not item:
+                continue
+            security = OpinionSecurityService.analyze_and_record(
+                "collection",
+                item["id"],
+                f"{item['title']}\n{item['summary']}",
+                self.current_user["id"],
+                {"stage": "warehouse_import", "source_result_id": result_id},
+            )
+            warehouse_risk = {
+                "medium": "high", "high": "high", "critical": "critical", "low": "low"
+            }.get(security["risk_level"], "normal")
+            WarehouseRepository.update_risk_level(item["id"], warehouse_risk, security)
+            WarehouseRepository.update_keywords(
+                item["id"],
+                ",".join(word["word"] for word in security["matched_words"]),
+                json.dumps(security["matched_words"], ensure_ascii=False),
+            )
         return self.write_json(
             {
                 "ok": True,
@@ -216,7 +333,6 @@ class AdminWarehouseHighRiskHandler(AdminJsonHandler):
             risk_level = "high"
         page = _page(self)
         limit = 20
-        offset = (page - 1) * limit
 
         items = WarehouseRepository.get_by_risk_level(risk_level, limit=limit)
         return self.write_json({

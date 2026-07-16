@@ -26,3 +26,9 @@
 ## 变更规则
 
 新表、字段和索引只能通过新的递增 SQL 迁移加入。迁移文件执行后不得修改；runner 会比较 SHA-256 校验和。种子数据使用唯一键和 `INSERT OR IGNORE`，允许重复启动。模型密钥只保存环境变量名，不保存真实 Key。
+# A/B/C 缺口迁移（v0.3）
+
+- `023_collection_task_lifecycle.sql`：统一采集状态、进度、计数、时间字段与 `collection_run_logs`。
+- `030_employee_interface_binding.sql`：为数字员工增加受管接口绑定。
+- `031_multimodal_tasks.sql`：增加多模态配置与数据库任务记录。
+- `040_platform_security_closure.sql`：增加会话归档、消息风险/耗时/Token、舆情内容哈希/元数据与审计索引。

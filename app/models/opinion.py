@@ -191,15 +191,17 @@ class OpinionAlertRepository:
         matched_words: list[dict],
         risk_level: str = "low",
         ai_analysis: str = "",
+        content_hash: str = "",
+        metadata: dict | None = None,
     ):
         try:
             with connection_scope() as connection:
                 cursor = connection.execute(
                     """
-                    INSERT INTO opinion_alerts
+                    INSERT OR IGNORE INTO opinion_alerts
                     (source_type, source_id, user_id, title, content, excerpt,
-                     matched_words, risk_level, ai_analysis)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     matched_words, risk_level, ai_analysis, content_hash, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         source_type,
@@ -211,10 +213,19 @@ class OpinionAlertRepository:
                         json.dumps(matched_words, ensure_ascii=False),
                         risk_level,
                         ai_analysis,
+                        content_hash,
+                        json.dumps(metadata or {}, ensure_ascii=False, separators=(",", ":")),
                     ),
                 )
                 connection.commit()
-            return int(cursor.lastrowid)
+                if cursor.rowcount:
+                    return int(cursor.lastrowid)
+                row = connection.execute(
+                    """SELECT id FROM opinion_alerts
+                       WHERE source_type=? AND source_id=? AND content_hash=?""",
+                    (source_type, source_id, content_hash),
+                ).fetchone()
+            return int(row["id"]) if row else 0
         except Exception:
             return 0
 
@@ -314,6 +325,10 @@ class AuditLogRepository:
     def list_logs(
         action_type: str = "",
         user_id: int = None,
+        resource_type: str = "",
+        resource_id: int | None = None,
+        start_date: str = "",
+        end_date: str = "",
         page: int = 1,
         page_size: int = 20,
     ):
@@ -325,6 +340,18 @@ class AuditLogRepository:
         if user_id:
             clauses.append("user_id = ?")
             params.append(user_id)
+        if resource_type:
+            clauses.append("resource_type = ?")
+            params.append(resource_type)
+        if resource_id:
+            clauses.append("resource_id = ?")
+            params.append(resource_id)
+        if start_date:
+            clauses.append("date(created_at) >= date(?)")
+            params.append(start_date)
+        if end_date:
+            clauses.append("date(created_at) <= date(?)")
+            params.append(end_date)
         
         where_sql = " AND ".join(clauses) if clauses else "1=1"
         

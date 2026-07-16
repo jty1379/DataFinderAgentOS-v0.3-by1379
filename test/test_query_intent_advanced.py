@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from app.services.query_intent import QueryIntentService, UnsafeQueryError
-from app.models.analytics import AnalyticsRepository
 
 
 class TestQueryIntentAdvanced(unittest.TestCase):
@@ -160,6 +159,24 @@ class TestQueryIntentAdvanced(unittest.TestCase):
         self.assertIn("type", viz)
         self.assertIn("title", viz)
         self.assertIn("data", viz)
+
+    def test_stable_query_contract(self):
+        result = QueryIntentService.query("各来源分别有多少条新闻？", user_id=7)
+
+        self.assertEqual(
+            set(result),
+            {"intent", "conclusion", "kpis", "charts", "table", "generated_at"},
+        )
+        self.assertEqual(result["intent"], "sources_breakdown")
+        self.assertIsInstance(result["charts"], list)
+        self.assertEqual(set(result["table"]), {"columns", "labels", "rows"})
+
+    def test_stable_query_contract_for_unknown_question(self):
+        result = QueryIntentService.query("请介绍一下系统")
+
+        self.assertEqual(result["intent"], "unrecognized")
+        self.assertEqual(result["kpis"], [])
+        self.assertEqual(result["charts"], [])
 
     @patch("app.models.analytics.AnalyticsRepository.risk_level_distribution")
     @patch("app.models.analytics.AnalyticsRepository.high_risk_items")

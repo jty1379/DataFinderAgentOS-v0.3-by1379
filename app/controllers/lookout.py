@@ -5,9 +5,8 @@ from __future__ import annotations
 import logging
 
 from app.controllers.base import AdminBaseHandler, AdminJsonHandler
-from app.models.lookout import CollectionRepository
 from app.models.source import RuleRepository
-from app.services.collector import CollectorService
+from app.services.collection_task import CollectionTaskService
 
 LOGGER = logging.getLogger("collection")
 
@@ -27,12 +26,32 @@ class AdminLookoutHandler(AdminBaseHandler):
         available_rules, _ = RuleRepository.list(
             enabled_only=True, page=1, page_size=200
         )
-        recent_runs = CollectionRepository.list_runs(limit=6)
+        keyword = self.get_query_argument("q", "").strip()
+        selected_status = self.get_query_argument("status", "").strip()
+        selected_type = self.get_query_argument("task_type", "").strip()
+        try:
+            selected_rule_id = max(
+                0, int(self.get_query_argument("rule_id", "0"))
+            )
+        except ValueError:
+            selected_rule_id = 0
+        page = _positive_int(
+            self.get_query_argument("task_page", "1"), default=1, maximum=100000
+        )
+        recent_runs, task_total = CollectionTaskService.list_tasks(
+            keyword=keyword,
+            status=selected_status,
+            task_type=selected_type,
+            page=page,
+            page_size=12,
+        )
         status_text = {
             "pending": "等待中",
             "running": "采集中",
             "success": "已完成",
+            "partial": "部分成功",
             "failed": "失败",
+            "cancelled": "已取消",
         }
         for run in recent_runs:
             run["status_text"] = status_text.get(run["status"], run["status"])
@@ -42,6 +61,13 @@ class AdminLookoutHandler(AdminBaseHandler):
             active_menu="lookout_management",
             available_rules=available_rules,
             recent_runs=recent_runs,
+            task_total=task_total,
+            task_page=page,
+            task_pages=max(1, (task_total + 11) // 12),
+            keyword=keyword,
+            selected_status=selected_status,
+            selected_type=selected_type,
+            selected_rule_id=selected_rule_id,
             can_write=True,
         )
 
@@ -59,48 +85,98 @@ class AdminLookoutCollectHandler(AdminJsonHandler):
             rule_id = int(self.get_body_argument("rule_id", "0"))
         except ValueError:
             return self.write_json({"ok": False, "message": "采集规则无效"}, 400)
-        page = _positive_int(
+        start_page = _positive_int(
             self.get_body_argument("page", "1"), default=1, maximum=100
+        )
+        pages = _positive_int(
+            self.get_body_argument("pages", "1"), default=1, maximum=20
         )
         page_size = _positive_int(
             self.get_body_argument("page_size", "12"), default=12, maximum=12
         )
+        task_type = self.get_body_argument("task_type", "single").strip()
+        if task_type not in {"single", "batch"}:
+            return self.write_json({"ok": False, "message": "采集任务类型无效"}, 400)
+        if task_type == "single":
+            pages = 1
         rule = RuleRepository.get(rule_id)
         if not rule or not rule.get("enabled") or not rule.get("source_enabled"):
             return self.write_json(
                 {"ok": False, "message": "采集规则或所属瞭源当前不可用"}, 404
             )
 
-        run_id = CollectionRepository.create_run(
-            rule_id=rule_id,
-            user_id=self.current_user["id"],
-            keyword=keyword,
-            page=page,
-            page_size=page_size,
-        )
         try:
-            items = await CollectorService.collect(
-                rule, keyword, page=page, page_size=page_size
+            run_id = CollectionTaskService.create_batch_task(
+                rule_id,
+                keyword,
+                pages=pages,
+                user_id=self.current_user["id"],
+                start_page=start_page,
+                page_size=page_size,
             )
-            saved_items = CollectionRepository.save_results(run_id, items)
-            message = (
-                f"采集完成，共获取 {len(saved_items)} 条公开结果"
-                if saved_items
-                else "请求成功，但页面未解析到结果；站点结构可能已变化"
-            )
+            if not run_id:
+                return self.write_json(
+                    {"ok": False, "message": "采集规则或所属瞭源当前不可用"}, 404
+                )
+            CollectionTaskService.schedule(run_id)
             return self.write_json(
                 {
                     "ok": True,
-                    "message": message,
+                    "message": f"采集任务 #{run_id} 已创建，正在后台执行",
                     "run_id": run_id,
-                    "items": saved_items,
-                }
+                    "task": CollectionTaskService.get_task_progress(run_id),
+                },
+                202,
             )
-        except Exception as exc:  # 外部站点错误需要转换成可恢复反馈
-            LOGGER.exception("lookout collection failed", extra={"task_id": run_id, "user_id": self.current_user["id"], "request_id": self.request_id, "event": "lookout_collection_failed"})
-            message = str(exc)[:300] or "外部站点暂时不可用"
-            CollectionRepository.fail_run(run_id, message)
+        except ValueError as exc:
+            return self.write_json({"ok": False, "message": str(exc)}, 400)
+        except Exception:
+            LOGGER.exception(
+                "lookout task create failed",
+                extra={
+                    "user_id": self.current_user["id"],
+                    "request_id": self.request_id,
+                    "event": "lookout_task_create_failed",
+                },
+            )
             return self.write_json(
-                {"ok": False, "message": f"采集失败：{message}", "run_id": run_id},
-                502,
+                {"ok": False, "message": "采集任务创建失败，请检查规则后重试"}, 500
             )
+
+
+class AdminLookoutTaskHandler(AdminJsonHandler):
+    required_feature = "lookout_management"
+
+    def get(self, task_id: str):
+        try:
+            task = CollectionTaskService.get_task_progress(int(task_id))
+        except ValueError:
+            task = None
+        if not task:
+            return self.write_json({"ok": False, "message": "采集任务不存在"}, 404)
+        return self.write_json({"ok": True, "task": task})
+
+
+class AdminLookoutTaskActionHandler(AdminJsonHandler):
+    required_feature = "lookout_management"
+
+    def post(self, task_id: str, action: str):
+        try:
+            task_id_int = int(task_id)
+        except ValueError:
+            return self.write_json({"ok": False, "message": "采集任务编号无效"}, 400)
+        if action == "cancel":
+            if not CollectionTaskService.cancel_task(task_id_int):
+                return self.write_json(
+                    {"ok": False, "message": "只有等待中或运行中的任务可以取消"}, 409
+                )
+            return self.write_json({"ok": True, "message": "采集任务已取消"})
+        if action == "retry":
+            if not CollectionTaskService.retry_failed_task(task_id_int):
+                return self.write_json(
+                    {"ok": False, "message": "只有失败、部分成功或已取消任务可以重试"},
+                    409,
+                )
+            CollectionTaskService.schedule(task_id_int)
+            return self.write_json({"ok": True, "message": "采集任务已重新开始"})
+        return self.write_json({"ok": False, "message": "不支持的任务操作"}, 400)

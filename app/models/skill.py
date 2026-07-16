@@ -8,7 +8,6 @@ import sqlite3
 
 from app.models.db import connection_scope
 
-
 CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{2,39}$")
 
 
