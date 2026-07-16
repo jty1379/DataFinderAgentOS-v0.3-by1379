@@ -147,3 +147,77 @@ class AdminWarehouseDeepResultHandler(AdminJsonHandler):
         if not result:
             return self.write_json({"ok": False, "message": "该数据尚无深度采集结果"}, 404)
         return self.write_json({"ok": True, "result": result})
+
+
+class AdminWarehouseRiskAnalysisHandler(AdminJsonHandler):
+    """风险等级分析与统计。"""
+    required_feature = "data_management"
+
+    def get(self):
+        """获取风险等级统计。"""
+        stats = WarehouseRepository.get_summary_stats()
+        return self.write_json({
+            "ok": True,
+            "stats": stats,
+        })
+
+
+class AdminWarehouseHighRiskHandler(AdminJsonHandler):
+    """获取高风险内容。"""
+    required_feature = "data_management"
+
+    def get(self):
+        """获取高风险项目列表。"""
+        risk_level = self.get_query_argument("level", "high").strip()
+        if risk_level not in ("low", "normal", "high", "critical"):
+            risk_level = "high"
+        page = _page(self)
+        limit = 20
+        offset = (page - 1) * limit
+
+        items = WarehouseRepository.get_by_risk_level(risk_level, limit=limit)
+        return self.write_json({
+            "ok": True,
+            "items": items,
+            "risk_level": risk_level,
+            "page": page,
+            "count": len(items),
+        })
+
+
+class AdminWarehouseBatchDeleteHandler(AdminJsonHandler):
+    """批量删除仓库项。"""
+    required_feature = "data_management"
+
+    def post(self):
+        """批量删除指定项。"""
+        payload = self.json_body()
+        item_ids = payload.get("item_ids", [])
+
+        if not isinstance(item_ids, list):
+            return self.write_json({"ok": False, "message": "参数格式错误"}, 400)
+
+        ids = [int(x) for x in item_ids if isinstance(x, (int, str))]
+        if not ids:
+            return self.write_json({"ok": False, "message": "请选择要删除的项"}, 400)
+
+        deleted = WarehouseRepository.batch_delete(ids)
+        return self.write_json({
+            "ok": True,
+            "deleted": deleted,
+            "message": f"已删除 {deleted} 条数据",
+        })
+
+
+class AdminWarehouseDeduplicationHandler(AdminJsonHandler):
+    """数据去重。"""
+    required_feature = "data_management"
+
+    def post(self):
+        """执行数据去重。"""
+        deleted = WarehouseRepository.deduplication()
+        return self.write_json({
+            "ok": True,
+            "deleted": deleted,
+            "message": f"去重完成，删除了 {deleted} 条重复数据",
+        })

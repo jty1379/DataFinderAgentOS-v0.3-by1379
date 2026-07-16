@@ -35,6 +35,10 @@ from app.controllers.warehouse import (
     AdminWarehouseDeepTaskHandler,
     AdminWarehouseHandler,
     AdminWarehouseImportHandler,
+    AdminWarehouseRiskAnalysisHandler,
+    AdminWarehouseHighRiskHandler,
+    AdminWarehouseBatchDeleteHandler,
+    AdminWarehouseDeduplicationHandler,
 )
 from app.controllers.admin import (
     AdminFeaturesHandler,
@@ -79,6 +83,10 @@ def make_app() -> tornado.web.Application:
             (r"/admin/warehouse/deep-collect", AdminWarehouseDeepCollectHandler),
             (r"/admin/warehouse/deep-tasks/([0-9]+)", AdminWarehouseDeepTaskHandler),
             (r"/admin/warehouse/deep-results/([0-9]+)", AdminWarehouseDeepResultHandler),
+            (r"/admin/warehouse/risk-analysis", AdminWarehouseRiskAnalysisHandler),
+            (r"/admin/warehouse/high-risk", AdminWarehouseHighRiskHandler),
+            (r"/admin/warehouse/batch-delete", AdminWarehouseBatchDeleteHandler),
+            (r"/admin/warehouse/deduplication", AdminWarehouseDeduplicationHandler),
             (r"/admin/models", AdminModelsHandler),
             (r"/admin/models/chat", AdminModelChatHandler),
             (r"/admin/agents", AdminDigitalEmployeesHandler),

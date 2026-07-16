@@ -45,6 +45,19 @@ class QueryIntentService:
             return cls._deep()
         if any(term in text for term in ("统计", "总数", "概览", "数据仓库", "采集数据", "数据分析")):
             return cls._overview()
+        # 新增问法
+        if any(term in text for term in ("采集了多少", "今天采集", "采集数量", "采集了")):
+            return cls._daily_collection()
+        if any(term in text for term in ("各来源", "各个来源", "来源分别")):
+            return cls._sources_breakdown()
+        if any(term in text for term in ("失败率", "失败", "出错")):
+            return cls._failure_analysis()
+        if any(term in text for term in ("高风险", "风险内容", "敏感", "风险等级")):
+            return cls._risk_analysis()
+        if any(term in text for term in ("关键词", "频率最高", "热词")):
+            return cls._keyword_analysis()
+        if any(term in text for term in ("耗时", "平均耗时", "性能", "速度")):
+            return cls._performance_analysis()
         return None
 
     @staticmethod
@@ -140,4 +153,145 @@ class QueryIntentService:
                 {"type": "line", "title": "近七日趋势", "data": trend},
                 {"type": "table", "title": "最近入仓数据", "columns": ["title", "source", "deep"], "labels": ["标题", "来源", "深采"], "data": table},
             ],
+        )
+
+    @classmethod
+    def _daily_collection(cls) -> dict:
+        """回答：今天采集了多少条数据？"""
+        from datetime import datetime, timedelta
+        today = datetime.now().strftime("%Y-%m-%d")
+        rows = AnalyticsRepository.daily_trend(1)
+        today_count = rows[-1]["value"] if rows else 0
+
+        # 统计近7天数据
+        weekly = AnalyticsRepository.daily_trend(7)
+        weekly_total = sum(item["value"] for item in weekly)
+
+        narrative = f"今日共采集 {today_count} 条数据，近七日累计采集 {weekly_total} 条。"
+        return cls._base(
+            "daily_collection", "今日采集统计", narrative,
+            [{"type": "kpi", "title": "采集数量", "data": [
+                {"label": "今日采集", "value": today_count},
+                {"label": "周均采集", "value": round(weekly_total / 7) if weekly_total else 0},
+            ]}]
+        )
+
+    @classmethod
+    def _sources_breakdown(cls) -> dict:
+        """回答：各来源分别有多少条新闻？"""
+        sources = AnalyticsRepository.source_distribution(12)
+        total = sum(item["value"] for item in sources)
+        narrative = f"数据源统计显示，已采集 {total} 条数据，分布在 {len(sources)} 个数据源中。"
+        return cls._base(
+            "sources_breakdown", "各来源数据统计", narrative,
+            [{"type": "bar", "title": "来源数据量", "data": sources}]
+        )
+
+    @classmethod
+    def _failure_analysis(cls) -> dict:
+        """回答：哪个来源失败率最高？"""
+        performance = AnalyticsRepository.source_performance()
+        if not performance:
+            narrative = "暂无采集任务数据。"
+            return cls._base(
+                "failure_analysis", "来源采集失败率", narrative,
+                [{"type": "kpi", "title": "采集统计", "data": [{"label": "任务总数", "value": 0}]}]
+            )
+
+        # 找失败率最高的
+        worst = max(performance, key=lambda x: 100 - x.get("success_rate", 100))
+        table = [
+            {
+                "source": item["label"],
+                "success": item["success_count"],
+                "total": item["total_count"],
+                "rate": f"{item['success_rate']}%"
+            }
+            for item in sorted(performance, key=lambda x: x.get("success_rate", 0))[:5]
+        ]
+        narrative = f"数据源采集成功率统计显示，{worst['label']} 的成功率为 {worst['success_rate']}%。"
+        return cls._base(
+            "failure_analysis", "采集失败率分析", narrative,
+            [{"type": "table", "title": "来源采集成功率排序",
+              "columns": ["source", "success", "total", "rate"],
+              "labels": ["数据源", "成功", "总数", "成功率"],
+              "data": table}]
+        )
+
+    @classmethod
+    def _risk_analysis(cls) -> dict:
+        """回答：最近有哪些高风险内容？"""
+        risk_dist = AnalyticsRepository.risk_level_distribution()
+        high_risk = AnalyticsRepository.high_risk_items(15)
+
+        high_count = sum(item["value"] for item in risk_dist if item["label"] in ("high", "critical"))
+        narrative = f"检测到 {high_count} 条高风险内容需要关注。"
+
+        table = [
+            {
+                "title": item["title"][:40],
+                "level": item["risk_level"],
+                "source": item["source"]
+            }
+            for item in high_risk
+        ]
+
+        return cls._base(
+            "risk_analysis", "高风险内容提示", narrative,
+            [
+                {"type": "bar", "title": "风险等级分布", "data": risk_dist},
+                {"type": "table", "title": "高风险项目",
+                 "columns": ["title", "level", "source"],
+                 "labels": ["标题", "风险等级", "来源"],
+                 "data": table}
+            ]
+        )
+
+    @classmethod
+    def _keyword_analysis(cls) -> dict:
+        """回答：哪个关键词出现频率最高？"""
+        keywords = AnalyticsRepository.keyword_frequency(12)
+        if not keywords:
+            narrative = "暂无关键词数据。"
+            return cls._base(
+                "keyword_analysis", "关键词频率分析", narrative,
+                [{"type": "kpi", "title": "统计", "data": [{"label": "关键词总数", "value": 0}]}]
+            )
+
+        top_keyword = keywords[0]["label"]
+        top_count = keywords[0]["value"]
+        narrative = f"关键词频率分析显示，'{top_keyword}' 出现 {top_count} 次，是最常见的关键词。"
+        return cls._base(
+            "keyword_analysis", "关键词频率分析", narrative,
+            [{"type": "bar", "title": "关键词出现频率", "data": keywords}]
+        )
+
+    @classmethod
+    def _performance_analysis(cls) -> dict:
+        """回答：各来源平均采集耗时是多少？"""
+        performance = AnalyticsRepository.source_performance()
+        if not performance:
+            narrative = "暂无性能数据。"
+            return cls._base(
+                "performance_analysis", "采集性能分析", narrative,
+                [{"type": "kpi", "title": "性能", "data": [{"label": "平均耗时", "value": 0}]}]
+            )
+
+        avg_time = round(sum(item["avg_time"] for item in performance) / len(performance), 2) if performance else 0
+        table = [
+            {
+                "source": item["label"],
+                "avg_time": f"{item['avg_time']}s",
+                "count": item["total_count"]
+            }
+            for item in sorted(performance, key=lambda x: x.get("avg_time", 0), reverse=True)[:8]
+        ]
+
+        narrative = f"数据源采集性能分析显示，平均耗时为 {avg_time} 秒。"
+        return cls._base(
+            "performance_analysis", "采集性能分析", narrative,
+            [{"type": "table", "title": "来源采集耗时排序",
+              "columns": ["source", "avg_time", "count"],
+              "labels": ["数据源", "平均耗时", "采集次数"],
+              "data": table}]
         )

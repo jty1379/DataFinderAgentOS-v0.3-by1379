@@ -107,6 +107,36 @@ def _seed_source(connection: sqlite3.Connection) -> None:
             (source["id"], json.dumps({"rtt": "1", "bsst": "1", "cl": "2", "tn": "news", "rsv_dl": "ns_pc"}, separators=(",", ":")), '{"result_limit":12}'),
         )
 
+    # Source 2: 四川大学新闻网 (SCU News)
+    connection.execute(
+        """INSERT OR IGNORE INTO lookout_sources(code,name,base_url,description,default_headers,enabled)
+        VALUES ('scu_news','四川大学新闻网','https://news.scu.edu.cn/','四川大学官方新闻网站；校园动态与学术资讯。',?,1)""",
+        (json.dumps(SAFE_BAIDU_HEADERS, ensure_ascii=False, separators=(",", ":")),),
+    )
+    scu_source = connection.execute("SELECT id FROM lookout_sources WHERE code='scu_news'").fetchone()
+    if scu_source:
+        connection.execute(
+            """INSERT OR IGNORE INTO collection_rules
+            (source_id,name,keyword_param,page_param,page_start,page_step,page_size,fixed_params,request_headers,parser_type,parser_config,enabled)
+            VALUES (?,'四川大学新闻采集','word','page',1,1,20,'{}','{}','generic_links',?,1)""",
+            (scu_source["id"], '{"result_limit":20}'),
+        )
+
+    # Source 3: 36Kr (创投热点) - Using RSS/news feed endpoint
+    connection.execute(
+        """INSERT OR IGNORE INTO lookout_sources(code,name,base_url,description,default_headers,enabled)
+        VALUES ('kr36_trending','36氪热点','https://www.36kr.com/search','创投行业动态与融资信息。',?,1)""",
+        (json.dumps(SAFE_BAIDU_HEADERS, ensure_ascii=False, separators=(",", ":")),),
+    )
+    kr36_source = connection.execute("SELECT id FROM lookout_sources WHERE code='kr36_trending'").fetchone()
+    if kr36_source:
+        connection.execute(
+            """INSERT OR IGNORE INTO collection_rules
+            (source_id,name,keyword_param,page_param,page_start,page_step,page_size,fixed_params,request_headers,parser_type,parser_config,enabled)
+            VALUES (?,'36氪创投采集','keyword','page',1,1,30,'{}','{}','generic_links',?,1)""",
+            (kr36_source["id"], '{"result_limit":30}'),
+        )
+
 
 def _seed_employees(connection: sqlite3.Connection) -> None:
     connection.execute(
