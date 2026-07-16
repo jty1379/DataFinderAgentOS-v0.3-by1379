@@ -42,10 +42,16 @@ class UserRepositoryTest(unittest.TestCase):
         self.assertIsNone(user.UserRepository.authenticate("tester", "wrong"))
 
     def test_admin_seed_does_not_reset_existing_account(self):
-        self.assertTrue(user.UserRepository.ensure_admin("admin", "123456"))
-        self.assertFalse(user.UserRepository.ensure_admin("admin", "changed"))
-        self.assertIsNotNone(user.UserRepository.authenticate("admin", "123456"))
-        self.assertIsNone(user.UserRepository.authenticate("admin", "changed"))
+        seeded = user.UserRepository.authenticate("admin", "123456")
+        self.assertIsNotNone(seeded)
+        self.assertTrue(
+            user.UserRepository.change_superadmin_password(
+                seeded["id"], "123456", "changed"
+            )
+        )
+        self.assertFalse(user.UserRepository.ensure_admin("admin", "123456"))
+        self.assertIsNone(user.UserRepository.authenticate("admin", "123456"))
+        self.assertIsNotNone(user.UserRepository.authenticate("admin", "changed"))
 
     def test_rbac_feature_and_menu_chain(self):
         admin_role = RoleRepository.get_by_code("admin")

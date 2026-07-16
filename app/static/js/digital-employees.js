@@ -1,7 +1,8 @@
 (function () {
     "use strict";
     const api = window.DataFinderAdmin;
-    if (!api) return;
+    const cards = window.DataFinderCards;
+    if (!api || !cards) return;
 
     function syncForm(form) {
         const type = form.querySelector("[data-agent-type]")?.value || "llm";
@@ -45,13 +46,27 @@
                 timeoutMs: 95000
             });
             const output = data.result;
+            resultBox.replaceChildren();
+            const header = document.createElement("header");
+            const mention = document.createElement("b");
+            mention.textContent = output.mention;
+            const service = document.createElement("span");
+            service.textContent = output.mode === "text" ? (output.model || "模型") : (output.mode === "card" ? "数据卡片" : "JSON");
+            header.append(mention, service);
+            resultBox.append(header);
             if (output.mode === "text") {
-                resultBox.innerHTML = `<header><b>${api.escapeHtml(output.mention)}</b><span>${api.escapeHtml(output.model || "模型")}</span></header><pre>${api.escapeHtml(output.text)}</pre>`;
+                const text = document.createElement("pre");
+                text.textContent = output.text;
+                resultBox.append(text);
+            } else if (output.mode === "card") {
+                resultBox.append(cards.render(output.data));
             } else {
-                resultBox.innerHTML = `<header><b>${api.escapeHtml(output.mention)}</b><span>${output.mode === "card" ? "数据卡片" : "JSON"}</span></header>${renderData(output.data)}`;
+                const data = document.createElement("div");
+                data.innerHTML = renderData(output.data);
+                resultBox.append(data);
             }
         } catch (error) {
-            resultBox.innerHTML = `<p class="preview-error">${api.escapeHtml(error.message)}</p>`;
+            resultBox.innerHTML = `<p class="preview-error">${api.escapeHtml(api.errorMessage(error))}</p>`;
         } finally {
             api.setBusy(button, false);
         }

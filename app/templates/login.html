@@ -46,9 +46,19 @@
                 </div>
                 <button class="primary-action" type="submit"><span>进入系统</span><i class="layui-icon layui-icon-right"></i></button>
             </form>
+            <button class="biometric-secondary" type="button" data-biometric-open="face-login"><i class="layui-icon layui-icon-camera"></i>使用人脸登录</button>
             <div class="auth-links"><span>还没有账号？</span><a href="/register">立即注册</a></div>
             <div class="demo-account"><span>演示入口</span><a href="/admin/login">管理端登录</a></div>
         </div>
     </section>
 </main>
+<dialog class="biometric-dialog" data-biometric-dialog>
+    <div class="biometric-dialog-card">
+        <header><div><p>指定账号验证</p><h3>人脸登录</h3></div><button type="button" data-biometric-close aria-label="关闭">×</button></header>
+        <div class="camera-stage"><video data-biometric-video autoplay muted playsinline></video><canvas data-biometric-canvas hidden></canvas><span>请正对镜头，并轻微转头或眨眼</span></div>
+        <p class="biometric-status" data-biometric-status role="status">摄像头仅在本次验证期间开启。</p>
+        <footer><button type="button" data-biometric-close>取消</button><button class="primary-action compact" type="button" data-biometric-capture>开始验证</button></footer>
+    </div>
+</dialog>
 {% end %}
+{% block scripts %}<script src="{{ static_url('js/biometric-ui.js') }}"></script>{% end %}

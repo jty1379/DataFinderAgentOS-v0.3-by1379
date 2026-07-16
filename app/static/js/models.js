@@ -2,7 +2,8 @@
     "use strict";
 
     const api = window.DataFinderAdmin;
-    if (!api) return;
+    const sse = window.DataFinderSSE;
+    if (!api || !sse) return;
 
     const cards = api.qsa("[data-model-card]");
     const maxTokens = Math.max(1, ...cards.map((card) => Number(card.dataset.totalTokens) || 0));
@@ -74,27 +75,6 @@
         totalTokens.textContent = String(total);
     }
 
-    function parseEvent(block, assistantNode) {
-        const dataLines = block.split(/\r?\n/).filter((line) => line.startsWith("data:"));
-        for (const line of dataLines) {
-            const raw = line.slice(5).trim();
-            if (!raw || raw === "[DONE]") continue;
-            let payload;
-            try {
-                payload = JSON.parse(raw);
-            } catch (_) {
-                assistantNode.textContent += raw;
-                continue;
-            }
-            if (payload.error) throw new Error(typeof payload.error === "string" ? payload.error : payload.error.message || "模型服务返回错误");
-            const delta = payload.delta ?? payload.content ?? payload.choices?.[0]?.delta?.content ?? "";
-            if (delta) assistantNode.textContent += String(delta);
-            if (payload.usage) applyUsage(payload.usage);
-            if (payload.status) streamStatus.textContent = String(payload.status);
-        }
-        transcript.scrollTop = transcript.scrollHeight;
-    }
-
     cancelButton.addEventListener("click", () => controller?.abort());
     dialog.addEventListener("close", () => controller?.abort());
 
@@ -116,36 +96,20 @@
         messageInput.value = "";
 
         try {
-            const response = await fetch("/admin/models/chat", {
+            await sse.stream("/admin/models/chat", {
                 method: "POST",
                 signal: controller.signal,
-                headers: {
-                    "Accept": "text/event-stream",
-                    "Content-Type": "application/json;charset=UTF-8",
-                    "X-Xsrftoken": api.xsrfToken()
-                },
-                body: JSON.stringify({model_id: Number(modelId.value), message})
+                json: {model_id: Number(modelId.value), message},
+                onEvent: ({event: eventName, data}) => {
+                    if (eventName === "meta") streamStatus.textContent = data.status || "接收中";
+                    else if (eventName === "delta") assistantNode.textContent += String(data.delta || data.text || "");
+                    else if (eventName === "done") {
+                        applyUsage(data.usage);
+                        streamStatus.textContent = data.status || "已完成";
+                    }
+                    transcript.scrollTop = transcript.scrollHeight;
+                }
             });
-            if (!response.ok) {
-                const data = await api.responseData(response);
-                throw new Error(data.message || `模型请求失败（HTTP ${response.status}）`);
-            }
-            if (!response.body) throw new Error("浏览器未获得可读取的流式响应");
-
-            streamStatus.textContent = "接收中";
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder("utf-8");
-            let buffer = "";
-            while (true) {
-                const {value, done} = await reader.read();
-                buffer += decoder.decode(value || new Uint8Array(), {stream: !done});
-                const blocks = buffer.split(/\r?\n\r?\n/);
-                buffer = blocks.pop() || "";
-                blocks.forEach((block) => parseEvent(block, assistantNode));
-                if (done) break;
-            }
-            if (buffer.trim()) parseEvent(buffer, assistantNode);
-            streamStatus.textContent = "已完成";
             api.announce("模型响应完成");
         } catch (error) {
             if (error.name === "AbortError") {
@@ -154,8 +118,9 @@
                 api.announce("已停止模型响应");
             } else {
                 streamStatus.textContent = "失败";
-                assistantNode.textContent += `${assistantNode.textContent ? "\n" : ""}请求失败：${error.message || "未知错误"}`;
-                api.announce(error.message || "模型对话失败", "error");
+                const message = api.errorMessage(error, "模型对话失败");
+                assistantNode.textContent += `${assistantNode.textContent ? "\n" : ""}请求失败：${message}`;
+                api.announce(message, "error");
             }
         } finally {
             controller = null;

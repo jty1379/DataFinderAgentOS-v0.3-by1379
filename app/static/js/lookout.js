@@ -151,8 +151,9 @@
             renderResults(Array.isArray(data.items) ? data.items : []);
             api.announce(data.message || `采集任务 #${data.run_id || "-"} 已完成`);
         } catch (error) {
-            showError(error.message || "采集请求失败，请检查规则或网络后重试。");
-            api.announce(error.message || "采集失败", "error");
+            const message = api.errorMessage(error, "采集请求失败，请检查规则或网络后重试。");
+            showError(message);
+            api.announce(message, "error");
         } finally {
             api.setBusy(button, false);
         }
@@ -171,7 +172,7 @@
             api.announce(data.message || `已保存 ${ids.length} 条结果到数据仓库`);
             updatePipeline("warehouse", ["query", "rule", "result"]);
         } catch (error) {
-            api.announce(error.message || "入仓失败，请稍后重试", "error");
+            api.announce(api.errorMessage(error, "入仓失败，请稍后重试"), "error");
         } finally {
             api.setBusy(importButton, false);
             updateSelection();

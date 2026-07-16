@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block admin_head %}<link rel="stylesheet" href="{{ static_url('css/screens.css') }}">{% end %}
+{% block admin_content %}
+<section class="screen-page" data-intelligence-screen>
+    <header class="screen-command">
+        <div><h2>数智运行全景</h2><p>数据来自采集、仓库、模型调用和用户会话；无记录时明确显示空状态。</p></div>
+        <span class="screen-refreshed" data-screen-refreshed>等待刷新</span>
+        <div class="screen-command-actions"><button type="button" data-screen-pause aria-pressed="false"><i class="layui-icon layui-icon-pause"></i>暂停刷新</button><button class="primary" type="button" data-screen-refresh><i class="layui-icon layui-icon-refresh"></i>立即刷新</button><button type="button" data-screen-fullscreen><i class="layui-icon layui-icon-screen-full"></i>全屏</button></div>
+    </header>
+    <div class="screen-kpis" data-intelligence-kpis aria-label="核心指标"></div>
+    <div class="screen-grid">
+        <article class="screen-panel span-8"><header><h3>来源空间分布 · 3D 地球</h3><small>地点由内容中的城市名称定位</small></header><div class="screen-chart tall" data-chart="globe" tabindex="0" aria-label="采集来源三维地球分布"></div><div class="screen-empty" data-empty="globe" hidden>当前内容没有可定位的城市名称，地球底图仍可旋转查看。</div></article>
+        <article class="screen-panel span-4"><header><h3>采集来源分布</h3><small>仓库数据</small></header><div class="screen-chart" data-chart="source"></div><details class="chart-fallback"><summary>查看来源数据表</summary><table><thead><tr><th>来源</th><th>数量</th></tr></thead><tbody data-table="source"></tbody></table></details></article>
+        <article class="screen-panel span-6"><header><h3>七日采集趋势</h3><small>按入库时间</small></header><div class="screen-chart" data-chart="collection"></div><details class="chart-fallback"><summary>查看采集数据表</summary><table><thead><tr><th>日期</th><th>数量</th></tr></thead><tbody data-table="collection"></tbody></table></details></article>
+        <article class="screen-panel span-6"><header><h3>模型调用与用户活跃</h3><small>七日对比</small></header><div class="screen-chart" data-chart="activity"></div><details class="chart-fallback"><summary>查看活动数据表</summary><table><thead><tr><th>日期</th><th>模型调用</th><th>用户消息</th></tr></thead><tbody data-table="activity"></tbody></table></details></article>
+        <article class="screen-panel span-4"><header><h3>高频业务词</h3><small>仓库标题与摘要</small></header><div class="word-cloud" data-word-cloud></div></article>
+        <article class="screen-panel span-5"><header><h3>最新数据热点</h3><small>最近入仓</small></header><ol class="hotspot-list" data-hotspots></ol></article>
+        <article class="screen-panel span-3"><header><h3>风险等级分布</h3><small>舆情预警</small></header><div class="screen-chart" data-chart="risk"></div></article>
+    </div>
+</section>
+{% end %}
+{% block admin_scripts %}<script src="{{ static_url('dist/echarts/echarts.min.js') }}"></script><script src="{{ static_url('dist/echarts/echarts-gl.min.js') }}"></script><script src="{{ static_url('js/intelligence-screen.js') }}"></script>{% end %}

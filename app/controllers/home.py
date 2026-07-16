@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-import json
 import asyncio
+import json
 
 import tornado.web
 from tornado.iostream import StreamClosedError
 
 from app.controllers.base import AdminBaseHandler, BaseHandler, UserJsonHandler
 from app.models.conversation import ConversationRepository
+from app.models.dashboard import DashboardRepository
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.model_engine import ModelRepository
 from app.models.rbac import RoleRepository
-from app.models.user import UserRepository
 from app.services.user_chat import UserChatError, UserChatService
 
 
@@ -102,7 +102,7 @@ class UserChatStreamHandler(UserJsonHandler):
                     piece = await asyncio.wait_for(queue.get(), timeout=0.05)
                     streamed = True
                     await emit("delta", {"text": piece})
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
             result = await task
             while not queue.empty():
@@ -138,9 +138,11 @@ class AdminIndexHandler(AdminBaseHandler):
     required_feature = "dashboard"
 
     def get(self):
+        dashboard = DashboardRepository.overview()
         self.render_admin(
             "admin/index.html",
             title="管理工作台 · 瞭望与问数系统",
             active_menu="dashboard",
-            user_count=UserRepository.count_users(),
+            dashboard=dashboard,
+            user_count=dashboard["metrics"]["user_count"],
         )

@@ -23,6 +23,7 @@
         </form>
         {% if can_write %}
         <div class="task2-toolbar-actions">
+            <button class="management-primary face-global-toggle" type="button" data-face-global data-enabled="{{ 1 if face_login_enabled else 0 }}"><i class="layui-icon layui-icon-face-smile"></i>人脸登录：{{ "已启用" if face_login_enabled else "已停用" }}</button>
             <form class="task2-batch-form" id="user-batch-form" method="post" data-user-batch-form>
                 <input type="hidden" name="action" value="batch">
                 {% raw xsrf_form_html() %}
@@ -39,7 +40,7 @@
         <div class="table-responsive">
             <table class="management-table task2-table">
                 <caption class="sr-only">后台用户列表</caption>
-                <thead><tr>{% if can_write %}<th class="selection-column"><label class="table-check"><input type="checkbox" data-select-all-users aria-label="选择本页可操作用户"><span></span></label></th>{% end %}<th>ID</th><th>用户名</th><th>角色</th><th>访问端</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+                <thead><tr>{% if can_write %}<th class="selection-column"><label class="table-check"><input type="checkbox" data-select-all-users aria-label="选择本页可操作用户"><span></span></label></th>{% end %}<th>ID</th><th>用户名</th><th>角色</th><th>访问端</th><th>状态</th><th>人脸登录</th><th>创建时间</th><th>操作</th></tr></thead>
                 <tbody>
                     {% for item in users %}
                     <tr>
@@ -49,6 +50,7 @@
                         <td>{{ item["role_name"] }}</td>
                         <td>{{ "管理侧" if item["role_scope"] == "admin" else "用户侧" }}</td>
                         <td><span class="state-badge {{ item['status'] }}">{{ "正常" if item["status"] == "enabled" else "已停用" }}</span></td>
+                        <td>{% if item["face_enrolled"] %}<button class="face-user-toggle state-badge {{ 'enabled' if item['face_enabled'] else 'disabled' }}" type="button" data-face-user="{{ item['id'] }}" data-enabled="{{ item['face_enabled'] }}" {% if not can_write %}disabled{% end %}>{{ "已启用" if item["face_enabled"] else "已停用" }}</button>{% else %}<span class="state-badge disabled">未录入</span>{% end %}</td>
                         <td>{{ item["created_at"][:16] }}</td>
                         <td>
                             {% if item["is_superadmin"] %}
@@ -59,7 +61,7 @@
                         </td>
                     </tr>
                     {% end %}
-                    {% if not users %}<tr><td colspan="{% if can_write %}8{% else %}7{% end %}"><div class="empty-state"><i class="layui-icon layui-icon-face-surprised"></i><b>没有找到用户</b><span>请调整搜索条件或新增用户。</span></div></td></tr>{% end %}
+                    {% if not users %}<tr><td colspan="{% if can_write %}9{% else %}8{% end %}"><div class="empty-state"><i class="layui-icon layui-icon-face-surprised"></i><b>没有找到用户</b><span>请调整搜索条件或新增用户。</span></div></td></tr>{% end %}
                 </tbody>
             </table>
         </div>
@@ -80,4 +82,4 @@
 {% for item in users %}{% if not item["is_superadmin"] %}<dialog class="management-dialog" id="edit-user-{{ item['id'] }}"><form method="post"><header><h3>编辑用户</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header><div class="dialog-body"><input type="hidden" name="action" value="update"><input type="hidden" name="user_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<label>用户名<input class="layui-input" name="username" autocomplete="off" value="{{ item['username'] }}" required minlength="3" maxlength="20"></label><label>所属角色<select name="role_id">{% for role in roles %}<option value="{{ role['id'] }}" {% if item['role_id'] == role['id'] %}selected{% end %}>{{ role["name"] }}</option>{% end %}</select></label><label>账号状态<select name="status"><option value="enabled" {% if item['status'] == 'enabled' %}selected{% end %}>正常</option><option value="disabled" {% if item['status'] == 'disabled' %}selected{% end %}>停用</option></select></label><label>重置密码（可选）<input class="layui-input" type="password" name="password" autocomplete="new-password" minlength="6" maxlength="64" placeholder="留空则保持原密码"></label></div><footer><button type="button" data-dialog-close>取消</button><button class="management-primary" type="submit">保存修改</button></footer></form></dialog>{% end %}{% end %}
 {% end %}
 {% end %}
-{% block admin_scripts %}<script src="{{ static_url('js/admin-task2.js') }}"></script>{% end %}
+{% block admin_scripts %}<script src="{{ static_url('js/admin-task2.js') }}"></script><script src="{{ static_url('js/admin-biometric.js') }}"></script>{% end %}

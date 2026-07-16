@@ -5,16 +5,7 @@
     const qsa = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
     function showNotice(message) {
-        if (window.layui && window.layui.layer) {
-            window.layui.layer.msg(message, {offset: "30px", time: 1800});
-            return;
-        }
-        const toast = qs("#app-toast");
-        if (!toast) return;
-        toast.textContent = message;
-        toast.classList.add("show");
-        window.clearTimeout(showNotice.timer);
-        showNotice.timer = window.setTimeout(() => toast.classList.remove("show"), 2000);
+        window.DataFinderApp?.announce(message, "info", {duration: 2000});
     }
 
     qsa("[data-password-toggle]").forEach((button) => {

@@ -1,46 +1,59 @@
 {% extends "base.html" %}
 {% block title %}{{ title }}{% end %}
+{% block admin_head %}<link rel="stylesheet" href="{{ static_url('css/dashboard-v03.css') }}">{% end %}
 {% block admin_content %}
 <section>
     <div class="welcome-banner">
-        <div><p class="section-kicker">系统概览</p><h2><span data-greeting>你好</span>，{{ user["username"] }}</h2><p>欢迎回到瞭望与问数系统，权限、认证和核心服务运行正常。</p></div>
+        <div><p class="section-kicker">系统概览</p><h2><span data-greeting>你好</span>，{{ user["username"] }}</h2><p>所有指标均来自当前数据库；点击数智大屏可查看来源、模型和用户活动证据链。</p></div>
         <time data-current-date></time>
     </div>
-    <div class="metric-grid">
-        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-user"></i></div><div><span>注册用户数</span><strong data-count="{{ user_count }}">{{ user_count }}</strong><small><em>实时</em> 数据库统计</small></div></article>
-        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-dialogue"></i></div><div><span>今日问数</span><strong data-count="28">28</strong><small><em>+12.5%</em> 较昨日</small></div></article>
-        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-diamond"></i></div><div><span>数据源数量</span><strong data-count="12">12</strong><small><em>10</em> 个在线</small></div></article>
-        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-ok-circle"></i></div><div><span>系统成功率</span><strong data-count="96" data-suffix="%">96%</strong><small><em>稳定</em> 最近 24 小时</small></div></article>
+    <div class="metric-grid evidence-metric-grid">
+        {% set metrics = dashboard["metrics"] %}
+        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-user"></i></div><div><span>可用用户</span><strong data-metric="user_count">{{ metrics["user_count"] }}</strong><small><em>实时</em> 用户表</small></div></article>
+        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-dialogue"></i></div><div><span>今日对话</span><strong data-metric="today_conversations">{{ metrics["today_conversations"] }}</strong><small><em>今日</em> 会话表</small></div></article>
+        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-engine"></i></div><div><span>模型调用</span><strong data-metric="model_calls">{{ metrics["model_calls"] }}</strong><small><em>今日</em> 调用日志</small></div></article>
+        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-download-circle"></i></div><div><span>今日采集量</span><strong data-metric="today_collection">{{ metrics["today_collection"] }}</strong><small><em>今日</em> 采集结果</small></div></article>
+        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-ok-circle"></i></div><div><span>采集成功率</span><strong data-metric="collection_success_rate">{{ metrics["collection_success_rate"] }}%</strong><small><em>今日</em> 任务统计</small></div></article>
+        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-fire"></i></div><div><span>高风险预警</span><strong data-metric="high_risk_alerts">{{ metrics["high_risk_alerts"] }}</strong><small><em>待处理</em> 高/重大风险</small></div></article>
+        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-username"></i></div><div><span>数字员工</span><strong data-metric="employee_count">{{ metrics["employee_count"] }}</strong><small><em>启用</em> 员工配置</small></div></article>
     </div>
     <div class="dashboard-grid">
         <article class="dashboard-card trend-card">
-            <header><h3>七日问数趋势</h3><span class="demo-tag">演示数据</span></header>
-            <div class="chart-summary"><strong>168</strong><span>本周累计问数</span><em>↑ 18.6%</em></div>
-            <canvas id="query-trend-chart" aria-label="七日问数趋势图"></canvas>
+            <header><h3>七日对话与采集趋势</h3><span class="evidence-tag">数据库 · 自动刷新</span></header>
+            <div class="chart-summary"><strong data-metric="week_conversations">{{ metrics["week_conversations"] }}</strong><span>七日新增会话</span><em data-dashboard-time>{{ dashboard["refreshed_at"][11:19] }}</em></div>
+            <canvas id="query-trend-chart" aria-label="七日新增会话与采集结果趋势图"></canvas>
+            <details class="chart-data-table"><summary>查看图表数据</summary><table><thead><tr><th>日期</th><th>会话</th><th>采集</th></tr></thead><tbody data-trend-table></tbody></table></details>
         </article>
-        <article class="dashboard-card source-card">
-            <header><h3>数据源状态</h3><button data-demo-notice="数据源配置将在后续版本开放">管理</button></header>
+        <article class="dashboard-card source-card status-evidence">
+            <header><h3>系统运行状态</h3><a href="/admin/screens/intelligence">进入数智大屏</a></header>
             <ul class="source-list">
-                <li><span class="source-logo mysql">M</span><div><b>政务业务库</b><small>MySQL · 2 分钟前同步</small></div><em class="online">在线</em></li>
-                <li><span class="source-logo excel">X</span><div><b>统计报表库</b><small>Excel · 15 分钟前同步</small></div><em class="online">在线</em></li>
-                <li><span class="source-logo api">A</span><div><b>城市开放接口</b><small>API · 1 小时前同步</small></div><em class="warning">延迟</em></li>
-                <li><span class="source-logo file">F</span><div><b>历史归档文件</b><small>File · 昨日同步</small></div><em class="offline">离线</em></li>
+                {% for code, state in dashboard["service_status"].items() %}
+                <li><span class="source-logo api">{{ code[0].upper() }}</span><div><b>{{ {"database":"数据库","collection":"采集服务","model":"模型服务"}[code] }}</b><small>来自最近任务与错误记录</small></div><em class="{{ 'online' if state == 'normal' else 'warning' }}">{{ "正常" if state == "normal" else "需关注" }}</em></li>
+                {% end %}
             </ul>
         </article>
     </div>
     <div class="dashboard-grid lower-grid">
         <article class="dashboard-card tasks-card">
-            <header><h3>最近问数任务</h3><button data-demo-notice="完整任务中心将在后续版本开放">查看全部</button></header>
-            <div class="table-responsive"><table class="task-table"><thead><tr><th>任务编号</th><th>问数主题</th><th>数字员工</th><th>状态</th><th>更新时间</th></tr></thead><tbody>
-                <tr><td>DF-0710-028</td><td>城市运行指标日报</td><td>@川哥</td><td><span class="task-status success">已完成</span></td><td>刚刚</td></tr>
-                <tr><td>DF-0710-027</td><td>今日政务热点汇总</td><td>@新闻</td><td><span class="task-status running">分析中</span></td><td>3 分钟前</td></tr>
-                <tr><td>DF-0710-026</td><td>区域天气风险研判</td><td>@天气</td><td><span class="task-status success">已完成</span></td><td>18 分钟前</td></tr>
+            <header><h3>最近任务</h3><a href="/admin/lookout">进入采集工作台</a></header>
+            <div class="table-responsive"><table class="task-table"><thead><tr><th>任务编号</th><th>类型</th><th>任务主题</th><th>状态</th><th>数量/进度</th><th>创建时间</th></tr></thead><tbody>
+                {% for item in dashboard["recent_tasks"] %}<tr><td>{{ item["task_no"] }}</td><td>{{ item["task_type"] }}</td><td>{{ item["title"] }}</td><td><span class="task-status {{ 'success' if item['status']=='success' else 'running' if item['status'] in ('running','pending') else 'failed' }}">{{ {"success":"已完成","running":"执行中","pending":"等待中","failed":"失败"}.get(item["status"], item["status"]) }}</span></td><td>{{ item["amount"] }}</td><td>{{ item["created_at"][:16] }}</td></tr>{% end %}
+                {% if not dashboard["recent_tasks"] %}<tr><td colspan="6">暂无任务记录，发起一次采集后将在此显示。</td></tr>{% end %}
             </tbody></table></div>
         </article>
+        <article class="dashboard-card security-card model-error-card">
+            <header><h3>最近模型错误</h3><span class="evidence-tag">调用日志</span></header>
+            <ul>{% for item in dashboard["model_errors"] %}<li><i class="layui-icon layui-icon-error"></i><span><b>{{ item["model_name"] }}</b><small>{{ item["error_message"] or "未记录错误详情" }} · {{ item["created_at"][:16] }}</small></span></li>{% end %}{% if not dashboard["model_errors"] %}<li><i class="layui-icon layui-icon-ok"></i><span><b>暂无模型错误</b><small>当前调用日志中没有失败记录</small></span></li>{% end %}</ul>
+        </article>
         <article class="dashboard-card security-card">
-            <header><h3>安全基线</h3><span class="score-ring">4/4</span></header>
-            <ul><li><i class="layui-icon layui-icon-ok"></i><span><b>Secure Cookie</b><small>会话签名与 HttpOnly</small></span></li><li><i class="layui-icon layui-icon-ok"></i><span><b>XSRF 防护</b><small>表单令牌校验</small></span></li><li><i class="layui-icon layui-icon-ok"></i><span><b>SQL 参数化</b><small>阻断注入风险</small></span></li><li><i class="layui-icon layui-icon-ok"></i><span><b>PBKDF2-SHA256</b><small>密码加盐哈希</small></span></li></ul>
+            <header><h3>安全基线</h3><span class="evidence-tag">默认开启</span></header>
+            <ul>
+                <li><i class="layui-icon layui-icon-auz"></i><span><b>Secure Cookie 与 XSRF</b><small>登录态加密，写操作校验跨站请求令牌</small></span></li>
+                <li><i class="layui-icon layui-icon-password"></i><span><b>PBKDF2-SHA256</b><small>密码随机盐哈希存储，不保存明文密码</small></span></li>
+                <li><i class="layui-icon layui-icon-vercode"></i><span><b>SQL 参数化与角色隔离</b><small>数据查询使用占位参数，管理端按功能授权</small></span></li>
+            </ul>
         </article>
     </div>
 </section>
 {% end %}
+{% block admin_scripts %}<script src="{{ static_url('js/dashboard.js') }}"></script>{% end %}
