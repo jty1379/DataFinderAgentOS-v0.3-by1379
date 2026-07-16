@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
+import importlib
 import logging
 import re
-
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
-from crawl4ai.__version__ import __version__ as CRAWL4AI_VERSION
 
 from app.models.deep_collection import DeepCollectionRepository
 from app.models.digital_employee import DigitalEmployeeRepository
@@ -14,6 +12,25 @@ from app.models.warehouse import WarehouseRepository
 from app.services.collector import CollectionError, _validate_public_url
 
 LOGGER = logging.getLogger("collection")
+
+_crawl4ai_imported = False
+AsyncWebCrawler = None
+BrowserConfig = None
+CacheMode = None
+CrawlerRunConfig = None
+CRAWL4AI_VERSION = None
+
+
+def _import_crawl4ai():
+    global _crawl4ai_imported, AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig, CRAWL4AI_VERSION
+    if not _crawl4ai_imported:
+        crawl4ai = importlib.import_module("crawl4ai")
+        AsyncWebCrawler = crawl4ai.AsyncWebCrawler
+        BrowserConfig = crawl4ai.BrowserConfig
+        CacheMode = crawl4ai.CacheMode
+        CrawlerRunConfig = crawl4ai.CrawlerRunConfig
+        CRAWL4AI_VERSION = crawl4ai.__version__
+        _crawl4ai_imported = True
 
 
 class DeepCollectionService:
@@ -27,6 +44,7 @@ class DeepCollectionService:
     @staticmethod
     async def _fetch(url: str) -> tuple[str, str, dict]:
         """调用 Crawl4AI 浏览器提取标题、正文 Markdown 与来源元数据。"""
+        _import_crawl4ai()
         await _validate_public_url(url)
         browser_config = BrowserConfig(
             headless=True,

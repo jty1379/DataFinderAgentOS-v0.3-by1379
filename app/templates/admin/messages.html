@@ -1,8 +1,8 @@
-{% extends "admin/base.html" %}
+{% extends "base.html" %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}{{ title }}{% end %}
 
-{% block content %}
+{% block admin_content %}
 <div class="layui-card">
     <div class="layui-card-header">
         <h3>对话详情</h3>
@@ -14,31 +14,31 @@
                 <table class="layui-table">
                     <tr>
                         <th>会话ID</th>
-                        <td>{{ conversation.id }}</td>
+                        <td>{{ conversation['id'] }}</td>
                     </tr>
                     <tr>
                         <th>用户</th>
-                        <td>{{ conversation.user_name }}</td>
+                        <td>{{ conversation['user_name'] }}</td>
                     </tr>
                     <tr>
                         <th>标题</th>
-                        <td>{{ conversation.title }}</td>
+                        <td>{{ conversation['title'] }}</td>
                     </tr>
                     <tr>
                         <th>模型</th>
-                        <td>{{ conversation.model_name or '-' }}</td>
+                        <td>{{ conversation['model_name'] or '-' }}</td>
                     </tr>
                     <tr>
                         <th>数字员工</th>
-                        <td>{{ conversation.employee_name or '-' }}</td>
+                        <td>{{ conversation['employee_name'] or '-' }}</td>
                     </tr>
                     <tr>
                         <th>创建时间</th>
-                        <td>{{ conversation.created_at }}</td>
+                        <td>{{ conversation['created_at'] }}</td>
                     </tr>
                     <tr>
                         <th>更新时间</th>
-                        <td>{{ conversation.updated_at }}</td>
+                        <td>{{ conversation['updated_at'] }}</td>
                     </tr>
                 </table>
             </div>
@@ -52,17 +52,17 @@
                         {% for message in messages %}
                         <div class="layui-row" style="margin-bottom: 15px;">
                             <div class="layui-col-md1">
-                                <span class="layui-btn layui-btn-xs {% if message.role == 'user' %}layui-btn-normal{% else %}layui-btn-primary{% endif %}">
-                                    {{ '用户' if message.role == 'user' else 'AI' }}
+                                <span class="layui-btn layui-btn-xs {% if message['role'] == 'user' %}layui-btn-normal{% else %}layui-btn-primary{% end %}">
+                                    {{ '用户' if message['role'] == 'user' else 'AI' }}
                                 </span>
                             </div>
                             <div class="layui-col-md11">
                                 <div class="layui-form-item">
-                                    <textarea class="layui-textarea" rows="3" readonly>{{ message.content }}</textarea>
+                                    <textarea class="layui-textarea" rows="3" readonly>{{ message['content'] }}</textarea>
                                 </div>
                                 <div class="layui-form-item">
-                                    <span class="layui-badge layui-bg-gray">类型: {{ message.content_type }}</span>
-                                    <span class="layui-badge layui-bg-gray">时间: {{ message.created_at }}</span>
+                                    <span class="layui-badge layui-bg-gray">类型: {{ message['content_type'] }}</span>
+                                    <span class="layui-badge layui-bg-gray">时间: {{ message['created_at'] }}</span>
                                 </div>
                             </div>
                         </div>
@@ -72,11 +72,11 @@
                                 暂无消息
                             </div>
                         </div>
-                        {% endfor %}
+                        {% end %}
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
+{% end %}

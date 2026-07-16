@@ -1,8 +1,8 @@
-{% extends "admin/base.html" %}
+{% extends "base.html" %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}{{ title }}{% end %}
 
-{% block content %}
+{% block admin_content %}
 <div class="layui-card">
     <div class="layui-card-header">
         <h3>会话管理</h3>
@@ -14,9 +14,9 @@
                 <div class="layui-input-inline" style="width: 200px;">
                     <select name="user_id" lay-verify="">
                         <option value="">全部用户</option>
-                        {% for user in users %}
-                        <option value="{{ user.id }}" {% if selected_user_id == user.id %}selected{% endif %}>{{ user.username }}</option>
-                        {% endfor %}
+                        {% for u in users %}
+                        <option value="{{ u['id'] }}" {% if selected_user_id == u['id'] %}selected{% end %}>{{ u['username'] }}</option>
+                        {% end %}
                     </select>
                 </div>
             </div>
@@ -34,7 +34,7 @@
         
         <form class="layui-form" action="/admin/sessions" method="post">
             <input type="hidden" name="action" value="batch_delete">
-            <input type="hidden" name="_xsrf" value="{{ handler.xsrf_token }}">
+            {% raw xsrf_form_html() %}
             
             <table class="layui-table">
                 <thead>
@@ -54,21 +54,21 @@
                 <tbody>
                     {% for conv in conversations %}
                     <tr>
-                        <td><input type="checkbox" name="conversation_ids" value="{{ conv.id }}"></td>
-                        <td>{{ conv.id }}</td>
-                        <td>{{ conv.user_name }}</td>
-                        <td><a href="/admin/messages?conversation_id={{ conv.id }}">{{ conv.title }}</a></td>
-                        <td>{{ conv.model_name or '-' }}</td>
-                        <td>{{ conv.employee_name or '-' }}</td>
-                        <td>{{ conv.message_count }}</td>
-                        <td>{{ conv.created_at }}</td>
-                        <td>{{ conv.updated_at }}</td>
+                        <td><input type="checkbox" name="conversation_ids" value="{{ conv['id'] }}"></td>
+                        <td>{{ conv['id'] }}</td>
+                        <td>{{ conv['user_name'] }}</td>
+                        <td><a href="/admin/messages?conversation_id={{ conv['id'] }}">{{ conv['title'] }}</a></td>
+                        <td>{{ conv['model_name'] or '-' }}</td>
+                        <td>{{ conv['employee_name'] or '-' }}</td>
+                        <td>{{ conv['message_count'] }}</td>
+                        <td>{{ conv['created_at'] }}</td>
+                        <td>{{ conv['updated_at'] }}</td>
                         <td>
-                            <a href="/admin/messages?conversation_id={{ conv.id }}" class="layui-btn layui-btn-xs">查看</a>
-                            <button type="button" class="layui-btn layui-btn-xs layui-btn-danger" onclick="deleteSession({{ conv.id }})">删除</button>
+                            <a href="/admin/messages?conversation_id={{ conv['id'] }}" class="layui-btn layui-btn-xs">查看</a>
+                            <button type="button" class="layui-btn layui-btn-xs layui-btn-danger" onclick="deleteSession({{ conv['id'] }})">删除</button>
                         </td>
                     </tr>
-                    {% endfor %}
+                    {% end %}
                 </tbody>
             </table>
             
@@ -76,7 +76,7 @@
                 <button class="layui-btn layui-btn-danger" lay-submit lay-filter="batchDelete">批量删除</button>
             </div>
             
-            {{ pager|safe }}
+            {{ pager }}
         </form>
     </div>
 </div>
@@ -121,4 +121,4 @@ function deleteSession(id) {
     }
 }
 </script>
-{% endblock %}
+{% end %}

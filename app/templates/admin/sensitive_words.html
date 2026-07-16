@@ -1,8 +1,8 @@
-{% extends "admin/base.html" %}
+{% extends "base.html" %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}{{ title }}{% end %}
 
-{% block content %}
+{% block admin_content %}
 <div class="layui-card">
     <div class="layui-card-header">
         <h3>敏感词管理</h3>
@@ -37,38 +37,38 @@
             <tbody>
                 {% for word in words %}
                 <tr>
-                    <td>{{ word.word }}</td>
-                    <td>{{ word.category }}</td>
+                    <td>{{ word['word'] }}</td>
+                    <td>{{ word['category'] }}</td>
                     <td>
-                        {% if word.level == 4 %}
+                        {% if word['level'] == 4 %}
                         <span class="layui-badge layui-bg-red">严重</span>
-                        {% elif word.level == 3 %}
+                        {% elif word['level'] == 3 %}
                         <span class="layui-badge layui-bg-orange">高</span>
-                        {% elif word.level == 2 %}
+                        {% elif word['level'] == 2 %}
                         <span class="layui-badge layui-bg-yellow">中</span>
                         {% else %}
                         <span class="layui-badge">低</span>
-                        {% endif %}
+                        {% end %}
                     </td>
-                    <td>{{ word.description or '-' }}</td>
+                    <td>{{ word['description'] or '-' }}</td>
                     <td>
-                        {% if word.enabled == 1 %}
+                        {% if word['enabled'] == 1 %}
                         <span class="layui-badge layui-bg-green">启用</span>
                         {% else %}
                         <span class="layui-badge">禁用</span>
-                        {% endif %}
+                        {% end %}
                     </td>
-                    <td>{{ word.created_at }}</td>
+                    <td>{{ word['created_at'] }}</td>
                     <td>
-                        <button type="button" class="layui-btn layui-btn-xs" onclick="showEditModal({{ word.id }}, '{{ word.word }}', '{{ word.category }}', {{ word.level }}, '{{ word.description }}', {{ word.enabled }})">编辑</button>
-                        <button type="button" class="layui-btn layui-btn-xs layui-btn-danger" onclick="deleteWord({{ word.id }})">删除</button>
+                        <button type="button" class="layui-btn layui-btn-xs" onclick="showEditModal({{ word['id'] }}, '{{ word['word'] }}', '{{ word['category'] }}', {{ word['level'] }}, '{{ word['description'] }}', {{ word['enabled'] }})">编辑</button>
+                        <button type="button" class="layui-btn layui-btn-xs layui-btn-danger" onclick="deleteWord({{ word['id'] }})">删除</button>
                     </td>
                 </tr>
-                {% endfor %}
+                {% end %}
             </tbody>
         </table>
         
-        {{ pager|safe }}
+        {{ pager }}
     </div>
 </div>
 
@@ -77,7 +77,7 @@
     <div class="layui-modal-body">
         <form class="layui-form" action="/admin/opinion/words" method="post">
             <input type="hidden" name="action" value="create">
-            <input type="hidden" name="_xsrf" value="{{ handler.xsrf_token }}">
+            {% raw xsrf_form_html() %}
             <div class="layui-form-item">
                 <label class="layui-form-label">敏感词</label>
                 <div class="layui-input-block">
@@ -191,4 +191,4 @@ function deleteWord(id) {
     }
 }
 </script>
-{% endblock %}
+{% end %}

@@ -9,6 +9,10 @@ class AdminOpinionAlertsHandler(AdminBaseHandler):
     required_feature = "opinion_management"
 
     def get(self) -> None:
+        if self.get_query_argument("detail", "") == "1":
+            self._detail()
+            return
+            
         status = self.get_query_argument("status", "").strip()
         risk_level = self.get_query_argument("risk_level", "").strip()
         user_id = self.get_query_argument("user_id", "").strip()
@@ -26,6 +30,18 @@ class AdminOpinionAlertsHandler(AdminBaseHandler):
             pager=pager_context("/admin/opinion/alerts", pager, status=status, risk_level=risk_level, user_id=user_id),
             selected_status=status,
             selected_risk=risk_level,
+        )
+
+    def _detail(self) -> None:
+        alert_id = integer(self, "id")
+        alert = OpinionSecurityService.get_alert(alert_id)
+        if not alert:
+            self.write("预警不存在")
+            return
+        self.render(
+            "admin/opinion_alert_detail.html",
+            title="预警详情",
+            alert=alert,
         )
 
     def post(self) -> None:

@@ -9,7 +9,8 @@ class AdminSettingsHandler(AdminBaseHandler):
     required_feature = "system_settings"
 
     def get(self) -> None:
-        settings = SystemSettingsService.get_all_settings()
+        settings_list = SystemSettingsService.get_all_settings()
+        settings = {s['setting_key']: s['setting_value'] for s in settings_list}
         self.render_admin(
             "admin/settings.html",
             title="系统设置 · 瞭望与问数系统",

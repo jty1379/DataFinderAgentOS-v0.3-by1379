@@ -12,7 +12,7 @@ import tornado.web
 
 from datetime import timedelta
 
-from app.config.settings import SETTINGS
+from config.settings import SETTINGS
 from app.core.contracts import error_response, success_response
 from app.core.permissions import require_admin, require_login, require_permission, require_superadmin
 from app.repositories.menu_repository import MenuRepository

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="/static/layui/css/layui.css">
+    <style>
+        body { padding: 20px; }
+        .info-item { margin-bottom: 15px; }
+        .info-label { display: inline-block; width: 100px; font-weight: bold; color: #666; }
+        .info-value { display: inline-block; }
+        .content-box { padding: 15px; border: 1px solid #e6e6e6; border-radius: 4px; background: #fafafa; }
+        .risk-critical { color: #FF5722; }
+        .risk-high { color: #FFB800; }
+        .risk-medium { color: #FFC107; }
+        .risk-low { color: #10B981; }
+    </style>
+</head>
+<body>
+    <div class="layui-card">
+        <div class="layui-card-header">预警详情 - ID: {{ alert['id'] }}</div>
+        <div class="layui-card-body">
+            <div class="info-item">
+                <span class="info-label">预警ID:</span>
+                <span class="info-value">{{ alert['id'] }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">来源类型:</span>
+                <span class="info-value">{{ alert['source_type'] }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">来源ID:</span>
+                <span class="info-value">{{ alert['source_id'] or '-' }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">用户ID:</span>
+                <span class="info-value">{{ alert['user_id'] or '-' }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">用户名称:</span>
+                <span class="info-value">{{ alert['user_name'] or '-' }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">风险等级:</span>
+                <span class="info-value risk-{{ alert['risk_level'] }}">
+                    {% if alert['risk_level'] == 'critical' %}严重{% elif alert['risk_level'] == 'high' %}高风险{% elif alert['risk_level'] == 'medium' %}中风险{% else %}低风险{% end %}
+                </span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">状态:</span>
+                <span class="info-value">
+                    {% if alert['status'] == 'pending' %}待处理{% elif alert['status'] == 'processing' %}处理中{% elif alert['status'] == 'resolved' %}已解决{% else %}误报{% end %}
+                </span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">内容:</span>
+                <div class="content-box">{{ alert['content'] }}</div>
+            </div>
+            <div class="info-item">
+                <span class="info-label">匹配敏感词:</span>
+                <div class="content-box">{{ alert['matched_words'] or '-' }}</div>
+            </div>
+            <div class="info-item">
+                <span class="info-label">AI分析:</span>
+                <div class="content-box">{{ alert['ai_analysis'] or '-' }}</div>
+            </div>
+            <div class="info-item">
+                <span class="info-label">处理人:</span>
+                <span class="info-value">{{ alert['handled_by_name'] or '-' }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">处理备注:</span>
+                <span class="info-value">{{ alert['handle_note'] or '-' }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">创建时间:</span>
+                <span class="info-value">{{ alert['created_at'] }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">更新时间:</span>
+                <span class="info-value">{{ alert['updated_at'] }}</span>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/static/layui/layui.js"></script>
+</body>
+</html>
