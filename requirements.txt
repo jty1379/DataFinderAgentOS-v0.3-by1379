@@ -1,5 +1,6 @@
 tornado==6.5.7
 litellm==1.80.10
 crawl4ai==0.8.5
+beautifulsoup4==4.15.0
 reportlab==5.0.0
 mediapipe==0.10.32

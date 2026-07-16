@@ -9,6 +9,8 @@ from app.models.tts import TTSCallRepository, TTSConfigRepository
 from app.services.tts import TTSService, TTSServiceError
 
 VOICE_OPTIONS = [
+    ("male-qn-qingse", "MiniMax · 青涩男声"),
+    ("female-shaonv", "MiniMax · 少女音色"),
     ("zh_female", "中文女声"),
     ("zh_male", "中文男声"),
     ("zh_child", "中文童声"),
@@ -38,8 +40,8 @@ class AdminTTSHandler(AdminBaseHandler):
         stats = TTSCallRepository.stats()
         self.render_admin(
             "admin/tts_config.html",
-            title="语音合成配置 · 瞭望与问数系统",
-            active_menu="tts_config",
+            title="语音合成配置 · 零界",
+            active_menu="model_engine",
             config=config,
             voice_options=VOICE_OPTIONS,
             stats=stats,
@@ -60,7 +62,7 @@ class AdminTTSHandler(AdminBaseHandler):
             rate = int(self.get_body_argument("rate", "0"))
             volume = int(self.get_body_argument("volume", "0"))
             pitch = int(self.get_body_argument("pitch", "0"))
-            if provider not in {"volcengine", "aliyun", "local"}:
+            if provider not in {"minimax", "volcengine", "aliyun", "local"}:
                 raise ValueError("不支持的 TTS 提供商")
             if default_voice not in [v[0] for v in VOICE_OPTIONS]:
                 raise ValueError("无效的语音选择")

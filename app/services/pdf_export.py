@@ -261,11 +261,11 @@ def build_conversation_pdf(conversation: dict, messages: list[dict], username: s
         topMargin=20 * mm,
         bottomMargin=18 * mm,
         title=conversation.get("title") or "问数会话",
-        author="瞭望与问数系统",
+        author="零界",
     )
     exported_at = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
     story: list = [
-        Paragraph("瞭望与问数系统", styles["title"]),
+        Paragraph("零界", styles["title"]),
         Paragraph("DataFinder Agent OS · 会话分析报告", styles["subtitle"]),
         Spacer(1, 8),
         Table([
@@ -315,7 +315,7 @@ def build_conversation_pdf(conversation: dict, messages: list[dict], username: s
         canvas.line(18 * mm, 13 * mm, PAGE_WIDTH - 18 * mm, 13 * mm)
         canvas.setFont(FONT_NAME, 8)
         canvas.setFillColor(MUTED)
-        canvas.drawString(18 * mm, 8.5 * mm, "瞭望与问数系统 · 会话导出")
+        canvas.drawString(18 * mm, 8.5 * mm, "零界 · 会话导出")
         canvas.drawRightString(PAGE_WIDTH - 18 * mm, 8.5 * mm, f"第 {canvas.getPageNumber()} 页")
         canvas.restoreState()
 

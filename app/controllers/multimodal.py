@@ -28,7 +28,10 @@ IMAGE_SIZES = [
     ("1024x1536", "1024×1536"),
     ("1536x1024", "1536×1024"),
 ]
-PROVIDER_OPTIONS = [("openai_compatible", "OpenAI API 兼容服务")]
+PROVIDER_OPTIONS = [
+    ("minimax", "MiniMax 国内 Token Plan"),
+    ("openai_compatible", "OpenAI API 兼容服务"),
+]
 
 
 class AdminMultimodalHandler(AdminBaseHandler):
@@ -37,8 +40,8 @@ class AdminMultimodalHandler(AdminBaseHandler):
     def get(self):
         self.render_admin(
             "admin/multimodal.html",
-            title="多模态服务 · 瞭望与问数系统",
-            active_menu="multimodal_config",
+            title="多模态服务 · 零界",
+            active_menu="model_engine",
             config=MultimodalConfigRepository.get_config(),
             stats=MultimodalTaskRepository.stats(),
             image_styles=IMAGE_STYLES,

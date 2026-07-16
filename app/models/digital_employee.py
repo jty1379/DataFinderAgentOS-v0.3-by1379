@@ -98,10 +98,12 @@ class DigitalEmployeeRepository:
             clauses.append("d.enabled = 0")
         where = " AND ".join(clauses)
         with connection_scope() as connection:
-            total = int(connection.execute(
-                "SELECT COUNT(*) AS count FROM digital_employees d WHERE " + where,
-                params,
-            ).fetchone()["count"])
+            total = int(
+                connection.execute(
+                    "SELECT COUNT(*) AS count FROM digital_employees d WHERE " + where,
+                    params,
+                ).fetchone()["count"]
+            )
             rows = connection.execute(
                 """
                 SELECT d.*, m.name AS model_name_display, m.model_name AS model_call_name,
@@ -109,8 +111,9 @@ class DigitalEmployeeRepository:
                 FROM digital_employees d
                 LEFT JOIN model_configs m ON m.id = d.model_id
                 LEFT JOIN api_interfaces i ON i.id = d.interface_id
-                WHERE """ + where +
-                " ORDER BY d.is_system DESC, d.id DESC LIMIT ? OFFSET ?",
+                WHERE """
+                + where
+                + " ORDER BY d.is_system DESC, d.id DESC LIMIT ? OFFSET ?",
                 (*params, page_size, (page - 1) * page_size),
             ).fetchall()
         return [_employee(row) for row in rows], total
@@ -142,12 +145,16 @@ class DigitalEmployeeRepository:
     @staticmethod
     def _normalized(values: dict, current: dict | None = None) -> dict:
         current = current or {}
-        employee_type = str(values.get("employee_type", current.get("employee_type", "llm"))).strip()
+        employee_type = str(
+            values.get("employee_type", current.get("employee_type", "llm"))
+        ).strip()
         if employee_type not in EMPLOYEE_TYPES:
             raise ValueError("数字员工类型无效")
         code = str(values.get("code", current.get("code", ""))).strip().lower()
         name = str(values.get("name", current.get("name", ""))).strip()
-        mention = str(values.get("mention", current.get("mention", name))).strip().lstrip("@").strip()
+        mention = (
+            str(values.get("mention", current.get("mention", name))).strip().lstrip("@").strip()
+        )
         description = str(values.get("description", current.get("description", ""))).strip()
         if not CODE_PATTERN.fullmatch(code):
             raise ValueError("编码需以小写字母开头，仅含小写字母、数字和下划线，长度 3—40")
@@ -162,23 +169,37 @@ class DigitalEmployeeRepository:
             raise ValueError("指定模型编号不正确") from exc
         interface_id = values.get("interface_id", current.get("interface_id"))
         try:
-            interface_id = (
-                int(interface_id) if interface_id not in (None, "", 0, "0") else None
-            )
+            interface_id = int(interface_id) if interface_id not in (None, "", 0, "0") else None
         except (TypeError, ValueError) as exc:
             raise ValueError("绑定接口编号不正确") from exc
-        use_default_model = _bool(values.get("use_default_model", current.get("use_default_model", True)))
+        use_default_model = _bool(
+            values.get("use_default_model", current.get("use_default_model", True))
+        )
         system_prompt = str(values.get("system_prompt", current.get("system_prompt", ""))).strip()
-        prompt_template = str(values.get("prompt_template", current.get("prompt_template", "{{input}}"))).strip()
+        prompt_template = str(
+            values.get("prompt_template", current.get("prompt_template", "{{input}}"))
+        ).strip()
         skills = _skills(values.get("skills", current.get("skills", [])))
-        crawl_enabled = _bool(values.get("crawl4ai_enabled", current.get("crawl4ai_enabled", False)))
-        crawl_config = _json_object(values.get("crawl4ai_config", current.get("crawl4ai_config", {})), "采集配置")
+        crawl_enabled = _bool(
+            values.get("crawl4ai_enabled", current.get("crawl4ai_enabled", False))
+        )
+        crawl_config = _json_object(
+            values.get("crawl4ai_config", current.get("crawl4ai_config", {})), "采集配置"
+        )
         api_method = str(values.get("api_method", current.get("api_method", "GET"))).upper().strip()
         api_url = str(values.get("api_url", current.get("api_url", ""))).strip()
-        request_headers = _json_object(values.get("request_headers", current.get("request_headers", {})), "请求头")
-        request_params = _json_object(values.get("request_params", current.get("request_params", {})), "请求参数")
-        response_mode = str(values.get("response_mode", current.get("response_mode", "json"))).strip()
-        timeout_seconds = int(values.get("timeout_seconds", current.get("timeout_seconds", 20)) or 20)
+        request_headers = _json_object(
+            values.get("request_headers", current.get("request_headers", {})), "请求头"
+        )
+        request_params = _json_object(
+            values.get("request_params", current.get("request_params", {})), "请求参数"
+        )
+        response_mode = str(
+            values.get("response_mode", current.get("response_mode", "json"))
+        ).strip()
+        timeout_seconds = int(
+            values.get("timeout_seconds", current.get("timeout_seconds", 20)) or 20
+        )
         if employee_type == "llm":
             if not system_prompt:
                 raise ValueError("模型型数字员工必须填写系统提示词")
@@ -197,7 +218,10 @@ class DigitalEmployeeRepository:
                     raise ValueError("接口地址不允许嵌入凭据")
             if api_method not in {"GET", "POST"} or response_mode not in {"json", "card"}:
                 raise ValueError("接口方法或响应模式无效")
-            if any(str(key).lower() in {"cookie", "authorization", "proxy-authorization"} for key in request_headers):
+            if any(
+                str(key).lower() in {"cookie", "authorization", "proxy-authorization"}
+                for key in request_headers
+            ):
                 raise ValueError("请求头中禁止保存 Cookie 或鉴权凭据")
             model_id = None
             use_default_model = False
@@ -208,18 +232,25 @@ class DigitalEmployeeRepository:
         if not 3 <= timeout_seconds <= 60:
             raise ValueError("超时时间需为 3—60 秒")
         return {
-            "code": code, "name": name, "mention": mention,
-            "employee_type": employee_type, "description": description[:500],
-            "model_id": model_id, "interface_id": interface_id,
+            "code": code,
+            "name": name,
+            "mention": mention,
+            "employee_type": employee_type,
+            "description": description[:500],
+            "model_id": model_id,
+            "interface_id": interface_id,
             "use_default_model": int(use_default_model),
-            "system_prompt": system_prompt[:10000], "prompt_template": prompt_template[:10000],
+            "system_prompt": system_prompt[:10000],
+            "prompt_template": prompt_template[:10000],
             "skills": json.dumps(skills, ensure_ascii=False),
             "crawl4ai_enabled": int(crawl_enabled),
             "crawl4ai_config": json.dumps(crawl_config, ensure_ascii=False),
-            "api_method": api_method, "api_url": api_url,
+            "api_method": api_method,
+            "api_url": api_url,
             "request_headers": json.dumps(request_headers, ensure_ascii=False),
             "request_params": json.dumps(request_params, ensure_ascii=False),
-            "response_mode": response_mode, "timeout_seconds": timeout_seconds,
+            "response_mode": response_mode,
+            "timeout_seconds": timeout_seconds,
             "enabled": int(_bool(values.get("enabled", current.get("enabled", True)))),
             "created_by": values.get("created_by", current.get("created_by")),
         }
@@ -287,7 +318,9 @@ class DigitalEmployeeRepository:
                 return False, "数字员工不存在"
             if row["is_system"]:
                 return False, "系统采集专员不可删除"
-            cursor = connection.execute("DELETE FROM digital_employees WHERE id = ?", (employee_id,))
+            cursor = connection.execute(
+                "DELETE FROM digital_employees WHERE id = ?", (employee_id,)
+            )
             connection.commit()
         return cursor.rowcount == 1, "数字员工已删除"
 
@@ -341,19 +374,15 @@ class DigitalEmployeeRepository:
                 """INSERT INTO employee_call_logs
                 (employee_id, user_id, input_text, success, response_data, error_message, latency_ms, tokens_used)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (employee_id, user_id, input_text[:2000], int(success), response_data, error_message, latency_ms, tokens_used),
+                (
+                    employee_id,
+                    user_id,
+                    input_text[:2000],
+                    int(success),
+                    response_data,
+                    error_message,
+                    latency_ms,
+                    tokens_used,
+                ),
             )
             connection.commit()
-
-    @staticmethod
-    def list_call_logs(employee_id: int, limit: int = 20) -> list[dict]:
-        """获取数字员工的最近调用日志。"""
-        with connection_scope() as connection:
-            rows = connection.execute(
-                """SELECT * FROM employee_call_logs
-                WHERE employee_id = ?
-                ORDER BY created_at DESC, id DESC
-                LIMIT ?""",
-                (employee_id, limit),
-            ).fetchall()
-        return [dict(row) for row in rows]

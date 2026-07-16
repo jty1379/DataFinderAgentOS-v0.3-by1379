@@ -14,6 +14,19 @@
     });
 
     api.qsa("[data-model-form]").forEach((form) => {
+        ["tts", "image", "video"].forEach((capability) => {
+            const toggle = api.qs(`[name="${capability}_enabled"]`, form);
+            if (!toggle) return;
+            const update = () => {
+                api.qsa(`[name^="${capability}_"]`, form).forEach((field) => {
+                    if (field === toggle) return;
+                    const wrapper = field.closest("label");
+                    if (wrapper) wrapper.hidden = toggle.value !== "1";
+                });
+            };
+            toggle.addEventListener("change", update);
+            update();
+        });
         form.addEventListener("submit", () => {
             const button = api.qs("button[type='submit']", form);
             api.setBusy(button, true, "正在保存…");
@@ -134,11 +147,23 @@
     const usageStatsDialog = api.qs("#model-usage-stats");
     const usageTitle = api.qs("[data-usage-title]", usageStatsDialog);
     const usageTable = api.qs("[data-usage-table]", usageStatsDialog);
+    const usageCount = api.qs("[data-usage-count]", usageStatsDialog);
+    const usageRate = api.qs("[data-usage-rate]", usageStatsDialog);
+    const usageTokens = api.qs("[data-usage-tokens]", usageStatsDialog);
+    const usageLatency = api.qs("[data-usage-latency]", usageStatsDialog);
     const filterButtons = api.qsa("[data-filter]", usageStatsDialog);
     let currentModelId = null;
     let currentFilter = "all";
 
     function renderUsageTable(logs, modelName) {
+        const rows = Array.isArray(logs) ? logs : [];
+        const successCount = rows.filter((item) => item.success).length;
+        const tokenTotal = rows.reduce((sum, item) => sum + Number(item.total_tokens || 0), 0);
+        const averageLatency = rows.length ? Math.round(rows.reduce((sum, item) => sum + Number(item.latency_ms || 0), 0) / rows.length) : 0;
+        usageCount.textContent = rows.length.toLocaleString("zh-CN");
+        usageRate.textContent = `${rows.length ? Math.round(successCount / rows.length * 100) : 0}%`;
+        usageTokens.textContent = tokenTotal.toLocaleString("zh-CN");
+        usageLatency.textContent = `${averageLatency.toLocaleString("zh-CN")} ms`;
         if (!logs || logs.length === 0) {
             usageTable.innerHTML = '<div class="v02-feedback"><i class="layui-icon layui-icon-chart"></i><h4>暂无调用记录</h4><p>该模型尚未被调用，或当前筛选条件下没有记录。</p></div>';
             return;
@@ -163,19 +188,27 @@
         `;
         const tbody = table.querySelector("tbody");
 
+        function cell(value, className = "") {
+            const element = document.createElement("td");
+            if (className) element.className = className;
+            element.textContent = String(value ?? "-");
+            return element;
+        }
         logs.forEach(log => {
             const row = document.createElement("tr");
             row.className = log.success ? "success" : "error";
-            row.innerHTML = `
-                <td>${log.user_name || "系统"}</td>
-                <td><span class="v02-badge ${log.success ? "success" : "error"}">${log.success ? "成功" : "失败"}</span></td>
-                <td>${log.prompt_tokens}</td>
-                <td>${log.completion_tokens}</td>
-                <td>${log.total_tokens}</td>
-                <td>${log.latency_ms}</td>
-                <td>${log.created_at}</td>
-                <td>${log.error_message || "-"}</td>
-            `;
+            row.append(cell(log.user_name || "系统"));
+            const statusCell = document.createElement("td");
+            const badge = document.createElement("span");
+            badge.className = `v02-badge ${log.success ? "success" : "error"}`;
+            badge.textContent = log.success ? "成功" : "失败";
+            statusCell.append(badge); row.append(statusCell);
+            row.append(cell(Number(log.prompt_tokens || 0).toLocaleString("zh-CN")));
+            row.append(cell(Number(log.completion_tokens || 0).toLocaleString("zh-CN")));
+            row.append(cell(Number(log.total_tokens || 0).toLocaleString("zh-CN"), "usage-total"));
+            row.append(cell(`${Number(log.latency_ms || 0).toLocaleString("zh-CN")} ms`));
+            row.append(cell(String(log.created_at || "-").replace("T", " ").slice(0, 19)));
+            row.append(cell(log.error_message || "-", "usage-error"));
             tbody.appendChild(row);
         });
 

@@ -108,7 +108,7 @@
         <label class="v02-dialog-field"><span>接口地址</span><input class="v02-input" readonly value="{{ item['api_url'] }}"></label>
         <label class="v02-dialog-field"><span>请求方法</span><input class="v02-input" readonly value="{{ item['request_method'] }}"></label>
         <label class="v02-dialog-field full"><span>测试输入</span><textarea class="v02-textarea" id="test-input-{{ item['id'] }}" placeholder="输入动态参数值（如果接口使用了 {{input}} 占位符）"></textarea></label>
-        <div id="test-result-{{ item['id'] }}" class="v02-dialog-field full" style="display:none;">
+        <div id="test-result-{{ item['id'] }}" class="v02-dialog-field full" hidden>
             <span>测试结果</span>
             <pre class="v02-code-textarea" id="test-output-{{ item['id'] }}"></pre>
         </div>
@@ -123,7 +123,7 @@ function testInterface(interfaceId) {
     var resultDiv = document.getElementById('test-result-' + interfaceId);
     var outputPre = document.getElementById('test-output-' + interfaceId);
     
-    resultDiv.style.display = 'block';
+    resultDiv.hidden = false;
     outputPre.textContent = '正在测试...';
     
     fetch('/admin/interfaces/test', {

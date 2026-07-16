@@ -13,7 +13,7 @@ class AdminSettingsHandler(AdminBaseHandler):
         settings = {s['setting_key']: s['setting_value'] for s in settings_list}
         self.render_admin(
             "admin/settings.html",
-            title="系统设置 · 瞭望与问数系统",
+            title="系统设置 · 零界",
             active_menu="system_settings",
             settings=settings,
         )

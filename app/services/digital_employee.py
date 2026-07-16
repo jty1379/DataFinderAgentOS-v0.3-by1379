@@ -14,7 +14,8 @@ from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.interface import InterfaceCallRepository, InterfaceRepository
 from app.models.model_engine import ModelRepository
 from app.models.skill import EmployeeSkillRepository
-from app.services.collector import _validate_public_url
+from app.models.source import RuleRepository
+from app.services.collector import CollectionError, CollectorService, _validate_public_url
 from app.services.employee_knowledge import prompt_context
 from app.services.llm import LLMService
 from app.services.opinion import OpinionSecurityService
@@ -88,7 +89,9 @@ class DigitalEmployeeService:
                 ),
                 None,
             )
-            if query_skill:
+            if employee.get("code") == "news":
+                result = await DigitalEmployeeService._collect_news(employee, text)
+            elif query_skill:
                 result = {
                     "mode": "card",
                     "employee": employee["name"],
@@ -197,6 +200,97 @@ class DigitalEmployeeService:
         # 规范化空白字符
         text = re.sub(r'\s+', ' ', text)
         return text.strip()
+
+    # 新闻源解析器优先级：优先使用专门的新闻解析器
+    _NEWS_PARSERS = ("bing_news", "chinanews", "baidu_news")
+    # 关键词提炼时需要剥离的指令性修饰词
+    _NEWS_STOPWORDS = (
+        "汇总", "今天", "今日", "帮我", "请", "一下", "值得关注的", "值得关注",
+        "值得", "关注", "最新", "近期", "近日", "相关", "方面", "的新闻",
+        "新闻", "资讯", "消息", "报道", "动态", "热点", "简报", "整理", "总结", "摘要",
+    )
+
+    @staticmethod
+    def _news_keyword(text: str) -> str:
+        """从用户自然语言中提炼新闻检索关键词。"""
+        keyword = (text or "").strip()
+        for word in DigitalEmployeeService._NEWS_STOPWORDS:
+            keyword = keyword.replace(word, " ")
+        keyword = " ".join(keyword.split()).strip(" ，,。.、:：\"'")
+        if len(keyword) < 2:
+            keyword = "今日热点"
+        return keyword[:100]
+
+    @staticmethod
+    async def _collect_news(employee: dict, text: str) -> dict:
+        """按主题从已启用的公开新闻源检索真实新闻，返回可追溯来源的新闻卡片。"""
+        rules, _ = RuleRepository.list(enabled_only=True, page=1, page_size=200)
+        if not rules:
+            raise DigitalEmployeeError("暂无已启用的新闻瞭源，请先在瞭望采集中配置并启用新闻源")
+
+        def _priority(rule: dict) -> int:
+            parser = str(rule.get("parser_type") or "")
+            return (
+                DigitalEmployeeService._NEWS_PARSERS.index(parser)
+                if parser in DigitalEmployeeService._NEWS_PARSERS
+                else len(DigitalEmployeeService._NEWS_PARSERS)
+            )
+
+        ordered = sorted(rules, key=_priority)
+        keyword = DigitalEmployeeService._news_keyword(text)
+
+        items: list[dict] = []
+        used_source = ""
+        last_error: Exception | None = None
+        for rule in ordered:
+            try:
+                results = await CollectorService.collect(
+                    rule, keyword, page=1, page_size=10
+                )
+            except CollectionError as exc:
+                last_error = exc
+                continue
+            except Exception as exc:  # noqa: BLE001 - 归一为可展示错误
+                last_error = exc
+                LOGGER.warning(
+                    "news collection failed rule_id=%s: %s", rule.get("id"), exc
+                )
+                continue
+            if results:
+                used_source = str(rule.get("source_name") or rule.get("name") or "").strip()
+                items = results
+                break
+
+        if not items:
+            if last_error is not None:
+                raise DigitalEmployeeError(
+                    f"未能从新闻源检索到「{keyword}」的最新新闻：{last_error}"
+                )
+            raise DigitalEmployeeError(f"未检索到与「{keyword}」相关的新闻，请更换主题重试")
+
+        card_items = []
+        for item in items[:10]:
+            card_items.append({
+                "title": str(item.get("title") or "未命名新闻").strip()[:300],
+                "url": str(item.get("url") or "").strip()[:2000],
+                "summary": str(item.get("summary") or "").strip()[:500],
+                "source_name": str(item.get("source_name") or used_source).strip()[:100],
+                "published_at": str(item.get("published_at") or "").strip()[:64],
+            })
+
+        description = f"已从「{used_source or '公开新闻源'}」检索到 {len(card_items)} 条与「{keyword}」相关的最新新闻，点击标题可查看原文。"
+        return {
+            "mode": "card",
+            "employee": employee["name"],
+            "mention": "@" + employee["mention"],
+            "data": {
+                "kind": "news",
+                "title": f"「{keyword}」新闻速览",
+                "items": card_items,
+                "description": description,
+                "source": used_source or "公开新闻源",
+            },
+        }
 
     @staticmethod
     async def _preview_llm_with_retry(
@@ -389,9 +483,13 @@ class DigitalEmployeeService:
     @staticmethod
     async def _preview_api(employee: dict, text: str, config: dict) -> dict:
         started = time.monotonic()
-        url = str(_replace(config["api_url"], text))
+        # 天气专员：从自然语言中提炼城市名，避免整句被当作地名导致接口 500。
+        lookup_text = text
+        if employee.get("code") == "weather":
+            lookup_text = DigitalEmployeeService._weather_city(text)
+        url = str(_replace(config["api_url"], lookup_text))
         await _validate_employee_url(url)
-        params = _replace(config.get("request_params") or {}, text)
+        params = _replace(config.get("request_params") or {}, lookup_text)
         headers = {
             "Accept": "application/json",
             "User-Agent": "DataFinderAgentOS-DigitalEmployee/0.3",
@@ -448,7 +546,7 @@ class DigitalEmployeeService:
         data = DigitalEmployeeService._sanitize_response_data(data)
 
         if employee.get("code") == "weather":
-            data = DigitalEmployeeService._weather_card(data, text)
+            data = DigitalEmployeeService._weather_card(data, lookup_text)
         elif employee.get("code") == "music":
             data = DigitalEmployeeService._music_card(data, text)
         elif employee.get("code") == "analyst":
@@ -477,44 +575,36 @@ class DigitalEmployeeService:
         else:
             return data
 
+    # 天气查询时需要剥离的指令性修饰词（按长度从长到短排列更稳）
+    _WEATHER_STOPWORDS = (
+        "帮我查询", "帮我查", "帮我看", "查询一下", "查一下", "看一下",
+        "查询", "查看", "帮我", "请问", "请", "一下",
+        "今天", "今日", "明天", "后天", "现在", "当前", "未来几天",
+        "未来", "这几天", "近几天", "这周", "本周", "接下来",
+        "的天气预报", "天气预报", "的天气", "天气", "气温", "温度", "气象",
+        "怎么样", "怎样", "如何", "情况", "状况", "多少度", "几度",
+        "会不会", "有没有", "下不下雨", "下雨吗", "下雨", "下雪",
+    )
+
     @staticmethod
-    async def health_check(employee_id: int) -> dict:
-        """检查数字员工的健康状态。"""
-        employee = DigitalEmployeeRepository.get(employee_id)
-        if not employee:
-            return {"healthy": False, "message": "数字员工不存在"}
+    def _weather_city(text: str) -> str:
+        """从自然语言中提炼城市名，供 wttr.in 查询使用。"""
+        import re
 
-        if not employee.get("enabled"):
-            return {"healthy": False, "message": "数字员工已停用"}
-
-        # 获取最近调用日志
-        logs = DigitalEmployeeRepository.list_call_logs(employee_id, limit=10)
-        if not logs:
-            return {
-                "healthy": True,
-                "message": "尚无调用记录",
-                "call_count": employee.get("call_count", 0),
-                "failure_count": employee.get("failure_count", 0),
-            }
-
-        # 计算失败率
-        recent_failures = sum(1 for log in logs if not log.get("success"))
-        failure_rate = recent_failures / len(logs) if logs else 0
-
-        # 计算平均响应时间
-        avg_latency = sum(log.get("latency_ms", 0) for log in logs) / len(logs) if logs else 0
-
-        healthy = failure_rate < 0.5  # 失败率低于50%认为健康
-
-        return {
-            "healthy": healthy,
-            "message": "正常" if healthy else f"最近失败率 {failure_rate:.1%}",
-            "call_count": employee.get("call_count", 0),
-            "failure_count": employee.get("failure_count", 0),
-            "recent_failure_rate": f"{failure_rate:.1%}",
-            "avg_latency_ms": int(avg_latency),
-            "last_call_at": logs[0].get("created_at") if logs else None,
-        }
+        city = (text or "").strip()
+        for word in DigitalEmployeeService._WEATHER_STOPWORDS:
+            city = city.replace(word, "")
+        # 去除标点与多余空白，仅保留中英文、数字与连接符
+        city = re.sub(r"[^0-9A-Za-z\u4e00-\u9fff\s\-]", "", city)
+        city = "".join(city.split()).strip("-")
+        # 去掉末尾的行政区划后缀，wttr.in 对纯地名解析更稳
+        for suffix in ("特别行政区", "自治区", "地区", "省", "市", "县", "区"):
+            if len(city) > len(suffix) + 1 and city.endswith(suffix):
+                city = city[: -len(suffix)]
+                break
+        if not city:
+            city = re.sub(r"[^0-9A-Za-z\u4e00-\u9fff]", "", text or "") or "成都"
+        return city[:50]
 
     @staticmethod
     def _weather_card(payload: dict, requested_city: str) -> dict:
@@ -581,6 +671,13 @@ class DigitalEmployeeService:
                     "genre": str(item.get("primaryGenreName", "")),
                     "preview_url": str(item.get("previewUrl", "")),
                     "artwork": str(item.get("artworkUrl100", "")),
+                    "store_url": str(item.get("trackViewUrl", "")),
+                    "netease_url": "https://music.163.com/#/search/m/?s=" + quote(
+                        " ".join(part for part in (
+                            str(item.get("trackName", "")),
+                            str(item.get("artistName", "")),
+                        ) if part)
+                    ) + "&type=1",
                     "release_date": str(item.get("releaseDate", "")),
                     "kind": kind,
                 })
@@ -590,14 +687,14 @@ class DigitalEmployeeService:
                     "query": requested_query.strip(),
                     "message": f"未找到与「{requested_query.strip()}」相关的音乐",
                     "tracks": [],
-                    "source": "iTunes Search API",
+                    "source": "iTunes Preview（公开试听）",
                 }
             return {
                 "kind": "music",
                 "query": requested_query.strip(),
                 "total": int(payload.get("resultCount", len(tracks))),
                 "tracks": tracks,
-                "source": "iTunes Search API",
+                "source": "iTunes Preview（公开试听）",
             }
         except (AttributeError, IndexError, TypeError) as exc:
             raise DigitalEmployeeError("音乐接口返回结构异常，请稍后重试") from exc

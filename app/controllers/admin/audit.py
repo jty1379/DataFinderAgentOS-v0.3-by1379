@@ -39,7 +39,7 @@ class AdminAuditLogsHandler(AdminBaseHandler):
         
         self.render_admin(
             "admin/audit_logs.html",
-            title="审计日志 · 瞭望与问数系统",
+            title="审计日志 · 零界",
             active_menu="audit_logs",
             logs=logs,
             action_types=action_types,

@@ -27,6 +27,7 @@ class TTSConfigurationError(TTSServiceError):
 
 CHUNK_SIZE = 500
 MAX_TEXT_LENGTH = 5000
+MINIMAX_TTS_MODEL = "speech-2.8-hd"
 
 
 def _text_chunks(text: str) -> list[str]:
@@ -162,6 +163,8 @@ class TTSService:
     @staticmethod
     async def _synthesize_chunk(text: str, voice: str, config: dict) -> bytes:
         provider = config.get("provider", "volcengine")
+        if provider == "minimax":
+            return await TTSService._minimax_tts(text, voice, config)
         if provider == "volcengine":
             return await TTSService._volcengine_tts(text, voice, config)
         elif provider == "aliyun":
@@ -170,6 +173,85 @@ class TTSService:
             return TTSService._local_tts(text, voice, config)
         else:
             raise TTSConfigurationError(f"不支持的 TTS 提供商: {provider}")
+
+    @staticmethod
+    async def _minimax_tts(text: str, voice: str, config: dict) -> bytes:
+        api_key = SETTINGS.secret_from_env(str(config.get("api_key_env", "")))
+        if not api_key:
+            raise TTSConfigurationError("MiniMax Token Plan Key 环境变量未配置")
+        base_url = str(config.get("base_url") or "").strip().rstrip("/")
+        if not base_url:
+            raise TTSConfigurationError("MiniMax TTS 服务地址未配置")
+        url = base_url if base_url.endswith("/t2a_v2") else base_url + "/t2a_v2"
+        rate = max(-100, min(100, int(config.get("rate", 0))))
+        volume = max(-100, min(100, int(config.get("volume", 0))))
+        pitch = max(-100, min(100, int(config.get("pitch", 0))))
+        payload = {
+            "model": str(config.get("tts_model") or MINIMAX_TTS_MODEL),
+            "text": text,
+            "stream": False,
+            "voice_setting": {
+                "voice_id": voice or "male-qn-qingse",
+                "speed": round(max(0.5, min(2.0, 1 + rate / 100)), 2),
+                "vol": round(max(0.1, min(10.0, 1 + volume / 20)), 2),
+                "pitch": round(pitch * 12 / 100),
+            },
+            "audio_setting": {
+                "sample_rate": 32000,
+                "bitrate": 128000,
+                "format": "mp3",
+                "channel": 1,
+            },
+            "language_boost": "auto",
+            "output_format": "hex",
+        }
+        chunks = bytearray()
+
+        def receive(chunk: bytes) -> None:
+            if len(chunks) + len(chunk) > 6 * 1024 * 1024:
+                raise TTSServiceError("MiniMax TTS 响应超过 6MB 限制")
+            chunks.extend(chunk)
+
+        try:
+            response = await AsyncHTTPClient().fetch(
+                HTTPRequest(
+                    url=url,
+                    method="POST",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                    },
+                    body=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                    connect_timeout=15,
+                    request_timeout=90,
+                    follow_redirects=False,
+                    streaming_callback=receive,
+                ),
+                raise_error=False,
+            )
+        except TTSServiceError:
+            raise
+        except Exception as exc:
+            LOGGER.exception("minimax tts request failed", extra={"event": "tts_minimax_failed"})
+            raise TTSServiceError("MiniMax 语音合成服务连接失败") from exc
+        try:
+            data = json.loads(bytes(chunks).decode("utf-8", errors="replace"))
+        except json.JSONDecodeError as exc:
+            raise TTSServiceError("MiniMax 语音服务未返回有效 JSON") from exc
+        base_resp = data.get("base_resp") if isinstance(data, dict) else {}
+        status_code = int(base_resp.get("status_code", -1)) if isinstance(base_resp, dict) else -1
+        if response.code != 200 or status_code != 0:
+            message = base_resp.get("status_msg", "") if isinstance(base_resp, dict) else ""
+            raise TTSServiceError(str(message or f"MiniMax TTS 返回 HTTP {response.code}")[:500])
+        audio_hex = str((data.get("data") or {}).get("audio") or "")
+        try:
+            audio = bytes.fromhex(audio_hex)
+        except ValueError as exc:
+            raise TTSServiceError("MiniMax TTS 返回的音频数据无效") from exc
+        if not audio or len(audio) > 5 * 1024 * 1024:
+            raise TTSServiceError("MiniMax TTS 返回的音频为空或超过限制")
+        return audio
 
     @staticmethod
     async def _volcengine_tts(text: str, voice: str, config: dict) -> bytes:

@@ -5,19 +5,24 @@
 {% end %}
 {% block content %}
 <div class="admin-app">
-    <aside class="admin-sidebar" data-admin-sidebar>
-        <a class="admin-logo" href="/admin/"><span>D</span><div><b>瞭望与问数</b><small>管理控制台</small></div></a>
-        {% for group in admin_menu_groups %}
-        <div class="nav-section-label">{{ group["category"] }}</div>
-        <nav class="admin-nav" aria-label="{{ group['category'] }}">
-            {% for item in group["items"] %}
-            <a href="{{ item['route'] }}" data-admin-link class="{% if active_menu == item['code'] %}active{% end %}"{% if active_menu == item['code'] %} aria-current="page"{% end %}>
-                <i class="layui-icon {{ item['icon'] }}"></i><span>{{ item["title"] }}</span>
-            </a>
+    <a class="admin-skip-link" href="#admin-main-content">跳到主内容</a>
+    <aside class="admin-sidebar" data-admin-sidebar aria-label="管理端主导航">
+        <a class="admin-logo" href="/admin/"><img class="brand-logo" src="{{ static_url('img/logo-mark.png') }}" alt="零界"><div><b>零界</b><small>0xBoundary</small></div></a>
+        <div class="admin-sidebar-nav">
+            {% for group in admin_menu_groups %}
+            <section class="admin-nav-group">
+                <div class="nav-section-label" aria-hidden="true"><span>{{ group["code"] }}</span><b>{{ group["category"] }}</b></div>
+                <nav class="admin-nav" aria-label="{{ group['category'] }}">
+                {% for item in group["items"] %}
+                    <a href="{{ item['route'] }}" data-admin-link title="{{ item['title'] }}" class="{% if active_menu == item['code'] %}active{% end %}"{% if active_menu == item['code'] %} aria-current="page"{% end %}>
+                        <i class="layui-icon {{ item['icon'] }}" aria-hidden="true"></i><span>{{ item["title"] }}</span>
+                    </a>
+                {% end %}
+                </nav>
+            </section>
             {% end %}
-        </nav>
-        {% end %}
-        <div class="admin-version"><span></span> v0.3 · 智能问数版</div>
+        </div>
+        <div class="admin-version"><span></span><b>v0.3</b><small>0xBoundary</small></div>
     </aside>
     <div class="admin-main">
         <header class="admin-topbar">
@@ -40,7 +45,7 @@
                 </details>
             </div>
         </header>
-        <main class="admin-content">
+        <main class="admin-content" id="admin-main-content" tabindex="-1">
             {% if flash_message %}<div class="flash-message {{ flash_level }}" role="status"><i class="layui-icon {% if flash_level == 'error' %}layui-icon-close-fill{% else %}layui-icon-ok-circle{% end %}"></i>{{ flash_message }}</div>{% end %}
             {% block admin_content %}{% end %}
         </main>

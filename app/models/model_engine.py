@@ -11,6 +11,12 @@ from config.settings import SETTINGS
 
 MODEL_TYPES = ("text", "image", "audio", "video", "multimodal", "embedding")
 ENV_PATTERN = re.compile(r"^[A-Z_][A-Z0-9_]{1,127}$")
+SERVICE_CAPABILITIES = (
+    ("vision_enabled", "视觉理解"),
+    ("tts_enabled", "语音合成"),
+    ("image_enabled", "图像生成"),
+    ("video_enabled", "视频生成"),
+)
 
 
 def _bool(value) -> bool:
@@ -25,6 +31,11 @@ def _model(row) -> dict | None:
     item = dict(row)
     item["enabled"] = bool(item["enabled"])
     item["is_default"] = bool(item["is_default"])
+    for field, _label in SERVICE_CAPABILITIES:
+        item[field] = bool(item.get(field))
+    item["capability_labels"] = [
+        label for field, label in SERVICE_CAPABILITIES if item.get(field)
+    ]
     item["api_key_configured"] = bool(
         item.get("api_key_env") and SETTINGS.secret_from_env(item["api_key_env"])
     )
@@ -132,6 +143,31 @@ class ModelRepository:
             raise ValueError("温度或 top_p 超出取值范围")
         if not 1 <= max_tokens <= 131072 or not 1 <= context_messages <= 100:
             raise ValueError("最大 token 或上下文条数超出取值范围")
+        service_values = {}
+        for field in ("vision_enabled", "tts_enabled", "image_enabled", "video_enabled"):
+            service_values[field] = int(
+                _bool(values.get(field, current.get(field, False)))
+            )
+        for field in ("tts_model", "tts_voice", "image_model", "video_model"):
+            service_values[field] = str(values.get(field, current.get(field, ""))).strip()[:120]
+        for field in ("tts_base_url", "image_base_url", "video_base_url"):
+            service_url = str(values.get(field, current.get(field, ""))).strip().rstrip("/")
+            if service_url:
+                service_parsed = urlsplit(service_url)
+                if (
+                    service_parsed.scheme.lower() not in {"http", "https"}
+                    or not service_parsed.hostname
+                    or service_parsed.username
+                    or service_parsed.password
+                ):
+                    raise ValueError("能力服务地址仅支持无凭据的完整 HTTP/HTTPS URL")
+            service_values[field] = service_url
+        if service_values["tts_enabled"] and not service_values["tts_model"]:
+            raise ValueError("启用语音合成时必须填写语音模型标识")
+        if service_values["image_enabled"] and not service_values["image_model"]:
+            raise ValueError("启用图像生成时必须填写图片模型标识")
+        if service_values["video_enabled"] and not service_values["video_model"]:
+            raise ValueError("启用视频生成时必须填写视频模型标识")
         return {
             "name": name,
             "model_name": model_name,
@@ -151,6 +187,7 @@ class ModelRepository:
                 _bool(values.get("is_default", current.get("is_default", False)))
             ),
             "created_by": values.get("created_by", current.get("created_by")),
+            **service_values,
         }
 
     @staticmethod
@@ -183,13 +220,18 @@ class ModelRepository:
                     INSERT INTO model_configs
                         (name, model_name, provider, model_type, base_url, api_key_env,
                          system_prompt, temperature, top_p, max_tokens, context_messages,
-                         enabled, is_default, created_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         enabled, is_default, created_by, vision_enabled, tts_enabled,
+                         tts_model, tts_voice, tts_base_url, image_enabled, image_model,
+                         image_base_url, video_enabled, video_model, video_base_url)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     tuple(data[key] for key in (
                         "name", "model_name", "provider", "model_type", "base_url",
                         "api_key_env", "system_prompt", "temperature", "top_p",
                         "max_tokens", "context_messages", "enabled", "is_default", "created_by",
+                        "vision_enabled", "tts_enabled", "tts_model", "tts_voice",
+                        "tts_base_url", "image_enabled", "image_model", "image_base_url",
+                        "video_enabled", "video_model", "video_base_url",
                     )),
                 )
                 ModelRepository._ensure_default(connection)
@@ -216,6 +258,9 @@ class ModelRepository:
                     SET name = ?, model_name = ?, provider = ?, model_type = ?, base_url = ?,
                         api_key_env = ?, system_prompt = ?, temperature = ?, top_p = ?,
                         max_tokens = ?, context_messages = ?, enabled = ?, is_default = ?,
+                        vision_enabled = ?, tts_enabled = ?, tts_model = ?, tts_voice = ?,
+                        tts_base_url = ?, image_enabled = ?, image_model = ?, image_base_url = ?,
+                        video_enabled = ?, video_model = ?, video_base_url = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
                     """,
@@ -224,6 +269,9 @@ class ModelRepository:
                             "name", "model_name", "provider", "model_type", "base_url",
                             "api_key_env", "system_prompt", "temperature", "top_p",
                             "max_tokens", "context_messages", "enabled", "is_default",
+                            "vision_enabled", "tts_enabled", "tts_model", "tts_voice",
+                            "tts_base_url", "image_enabled", "image_model", "image_base_url",
+                            "video_enabled", "video_model", "video_base_url",
                         )),
                         model_id,
                     ),
@@ -284,6 +332,24 @@ class ModelRepository:
             row = connection.execute(
                 ModelRepository.SELECT
                 + " WHERE m.is_default = 1 AND m.enabled = 1 GROUP BY m.id LIMIT 1"
+            ).fetchone()
+        return _model(row)
+
+    @staticmethod
+    def get_for_capability(capability: str):
+        field = {
+            "vision": "vision_enabled",
+            "tts": "tts_enabled",
+            "image": "image_enabled",
+            "video": "video_enabled",
+        }.get(str(capability or "").strip().lower())
+        if not field:
+            return None
+        with connection_scope() as connection:
+            row = connection.execute(
+                ModelRepository.SELECT
+                + f" WHERE m.enabled = 1 AND m.{field} = 1 "
+                  "GROUP BY m.id ORDER BY m.is_default DESC, m.id DESC LIMIT 1"
             ).fetchone()
         return _model(row)
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from urllib.parse import urlsplit
 
@@ -12,6 +13,14 @@ from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from config.settings import SETTINGS
 
 LOGGER = logging.getLogger("model")
+INTERNAL_REASONING_NAMES = ("think", "analysis", "reasoning")
+INTERNAL_REASONING_BLOCK = re.compile(
+    r"<(?P<name>think|analysis|reasoning)(?:\s[^>]*)?>.*?</(?P=name)\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+INTERNAL_REASONING_TAG = re.compile(
+    r"</?(?:think|analysis|reasoning)(?:\s[^>]*)?>", re.IGNORECASE
+)
 
 
 class LLMError(ValueError):
@@ -40,6 +49,81 @@ def _content_text(content) -> str:
                 parts.append(block["text"])
         return "".join(parts).strip()
     return ""
+
+
+def strip_internal_reasoning(text: str) -> str:
+    """Remove provider reasoning blocks before content reaches storage or the UI."""
+    value = str(text or "")
+    previous = None
+    while previous != value:
+        previous = value
+        value = INTERNAL_REASONING_BLOCK.sub("", value)
+    value = INTERNAL_REASONING_TAG.sub("", value)
+    return value.strip()
+
+
+def _partial_suffix(value: str, candidates: tuple[str, ...]) -> int:
+    lower = value.lower()
+    maximum = 0
+    for candidate in candidates:
+        limit = min(len(candidate) - 1, len(lower))
+        for length in range(1, limit + 1):
+            if lower.endswith(candidate[:length]):
+                maximum = max(maximum, length)
+    return maximum
+
+
+class _ReasoningStreamFilter:
+    def __init__(self) -> None:
+        self.buffer = ""
+        self.active = ""
+
+    def feed(self, piece: str, *, final: bool = False) -> str:
+        self.buffer += str(piece or "")
+        output: list[str] = []
+        open_tokens = tuple(f"<{name}" for name in INTERNAL_REASONING_NAMES)
+        while self.buffer:
+            lower = self.buffer.lower()
+            if self.active:
+                close_token = f"</{self.active}>"
+                close_index = lower.find(close_token)
+                if close_index < 0:
+                    if final:
+                        self.buffer = ""
+                        self.active = ""
+                    else:
+                        keep = _partial_suffix(self.buffer, (close_token,))
+                        self.buffer = self.buffer[-keep:] if keep else ""
+                    break
+                self.buffer = self.buffer[close_index + len(close_token):]
+                self.active = ""
+                continue
+
+            openings = [
+                (lower.find(token), name)
+                for token, name in zip(open_tokens, INTERNAL_REASONING_NAMES, strict=True)
+                if lower.find(token) >= 0
+            ]
+            if openings:
+                open_index, name = min(openings, key=lambda item: item[0])
+                output.append(self.buffer[:open_index])
+                tag_end = self.buffer.find(">", open_index)
+                if tag_end < 0:
+                    self.buffer = "" if final else self.buffer[open_index:]
+                    break
+                self.buffer = self.buffer[tag_end + 1:]
+                self.active = name
+                continue
+
+            if final:
+                output.append(self.buffer)
+                self.buffer = ""
+            else:
+                keep = _partial_suffix(self.buffer, open_tokens)
+                output.append(self.buffer[:-keep] if keep else self.buffer)
+                self.buffer = self.buffer[-keep:] if keep else ""
+            break
+        return "".join(output)
 
 
 class LLMService:
@@ -116,9 +200,9 @@ class LLMService:
             raise LLMError("模型服务未返回可用回答")
         first = choices[0] if isinstance(choices[0], dict) else {}
         message = first.get("message") if isinstance(first.get("message"), dict) else {}
-        text = _content_text(message.get("content"))
+        text = strip_internal_reasoning(_content_text(message.get("content")))
         if not text:
-            text = _content_text(first.get("text"))
+            text = strip_internal_reasoning(_content_text(first.get("text")))
         if not text:
             raise LLMError("模型回答为空")
         usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
@@ -173,6 +257,7 @@ class LLMService:
         raw = bytearray()
         pending = bytearray()
         text_parts: list[str] = []
+        reasoning_filter = _ReasoningStreamFilter()
         usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
         def consume(frame: bytes) -> None:
@@ -202,9 +287,12 @@ class LLMService:
                 raw_content = delta.get("content")
                 piece = raw_content if isinstance(raw_content, str) else _content_text(raw_content)
                 if piece:
-                    text_parts.append(piece)
+                    safe_piece = reasoning_filter.feed(piece)
+                    if not safe_piece:
+                        return
+                    text_parts.append(safe_piece)
                     if on_delta:
-                        on_delta(piece)
+                        on_delta(safe_piece)
 
         def receive_chunk(chunk: bytes) -> None:
             if len(raw) + len(chunk) > 4 * 1024 * 1024:
@@ -235,6 +323,11 @@ class LLMService:
         latency_ms = max(0, int((time.monotonic() - started) * 1000))
         if pending:
             consume(bytes(pending))
+        tail = reasoning_filter.feed("", final=True)
+        if tail:
+            text_parts.append(tail)
+            if on_delta:
+                on_delta(tail)
         if response.code != 200:
             raise LLMError(f"模型服务返回 HTTP {response.code}")
         text = "".join(text_parts).strip()
@@ -243,7 +336,7 @@ class LLMService:
                 fallback = json.loads(bytes(raw).decode("utf-8"))
                 choices = fallback.get("choices") or []
                 message = choices[0].get("message", {}) if choices else {}
-                text = _content_text(message.get("content"))
+                text = strip_internal_reasoning(_content_text(message.get("content")))
             except (UnicodeDecodeError, json.JSONDecodeError, AttributeError, IndexError):
                 text = ""
         if not text:

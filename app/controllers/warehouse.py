@@ -64,7 +64,7 @@ class AdminWarehouseHandler(AdminBaseHandler):
         )
         self.render_admin(
             "admin/warehouse.html",
-            title="数据仓库 · 瞭望与问数系统",
+            title="数据仓库 · 零界",
             active_menu="data_management",
             items=items,
             source_names=WarehouseRepository.source_names(),

@@ -21,7 +21,7 @@ class IntelligenceScreenHandler(AdminBaseHandler):
     def get(self) -> None:
         self.render_admin(
             "admin/intelligence_screen.html",
-            title="数智大屏 · 瞭望与问数系统",
+            title="数智大屏 · 零界",
             active_menu="intelligence_screen",
         )
 
@@ -39,7 +39,7 @@ class OpinionScreenHandler(AdminBaseHandler):
     def get(self) -> None:
         self.render_admin(
             "admin/opinion_screen.html",
-            title="舆情大屏 · 瞭望与问数系统",
+            title="舆情大屏 · 零界",
             active_menu="opinion_screen",
         )
 

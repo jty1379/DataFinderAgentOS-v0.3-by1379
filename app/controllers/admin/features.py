@@ -22,7 +22,7 @@ class AdminFeaturesHandler(AdminBaseHandler):
         roots = [item for item in FeatureRepository.list_features() if not item.get("parent_id")]
         self.render_admin(
             "admin/features.html",
-            title="功能管理 · 瞭望与问数系统",
+            title="功能管理 · 零界",
             active_menu="feature_management",
             features=features,
             root_features=roots,

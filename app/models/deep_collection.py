@@ -32,7 +32,7 @@ class DeepCollectionRepository:
             ).fetchall()
             for row in rows:
                 connection.execute(
-                    """UPDATE deep_collection_tasks SET status='failed', progress=100,
+                    """UPDATE deep_collection_tasks SET status='failed',
                        current_step='任务中断', error_message='服务重启，任务已中断',
                        finished_at=CURRENT_TIMESTAMP WHERE id=?""",
                     (row["id"],),
@@ -143,7 +143,7 @@ class DeepCollectionRepository:
         message = str(message).strip()[:500] or "深度采集失败"
         with connection_scope() as connection:
             connection.execute(
-                """UPDATE deep_collection_tasks SET status='failed', progress=100,
+                """UPDATE deep_collection_tasks SET status='failed',
                    current_step='执行失败', error_message=?, finished_at=CURRENT_TIMESTAMP
                    WHERE id=?""",
                 (message, task_id),

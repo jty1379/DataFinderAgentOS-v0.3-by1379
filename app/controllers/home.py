@@ -39,7 +39,7 @@ class UserIndexHandler(BaseHandler):
         employees = [item for item in employees if item["code"] != "collection_specialist"]
         self.render(
             "index.html",
-            title="智能问数 · 瞭望与问数系统",
+            title="智能问数 · 零界",
             user=self.current_user,
             models=models,
             default_model=SystemSettingsService.get_default_model(),
@@ -142,7 +142,7 @@ class AdminIndexHandler(AdminBaseHandler):
         dashboard = DashboardRepository.overview()
         self.render_admin(
             "admin/index.html",
-            title="管理工作台 · 瞭望与问数系统",
+            title="管理工作台 · 零界",
             active_menu="dashboard",
             dashboard=dashboard,
             user_count=dashboard["metrics"]["user_count"],

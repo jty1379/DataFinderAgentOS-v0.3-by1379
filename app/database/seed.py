@@ -8,27 +8,35 @@ import secrets
 import sqlite3
 
 DEFAULT_FEATURES = (
-    ("dashboard", "工作台", "/admin/", "layui-icon-console", "核心工作区", "系统运行概览与关键指标", 10, 1),
-    ("user_management", "用户管理", "/admin/users", "layui-icon-user", "核心工作区", "集中管理普通用户与管理员账号", 20, 1),
-    ("feature_management", "功能管理", "/admin/features", "layui-icon-component", "核心工作区", "维护系统功能及启用状态", 30, 1),
-    ("menu_management", "菜单管理", "/admin/menus", "layui-icon-cols", "核心工作区", "配置、排序并预览管理端菜单", 40, 1),
-    ("role_management", "角色管理", "/admin/roles", "layui-icon-auz", "核心工作区", "维护角色及其功能授权", 50, 1),
-    ("system_settings", "系统设置", "/admin/settings", "layui-icon-set", "核心工作区", "配置系统全局参数和运行开关", 55, 1),
-    ("session_management", "会话管理", "/admin/sessions", "layui-icon-dialogue", "核心工作区", "管理用户会话和对话记录", 58, 1),
-    ("opinion_management", "舆情管理", "/admin/opinion/alerts", "layui-icon-fire", "数据与智能", "舆情预警和敏感词管理", 59, 1),
-    ("audit_logs", "审计日志", "/admin/audit/logs", "layui-icon-file-text", "核心工作区", "系统操作日志和安全审计", 61, 1),
-    ("lookout_management", "瞭望采集", "/admin/lookout", "layui-icon-chart-screen", "数据与智能", "按瞭源规则采集并预览公开数据", 62, 1),
-    ("data_management", "数据仓库", "/admin/warehouse", "layui-icon-diamond", "数据与智能", "管理已入库的采集数据与深度采集状态", 70, 1),
-    ("collection_management", "瞭源管理", "/admin/sources", "layui-icon-download-circle", "数据与智能", "维护公开数据源、请求头和采集规则", 80, 1),
-    ("digital_employees", "数字员工", "/admin/agents", "layui-icon-username", "数据与智能", "配置模型型与接口型数字员工，并支持后台任务调度", 90, 1),
-    ("model_engine", "模型引擎", "/admin/models", "layui-icon-engine", "数据与智能", "配置 OpenAI 兼容模型、默认服务和生成参数", 100, 1),
-    ("intelligence_screen", "数智大屏", "/admin/screens/intelligence", "layui-icon-chart", "数据与智能", "呈现核心业务指标", 110, 1),
-    ("opinion_screen", "舆情大屏", "/admin/screens/opinion", "layui-icon-fire", "数据与智能", "聚合热点事件与舆情趋势", 120, 1),
-    ("tts_config", "语音合成", "/admin/tts", "layui-icon-voice", "数据与智能", "配置语音合成服务和参数", 107, 1),
-    ("multimodal_config", "多模态服务", "/admin/multimodal", "layui-icon-picture", "数据与智能", "配置生图、生视频等多模态服务", 108, 1),
-    ("interface_management", "接口管理", "/admin/interfaces", "layui-icon-link", "数据与智能", "配置外部 API 接口、测试和查看调用日志", 105, 1),
-    ("skill_management", "技能管理", "/admin/skills", "layui-icon-star", "数据与智能", "管理技能配置和绑定到数字员工", 106, 1),
+    ("dashboard", "控制台", "/admin/", "layui-icon-console", "控制台", "系统运行概览与关键指标", 10, 1),
+    ("user_management", "用户管理", "/admin/users", "layui-icon-user", "权限与系统", "集中管理普通用户与管理员账号", 20, 1),
+    ("feature_management", "功能管理", "/admin/features", "layui-icon-component", "权限与系统", "维护可授权业务能力、路由及启停状态", 30, 1),
+    ("role_management", "权限管理", "/admin/roles", "layui-icon-auz", "权限与系统", "维护角色、功能授权与管理侧访问范围", 40, 1),
+    ("menu_management", "菜单管理", "/admin/menus", "layui-icon-cols", "权限与系统", "将功能映射为导航并配置分组、排序与显隐", 50, 1),
+    ("system_settings", "系统设置", "/admin/settings", "layui-icon-set", "权限与系统", "配置系统全局参数和运行开关", 60, 1),
+    ("lookout_management", "瞭望采集", "/admin/lookout", "layui-icon-chart-screen", "瞭望与数据", "执行单条、批量与深度采集任务", 70, 1),
+    ("collection_management", "瞭源管理", "/admin/sources", "layui-icon-download-circle", "瞭望与数据", "维护真实数据源、请求参数和采集规则", 80, 1),
+    ("data_management", "数据仓库", "/admin/warehouse", "layui-icon-diamond", "瞭望与数据", "管理已入库的采集数据与深度采集状态", 90, 1),
+    ("model_engine", "模型引擎", "/admin/models", "layui-icon-engine", "模型与问数", "配置文本、图像、音频和视频模型及默认调用策略", 100, 1),
+    ("interface_management", "接口管理", "/admin/interfaces", "layui-icon-link", "模型与问数", "配置外部 API 接口、测试和查看调用日志", 110, 1),
+    ("digital_employees", "数字员工", "/admin/agents", "layui-icon-username", "模型与问数", "配置模型型与接口型数字员工，并支持后台任务调度", 120, 1),
+    ("skill_management", "技能管理", "/admin/skills", "layui-icon-star", "模型与问数", "管理技能配置和绑定到数字员工", 130, 1),
+    ("session_management", "会话与对话管理", "/admin/sessions", "layui-icon-dialogue", "模型与问数", "管理用户会话、对话消息链与 PDF 导出", 140, 1),
+    ("intelligence_screen", "数智大屏", "/admin/screens/intelligence", "layui-icon-chart", "数智监管", "呈现真实业务指标、趋势与热点", 150, 1),
+    ("opinion_screen", "舆情大屏", "/admin/screens/opinion", "layui-icon-fire", "数智监管", "聚合风险分布、敏感词、预警趋势和处置入口", 160, 1),
+    ("opinion_management", "舆情预警", "/admin/opinion/alerts", "layui-icon-fire", "数智监管", "舆情大屏的预警与敏感词二级管理能力", 180, 1),
+    ("tts_config", "语音合成", "/admin/tts", "layui-icon-voice", "模型与问数", "模型引擎的语音合成二级配置能力", 190, 1),
+    ("multimodal_config", "多模态服务", "/admin/multimodal", "layui-icon-picture", "模型与问数", "模型引擎的生图、生视频二级配置能力", 200, 1),
     ("user_portal", "用户侧门户", "/index", "layui-icon-dialogue", "用户侧", "用户登录、问数与数字员工入口", 130, 1),
+)
+
+# 任务书要求的管理端一级能力。其余系统功能保留路由和权限，但只从父模块内部进入。
+PRIMARY_ADMIN_MENU_CODES = (
+    "dashboard", "user_management", "feature_management", "role_management",
+    "menu_management", "system_settings", "lookout_management",
+    "collection_management", "data_management", "model_engine",
+    "interface_management", "digital_employees", "skill_management",
+    "session_management", "intelligence_screen", "opinion_screen",
 )
 
 SAFE_BAIDU_HEADERS = {
@@ -60,16 +68,24 @@ def _seed_permissions(connection: sqlite3.Connection) -> None:
     admin_role = connection.execute("SELECT id FROM roles WHERE code='admin'").fetchone()
     user_role = connection.execute("SELECT id FROM roles WHERE code='user'").fetchone()
     if admin_role:
-        connection.execute("INSERT OR IGNORE INTO role_features(role_id,feature_id) SELECT ?,id FROM features WHERE route LIKE '/admin/%' AND is_system=1", (admin_role["id"],))
+        connection.execute("INSERT OR IGNORE INTO role_features(role_id,feature_id) SELECT ?,id FROM features WHERE route LIKE '/admin/%' AND is_system=1 AND enabled=1", (admin_role["id"],))
     if user_role:
         connection.execute("INSERT OR IGNORE INTO role_features(role_id,feature_id) SELECT ?,id FROM features WHERE code='user_portal'", (user_role["id"],))
-    connection.execute("""INSERT OR IGNORE INTO menus(feature_id,title,icon,category,sort_order,enabled,is_system)
-        SELECT id,name,icon,category,sort_order,1,1 FROM features WHERE route LIKE '/admin/%'""")
+    placeholders = ",".join("?" for _ in PRIMARY_ADMIN_MENU_CODES)
+    connection.execute(
+        f"""DELETE FROM menus WHERE is_system=1 AND feature_id IN
+        (SELECT id FROM features WHERE code NOT IN ({placeholders}))""",
+        PRIMARY_ADMIN_MENU_CODES,
+    )
+    connection.execute(
+        f"""INSERT OR IGNORE INTO menus(feature_id,title,icon,category,sort_order,enabled,is_system)
+        SELECT id,name,icon,category,sort_order,1,1 FROM features WHERE code IN ({placeholders})""",
+        PRIMARY_ADMIN_MENU_CODES,
+    )
     connection.execute("""UPDATE menus SET title=(SELECT name FROM features WHERE id=menus.feature_id),
         icon=(SELECT icon FROM features WHERE id=menus.feature_id), category=(SELECT category FROM features WHERE id=menus.feature_id),
         sort_order=(SELECT sort_order FROM features WHERE id=menus.feature_id), updated_at=CURRENT_TIMESTAMP
-        WHERE feature_id IN (SELECT id FROM features WHERE code IN
-        ('lookout_management','data_management','collection_management','model_engine','digital_employees'))""")
+        WHERE is_system=1 AND feature_id IN (SELECT id FROM features WHERE route LIKE '/admin/%')""")
 
 
 def _seed_admin(connection: sqlite3.Connection) -> None:
@@ -130,23 +146,95 @@ def _seed_source(connection: sqlite3.Connection) -> None:
             (scu_source["id"], '{"result_limit":20}'),
         )
 
-    # Source 3: 36Kr (创投热点) - Using RSS/news feed endpoint
+    # 旧版 36 氪搜索长期返回 404；原位升级为可解析的 Bing 新闻。
+    legacy_source = connection.execute(
+        "SELECT id FROM lookout_sources WHERE code='kr36_trending' OR name='36氪热点' LIMIT 1"
+    ).fetchone()
+    bing_source = connection.execute(
+        "SELECT id FROM lookout_sources WHERE code='bing_news' LIMIT 1"
+    ).fetchone()
+    if legacy_source and not bing_source:
+        connection.execute(
+            """UPDATE lookout_sources SET code='bing_news',name='Bing 新闻',
+               base_url='https://www.bing.com/news/search',
+               description='聚合公开新闻搜索结果。',updated_at=CURRENT_TIMESTAMP WHERE id=?""",
+            (legacy_source["id"],),
+        )
+        connection.execute(
+            """UPDATE collection_rules SET name='Bing 新闻关键词采集',keyword_param='q',
+               page_param='first',page_start=1,page_step=10,page_size=12,
+               fixed_params='{}',parser_type='bing_news',
+               parser_config='{"result_limit":12}',updated_at=CURRENT_TIMESTAMP
+               WHERE source_id=?""",
+            (legacy_source["id"],),
+        )
+    elif legacy_source and bing_source and legacy_source["id"] != bing_source["id"]:
+        connection.execute("DELETE FROM lookout_sources WHERE id=?", (legacy_source["id"],))
+
     connection.execute(
         """INSERT OR IGNORE INTO lookout_sources(code,name,base_url,description,default_headers,enabled)
-        VALUES ('kr36_trending','36氪热点','https://www.36kr.com/search','创投行业动态与融资信息。',?,1)""",
+        VALUES ('bing_news','Bing 新闻','https://www.bing.com/news/search','聚合公开新闻搜索结果。',?,1)""",
         (json.dumps(SAFE_BAIDU_HEADERS, ensure_ascii=False, separators=(",", ":")),),
     )
-    kr36_source = connection.execute("SELECT id FROM lookout_sources WHERE code='kr36_trending'").fetchone()
-    if kr36_source:
+    bing_source = connection.execute("SELECT id FROM lookout_sources WHERE code='bing_news'").fetchone()
+    if bing_source:
+        connection.execute(
+            """UPDATE collection_rules SET parser_type='bing_news',
+               updated_at=CURRENT_TIMESTAMP WHERE source_id=?""",
+            (bing_source["id"],),
+        )
         connection.execute(
             """INSERT OR IGNORE INTO collection_rules
             (source_id,name,keyword_param,page_param,page_start,page_step,page_size,fixed_params,request_headers,parser_type,parser_config,enabled)
-            VALUES (?,'36氪创投采集','keyword','page',1,1,30,'{}','{}','generic_links',?,1)""",
-            (kr36_source["id"], '{"result_limit":30}'),
+            VALUES (?,'Bing 新闻关键词采集','q','first',1,10,12,'{}','{}','bing_news',?,1)""",
+            (bing_source["id"], '{"result_limit":12}'),
+        )
+
+    # Source 4: 中国新闻网搜索（页面内嵌结构化结果，包含可信发布时间）。
+    connection.execute(
+        """INSERT OR IGNORE INTO lookout_sources(code,name,base_url,description,default_headers,enabled)
+        VALUES ('chinanews','中国新闻网','https://sou.chinanews.com.cn/search.do','中国新闻网公开新闻检索。',?,1)""",
+        (json.dumps(SAFE_BAIDU_HEADERS, ensure_ascii=False, separators=(",", ":")),),
+    )
+    chinanews_source = connection.execute(
+        "SELECT id FROM lookout_sources WHERE code='chinanews'"
+    ).fetchone()
+    if chinanews_source:
+        connection.execute(
+            """INSERT OR IGNORE INTO collection_rules
+            (source_id,name,keyword_param,page_param,page_start,page_step,page_size,fixed_params,request_headers,parser_type,parser_config,enabled)
+            VALUES (?,'中国新闻网关键词采集','q','start',0,10,10,?,'{}','chinanews',?,1)""",
+            (
+                chinanews_source["id"],
+                json.dumps({"ps": "10"}, separators=(",", ":")),
+                '{"result_limit":10}',
+            ),
         )
 
 
 def _seed_employees(connection: sqlite3.Connection) -> None:
+    legacy_music = connection.execute(
+        "SELECT id FROM digital_employees WHERE code='music_assistant' LIMIT 1"
+    ).fetchone()
+    current_music = connection.execute(
+        "SELECT id FROM digital_employees WHERE code='music' LIMIT 1"
+    ).fetchone()
+    if legacy_music and not current_music:
+        connection.execute(
+            "UPDATE digital_employees SET code='music' WHERE id=?",
+            (legacy_music["id"],),
+        )
+    legacy_news = connection.execute(
+        "SELECT id FROM digital_employees WHERE code='news_assistant' LIMIT 1"
+    ).fetchone()
+    current_news = connection.execute(
+        "SELECT id FROM digital_employees WHERE code='news' LIMIT 1"
+    ).fetchone()
+    if legacy_news and not current_news:
+        connection.execute(
+            "UPDATE digital_employees SET code='news' WHERE id=?",
+            (legacy_news["id"],),
+        )
     connection.execute(
         """INSERT OR IGNORE INTO digital_employees
         (code,name,mention,employee_type,description,use_default_model,system_prompt,prompt_template,skills,crawl4ai_enabled,crawl4ai_config,enabled,is_system)
@@ -185,17 +273,30 @@ def _seed_employees(connection: sqlite3.Connection) -> None:
     connection.execute(
         """INSERT OR IGNORE INTO digital_employees
         (code,name,mention,employee_type,description,use_default_model,skills,api_method,api_url,request_headers,request_params,response_mode,timeout_seconds,enabled,is_system)
-        VALUES ('music','随机音乐','音乐','api',?,1,?,'GET','https://itunes.apple.com/search','{}',?,'card',20,1,1)""",
-        ("通过 iTunes Search API 搜索音乐。", json.dumps(["音乐推荐", "歌曲搜索", "随机播放"], ensure_ascii=False), '{"term":"{{input}}","media":"music","limit":10}'),
+        VALUES ('music','音乐播放器','音乐','api',?,1,?,'GET','https://itunes.apple.com/search','{}',?,'card',20,1,1)""",
+        ("搜索歌曲并在网站内直接播放公开试听片段。", json.dumps(["站内播放", "歌曲搜索", "试听控制"], ensure_ascii=False), '{"term":"{{input}}","media":"music","entity":"song","limit":10}'),
+    )
+    connection.execute(
+        """UPDATE digital_employees SET name='音乐播放器',employee_type='api',description='搜索歌曲并在网站内直接播放公开试听片段。',
+        skills=?,api_method='GET',api_url='https://itunes.apple.com/search',request_headers='{}',
+        request_params='{"term":"{{input}}","media":"music","entity":"song","limit":10}',response_mode='card',
+        system_prompt='',prompt_template='{{input}}',timeout_seconds=20,enabled=1,updated_at=CURRENT_TIMESTAMP
+        WHERE code='music'""",
+        (json.dumps(["站内播放", "歌曲搜索", "试听控制"], ensure_ascii=False),),
     )
     connection.execute(
         """INSERT OR IGNORE INTO digital_employees
         (code,name,mention,employee_type,description,use_default_model,system_prompt,prompt_template,skills,enabled,is_system)
-        VALUES ('news','新闻专员','新闻','llm',?,1,?,?,?,1,1)""",
-        ("新闻摘要助手，为用户解读新闻热点。",
-         "你是新闻专员，擅长将新闻热点整理为简洁的摘要。请用清晰的格式输出新闻要点，包括标题、核心内容和影响分析。",
-         "请帮我整理以下新闻热点：{{input}}",
-         json.dumps(["新闻热点", "时事资讯", "头条新闻"], ensure_ascii=False)),
+        VALUES ('news','新闻专员','新闻','llm',?,1,'','{{input}}',?,1,1)""",
+        ("实时新闻检索专员：按主题从已启用的公开新闻源检索最新新闻，并附可追溯来源链接。",
+         json.dumps(["实时新闻检索", "多源聚合", "来源可追溯"], ensure_ascii=False)),
+    )
+    connection.execute(
+        """UPDATE digital_employees SET
+            description='实时新闻检索专员：按主题从已启用的公开新闻源检索最新新闻，并附可追溯来源链接。',
+            system_prompt='',prompt_template='{{input}}',skills=?,updated_at=CURRENT_TIMESTAMP
+        WHERE code='news'""",
+        (json.dumps(["实时新闻检索", "多源聚合", "来源可追溯"], ensure_ascii=False),),
     )
     connection.execute(
         """INSERT OR IGNORE INTO digital_employees
@@ -240,6 +341,15 @@ def _seed_employee_runtime_bindings(connection: sqlite3.Connection) -> None:
                    updated_at=CURRENT_TIMESTAMP
                WHERE id=? AND interface_id IS NULL""",
             (interface_code, employee["id"]),
+        )
+        connection.execute(
+            """UPDATE api_interfaces SET name=?,api_url=?,request_method=?,request_headers=?,request_params=?,
+               timeout_seconds=?,description=?,updated_at=CURRENT_TIMESTAMP WHERE code=?""",
+            (
+                f"{employee['name']}托管接口", employee["api_url"], employee["api_method"],
+                employee["request_headers"], employee["request_params"], employee["timeout_seconds"],
+                f"由数字员工 {employee['name']} 使用的公开接口。", interface_code,
+            ),
         )
 
     connection.execute(

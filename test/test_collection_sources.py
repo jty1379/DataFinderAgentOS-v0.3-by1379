@@ -39,10 +39,10 @@ class TestCollectionSources(unittest.TestCase):
                 "description": "四川大学官方新闻",
             },
             {
-                "code": "kr36_trending",
-                "name": "36氪热点",
-                "base_url": "https://www.36kr.com/search",
-                "description": "创投行业动态",
+                "code": "bing_news",
+                "name": "Bing 新闻",
+                "base_url": "https://www.bing.com/news/search",
+                "description": "公开新闻搜索",
             },
         ]
 
@@ -147,19 +147,19 @@ class TestCollectionSources(unittest.TestCase):
         self.assertEqual(len(rules), 1)
         self.assertEqual(rules[0]["name"], "规则1")
 
-    def test_three_real_sources_present(self):
-        """Test that three real sources are configured."""
+    def test_real_sources_present(self):
+        """Test that the configured public sources are present."""
         db.init_db()
-        # This test verifies the database contains the three sources
+        # This test verifies the database contains the configured sources.
         with connection_scope() as connection:
             rows = connection.execute(
                 """
                 SELECT code, name FROM lookout_sources
-                WHERE code IN ('baidu_news', 'scu_news', 'kr36_trending')
+                WHERE code IN ('baidu_news', 'scu_news', 'bing_news', 'chinanews')
                 """
             ).fetchall()
 
-        self.assertEqual(len(rows), 3)
+        self.assertEqual(len(rows), 4)
 
 
 if __name__ == "__main__":

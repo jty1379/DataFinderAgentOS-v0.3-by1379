@@ -8,6 +8,7 @@ import uuid
 from urllib.parse import urlsplit
 
 from app.models.db import connection_scope
+from app.models.model_engine import ModelRepository
 
 ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]{1,79}$")
 IMAGE_SIZES = {"512x512", "1024x1024", "1024x1536", "1536x1024"}
@@ -22,12 +23,39 @@ def _task(row) -> dict | None:
             item[field] = json.loads(item.get(field) or "{}")
         except json.JSONDecodeError:
             item[field] = {}
+    prompt = str(item.get("prompt") or "").strip()
+    if prompt and not re.search(r"[^?？\s\ufffd]", prompt):
+        prompt = f"{'图片' if item.get('task_type') == 'image' else '视频'}生成任务 #{item.get('id')}"
+    item["display_prompt"] = prompt or f"生成任务 #{item.get('id')}"
     return item
 
 
 class MultimodalConfigRepository:
     @staticmethod
     def get_config() -> dict:
+        image_model = ModelRepository.get_for_capability("image")
+        video_model = ModelRepository.get_for_capability("video")
+        model = image_model or video_model
+        if model:
+            provider_text = f"{model.get('provider', '')} {model.get('model_name', '')}".lower()
+            return {
+                "enabled": bool(image_model or video_model),
+                "provider": "minimax" if "minimax" in provider_text else "openai_compatible",
+                "api_key_env": model.get("api_key_env") or "",
+                "api_secret_env": "",
+                "base_url": (
+                    (image_model or {}).get("image_base_url")
+                    or (video_model or {}).get("video_base_url")
+                    or model.get("base_url")
+                    or ""
+                ),
+                "default_image_size": "1024x1024",
+                "default_video_duration": 6,
+                "image_model": (image_model or {}).get("image_model") or "",
+                "video_model": (video_model or {}).get("video_model") or "",
+                "video_enabled": bool(video_model),
+                "model_id": model.get("id"),
+            }
         with connection_scope() as connection:
             row = connection.execute("SELECT * FROM multimodal_config WHERE id=1").fetchone()
         if not row:
@@ -51,8 +79,8 @@ class MultimodalConfigRepository:
     def update_config(data: dict) -> dict:
         current = MultimodalConfigRepository.get_config()
         provider = str(data.get("provider", current["provider"])).strip().lower()
-        if provider not in {"openai", "openai_compatible"}:
-            raise ValueError("v0.3 多模态仅支持 OpenAI API 兼容生图服务")
+        if provider not in {"minimax", "openai", "openai_compatible"}:
+            raise ValueError("多模态服务仅支持 MiniMax 或 OpenAI API 兼容生图服务")
         enabled_raw = data.get("enabled", current["enabled"])
         enabled = (
             enabled_raw.strip().lower() in {"1", "true", "yes", "on"}
@@ -96,7 +124,7 @@ class MultimodalConfigRepository:
                    VALUES (1,?,?,?,?,?,?,?,?,?,strftime('%s','now'))""",
                 (
                     int(enabled),
-                    "openai_compatible",
+                    "minimax" if provider == "minimax" else "openai_compatible",
                     api_key_env,
                     api_secret_env,
                     base_url,

@@ -151,7 +151,7 @@ class WebAppTest(AsyncHTTPTestCase):
         )
         dashboard = self.fetch("/admin/", headers={"Cookie": admin_header})
         self.assertEqual(dashboard.code, 200)
-        self.assertIn("安全基线".encode(), dashboard.body)
+        self.assertIn("最近任务".encode(), dashboard.body)
 
     def test_xsrf_and_sql_injection_protection(self):
         missing_token = self.fetch(
@@ -179,8 +179,8 @@ class WebAppTest(AsyncHTTPTestCase):
         for path, marker in (
             ("/admin/users", "集中维护普通用户与管理员账号"),
             ("/admin/roles", "用户与角色保持一对一关系"),
-            ("/admin/features", "停用后所有角色都无法操作"),
-            ("/admin/menus", "根据当前角色授权自动生成"),
+            ("/admin/features", "维护系统可授权的业务能力"),
+            ("/admin/menus", "把已启用功能映射到左侧导航"),
         ):
             response = self.fetch(path, headers={"Cookie": admin_header})
             self.assertEqual(response.code, 200)

@@ -23,6 +23,8 @@
         if (!card || typeof card !== "object") return {type: "text", data: {text: String(card ?? "")}};
         if (TYPES.has(card.type)) return {type: card.type, data: card.data && typeof card.data === "object" ? card.data : {text: card.data}};
         if (card.kind === "weather") return {type: "weather", data: card};
+        if (card.kind === "music") return {type: "music", data: card};
+        if (card.kind === "news") return {type: "news", data: card};
         if (card.kind === "analysis") return {type: "analysis", data: card};
         return {type: "text", data: {text: card.text || card.content || JSON.stringify(card, null, 2)}};
     }
@@ -183,6 +185,63 @@
 
     function media(type, data) {
         const card = node("article", `contract-card ${type}-card`);
+        if (type === "music" && Array.isArray(data.tracks)) {
+            const heading = node("div", "music-card-heading");
+            const title = node("div");
+            title.append(
+                node("h4", "", data.query ? `站内试听 · ${data.query}` : "站内音乐播放器"),
+                node("p", "", data.tracks.length ? `找到 ${data.tracks.length} 首可试听歌曲` : (data.message || "没有找到可试听歌曲"))
+            );
+            heading.append(title, node("span", "music-source", data.source || "公开试听源"));
+            card.append(heading);
+            const list = node("div", "music-track-list");
+            data.tracks.slice(0, 8).forEach((track, index) => {
+                const item = node("section", "music-track");
+                const artworkUrl = safeUrl(track.artwork);
+                if (artworkUrl) {
+                    const artwork = node("img", "music-artwork");
+                    artwork.src = artworkUrl;
+                    artwork.alt = `${track.title || "歌曲"}封面`;
+                    artwork.loading = "lazy";
+                    item.append(artwork);
+                } else {
+                    item.append(node("span", "music-artwork music-artwork-fallback", "♫"));
+                }
+                const details = node("div", "music-track-main");
+                details.append(
+                    node("b", "", track.title || `歌曲 ${index + 1}`),
+                    node("small", "", [track.artist, track.album].filter(Boolean).join(" · ") || "未标注歌手")
+                );
+                const previewUrl = safeUrl(track.preview_url || track.url);
+                if (previewUrl) {
+                    const player = node("audio");
+                    player.controls = true;
+                    player.preload = "none";
+                    player.src = previewUrl;
+                    player.addEventListener("play", () => {
+                        document.querySelectorAll("audio").forEach((audio) => {
+                            if (audio !== player && !audio.paused) audio.pause();
+                        });
+                    });
+                    details.append(player);
+                } else {
+                    details.append(node("span", "music-unavailable", "当前曲目没有公开试听片段"));
+                }
+                const actions = node("div", "music-track-actions");
+                [[track.store_url, "歌曲页面"], [track.netease_url, "网易云搜索"]].forEach(([value, label]) => {
+                    const href = safeUrl(value);
+                    if (!href) return;
+                    const link = node("a", "", label);
+                    link.href = href; link.target = "_blank"; link.rel = "noopener noreferrer";
+                    actions.append(link);
+                });
+                details.append(actions);
+                item.append(details);
+                list.append(item);
+            });
+            card.append(list);
+            return card;
+        }
         if (data.title) card.append(node("h4", "", data.title));
         if (type === "image") {
             const source = safeUrl(data.url || data.src);

@@ -23,8 +23,8 @@ class AdminOpinionAlertsHandler(AdminBaseHandler):
         
         self.render_admin(
             "admin/opinion_alerts.html",
-            title="舆情预警 · 瞭望与问数系统",
-            active_menu="opinion_management",
+            title="舆情预警 · 零界",
+            active_menu="opinion_screen",
             alerts=alerts,
             stats=stats,
             pager=pager_context("/admin/opinion/alerts", pager, status=status, risk_level=risk_level, user_id=user_id),
@@ -33,7 +33,12 @@ class AdminOpinionAlertsHandler(AdminBaseHandler):
         )
 
     def _detail(self) -> None:
-        alert_id = integer(self, "id")
+        raw_alert_id = self.get_query_argument("id", "").strip()
+        if not raw_alert_id.isdecimal() or int(raw_alert_id) <= 0:
+            self.set_status(400)
+            self.write("预警 ID 必须是正整数")
+            return
+        alert_id = int(raw_alert_id)
         alert = OpinionSecurityService.get_alert(alert_id)
         if not alert:
             self.write("预警不存在")
@@ -104,8 +109,8 @@ class AdminSensitiveWordsHandler(AdminBaseHandler):
         
         self.render_admin(
             "admin/sensitive_words.html",
-            title="敏感词管理 · 瞭望与问数系统",
-            active_menu="opinion_management",
+            title="敏感词管理 · 零界",
+            active_menu="opinion_screen",
             words=words,
             pager=pager_context("/admin/opinion/words", pager, q=keyword, category=category),
             keyword=keyword,

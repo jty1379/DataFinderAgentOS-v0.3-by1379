@@ -39,6 +39,13 @@
     let voiceEnabled = window.localStorage.getItem("datafinder-voice") === "1";
     const modelAvailable = Array.from(modelSelect.options).some((option) => Boolean(option.value));
 
+    function stripInternalReasoning(value) {
+        return String(value || "")
+            .replace(/<(think|analysis|reasoning)(?:\s[^>]*)?>[\s\S]*?<\/\1\s*>/gi, "")
+            .replace(/<\/?(?:think|analysis|reasoning)(?:\s[^>]*)?>/gi, "")
+            .trim();
+    }
+
     function setConversationActions(enabled) {
         exportButton.disabled = !enabled;
         deleteButton.disabled = !enabled;
@@ -61,7 +68,7 @@
     function speak(text) {
         if (!voiceEnabled || !text || !("speechSynthesis" in window)) return;
         window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(String(text).replace(/[`*_#>-]/g, " ").slice(0, 3000));
+        const utterance = new SpeechSynthesisUtterance(stripInternalReasoning(text).replace(/[`*_#>-]/g, " ").slice(0, 3000));
         utterance.lang = "zh-CN";
         utterance.rate = 1;
         window.speechSynthesis.speak(utterance);
@@ -157,6 +164,20 @@
             form.requestSubmit();
         }
     });
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        if (!command.hidden) {
+            event.preventDefault();
+            event.stopPropagation();
+            setCommandVisible(false);
+            input.focus({preventScroll: true});
+            return;
+        }
+        if (rail.classList.contains("open")) {
+            event.preventDefault();
+            closeRail();
+        }
+    }, true);
 
     function beginMessages() {
         welcome.hidden = true;
@@ -198,7 +219,7 @@
         } else if (message.content_type === "card") {
             content.append(messageCard(message));
         } else {
-            content.append(markdown.render(message.content || ""));
+            content.append(markdown.render(stripInternalReasoning(message.content)));
         }
         if (!temporary && message.metadata) {
             const source = message.metadata.employee || message.metadata.model || "系统服务";
@@ -360,7 +381,7 @@
                 json: {message, conversation_id: conversationId, model_id: request.model_id, employee_id: request.employee_id},
                 onEvent: ({event: eventName, data}) => {
                     if (eventName === "delta") {
-                        reply.content += data.text || "";
+                        reply.content = stripInternalReasoning(reply.content + (data.text || ""));
                         const target = pending.querySelector(".message-content");
                         target.classList.remove("error");
                         target.textContent = reply.content;

@@ -102,6 +102,11 @@
         api.qs("[data-current-task-cancel]", region)?.addEventListener("click", (event) => runTaskAction(event.currentTarget.dataset.currentTaskCancel, "cancel", event.currentTarget));
     }
 
+    function plainText(value) {
+        const parsed = new DOMParser().parseFromString(String(value || ""), "text/html");
+        return (parsed.body.textContent || "").replace(/\s+/g, " ").trim();
+    }
+
     function renderResults(items) {
         state.items = (items || []).slice(0, 100);
         state.selected.clear();
@@ -118,8 +123,8 @@
                 <label class="result-select-control"><input class="result-select" type="checkbox" value="${api.escapeHtml(id)}" data-result-select><span class="visually-hidden">选择结果：${api.escapeHtml(item.title)}</span></label>
                 <span class="result-card-source">${api.escapeHtml(item.source_name || "未知来源")}</span>
                 <h4>${api.escapeHtml(item.title || "未命名结果")}</h4>
-                <p>${api.escapeHtml(item.summary || "该结果暂未提供摘要，请打开原文核对。")}</p>
-                <footer><span>${api.escapeHtml(item.published_at || "时间未知")}</span><a href="${api.escapeHtml(href)}" target="_blank" rel="noopener noreferrer">查看原文<i class="layui-icon layui-icon-right"></i></a></footer>
+                <p>${api.escapeHtml(plainText(item.summary) || "该结果暂未提供摘要，请打开原文核对。")}</p>
+                <footer>${item.published_at ? `<span>${api.escapeHtml(item.published_at)}</span>` : ""}<a href="${api.escapeHtml(href)}" target="_blank" rel="noopener noreferrer">查看原文<i class="layui-icon layui-icon-right"></i></a></footer>
             </article>`;
         }).join("")}</div>`;
         resultCount.textContent = `${state.items.length} 条结果`;

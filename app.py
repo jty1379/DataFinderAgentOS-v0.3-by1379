@@ -1,4 +1,4 @@
-"""瞭望与问数系统 v0.3 的 Tornado 应用入口。"""
+"""零界 v0.3 的 Tornado 应用入口。"""
 
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ from app.controllers.admin import (
     AdminSettingsHandler,
     AdminUsersHandler,
 )
-from app.controllers.admin.audit import AdminAuditLogsHandler
 from app.controllers.admin.opinion import (
     AdminOpinionAlertsHandler,
     AdminSensitiveWordsHandler,
@@ -48,8 +47,6 @@ from app.controllers.dashboard import (
     OpinionScreenHandler,
 )
 from app.controllers.digital_employee import (
-    AdminDigitalEmployeeHealthHandler,
-    AdminDigitalEmployeeLogsHandler,
     AdminDigitalEmployeePreviewHandler,
     AdminDigitalEmployeesHandler,
 )
@@ -176,8 +173,6 @@ def make_app() -> tornado.web.Application:
             (r"/admin/screens/opinion", OpinionScreenHandler),
             (r"/api/admin/screens/opinion", OpinionScreenApiHandler),
             (r"/api/admin/opinion/alerts/([0-9]+)", OpinionAlertActionHandler),
-            (r"/admin/agents/health", AdminDigitalEmployeeHealthHandler),
-            (r"/admin/agents/logs", AdminDigitalEmployeeLogsHandler),
             (r"/admin/modules/agents", tornado.web.RedirectHandler, {"url": "/admin/agents", "permanent": True}),
             (r"/admin/interfaces", AdminInterfacesHandler),
             (r"/admin/interfaces/test", AdminInterfaceTestHandler),
@@ -205,7 +200,6 @@ def make_app() -> tornado.web.Application:
             (r"/admin/messages", AdminMessagesHandler),
             (r"/admin/opinion/alerts", AdminOpinionAlertsHandler),
             (r"/admin/opinion/words", AdminSensitiveWordsHandler),
-            (r"/admin/audit/logs", AdminAuditLogsHandler),
         ],
         template_path=str(BASE_DIR / "app" / "templates"),
         static_path=str(BASE_DIR / "app" / "static"),

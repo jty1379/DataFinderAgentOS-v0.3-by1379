@@ -113,7 +113,7 @@
         const title = api.qs("[data-deep-result-title]");
         const meta = api.qs("[data-deep-result-meta]");
         const content = api.qs("[data-deep-result-content]");
-        title.textContent = "深度采集数据"; meta.textContent = "正在读取持久化结果"; content.innerHTML = "<p>正在加载…</p>";
+        title.textContent = "网页正文"; meta.textContent = "正在读取已保存的公开原文"; content.innerHTML = "<p>正在加载…</p>";
         resultDialog.showModal();
         try {
             const data = await api.fetchJson(`/admin/warehouse/deep-results/${button.dataset.deepResult}`, {method: "GET"});

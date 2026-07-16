@@ -101,16 +101,14 @@ class UserChatService:
             assistant_message_id = ConversationRepository.add_message(
                 conversation_id, "assistant", result["answer"], result["content_type"], metadata
             )
-            if employee:
-                # DigitalEmployeeService 已按 employee 来源完成持久化；消息仍保留同一风险结果。
-                assistant_security = metadata.get("security") or {
-                    "risk_level": "low", "matched_words": []
-                }
-            else:
-                assistant_security = OpinionSecurityService.analyze_and_record(
-                    "chat", assistant_message_id, result["answer"], user_id,
-                    {"conversation_id": conversation_id, "role": "assistant"},
-                )
+            assistant_security = OpinionSecurityService.analyze_and_record(
+                "chat", assistant_message_id, result["answer"], user_id,
+                {
+                    "conversation_id": conversation_id,
+                    "role": "assistant",
+                    "employee_id": employee["id"] if employee else None,
+                },
+            )
             ConversationRepository.update_message_security(assistant_message_id, assistant_security)
             return {
                 "ok": True,

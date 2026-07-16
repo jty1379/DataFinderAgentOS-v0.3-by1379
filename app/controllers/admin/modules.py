@@ -35,7 +35,7 @@ class AdminModuleHandler(AdminBaseHandler):
             raise tornado.web.HTTPError(403)
         self.render_admin(
             "admin/module.html",
-            title=f"{title} · 瞭望与问数系统",
+            title=f"{title} · 零界",
             active_menu=code,
             module_title=title,
             module_note=note,

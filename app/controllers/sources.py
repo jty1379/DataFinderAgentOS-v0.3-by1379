@@ -91,7 +91,7 @@ class AdminSourcesHandler(AdminBaseHandler):
             )
         self.render_admin(
             "admin/sources.html",
-            title="瞭源管理 · 瞭望与问数系统",
+            title="瞭源管理 · 零界",
             active_menu="collection_management",
             sources=sources,
             rules=rules,

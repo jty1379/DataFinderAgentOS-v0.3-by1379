@@ -7,6 +7,10 @@
 .status-evidence .source-list { margin-top:12px; }
 .task-status.failed { color:#ff9cae;background:rgba(180,53,75,.12); }
 .chart-data-table { margin-top:8px;color:#8fa9c2;font-size:10px; }.chart-data-table summary{min-height:32px;cursor:pointer}.chart-data-table table{width:100%;border-collapse:collapse}.chart-data-table th,.chart-data-table td{padding:6px;border:1px solid #244968;text-align:left}.chart-data-table th{color:#b8d5e9;background:#0a1f32}
+.trend-legend { min-height:32px; margin:0 0 2px; display:flex; align-items:center; gap:8px; }
+.trend-legend span { min-height:28px; padding:5px 9px; display:inline-flex; align-items:center; gap:7px; color:#b8d5e9; border:1px solid #294f6c; border-radius:5px; background:#0a2033; font-size:10px; font-weight:600; }
+.trend-legend i { width:22px; height:2px; display:block; background:#5ba5d9; }
+.trend-legend .collection i { background:repeating-linear-gradient(90deg,#d7a04c 0 6px,transparent 6px 10px); }
 .model-error-card li i.layui-icon-error { color:#ff9cae; }
 @media(max-width:1380px){.evidence-metric-grid{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:760px){.evidence-metric-grid{grid-template-columns:repeat(2,1fr)}}

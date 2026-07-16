@@ -24,7 +24,7 @@ class AdminMenusHandler(AdminBaseHandler):
             selected = next(item for item in roles if item["id"] == preview_role_id)
         self.render_admin(
             "admin/menus.html",
-            title="菜单管理 · 瞭望与问数系统",
+            title="菜单管理 · 零界",
             active_menu="menu_management",
             menus=menus,
             available_features=available,

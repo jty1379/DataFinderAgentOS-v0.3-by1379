@@ -65,7 +65,7 @@ class AdminInterfacesHandler(AdminBaseHandler):
             )
         self.render_admin(
             "admin/interfaces.html",
-            title="接口管理 · 瞭望与问数系统",
+            title="接口管理 · 零界",
             active_menu="interface_management",
             interfaces=interfaces,
             keyword=keyword,

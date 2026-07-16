@@ -6,6 +6,15 @@ import sqlite3
 
 from app.models.db import connection_scope
 
+MENU_GROUP_META = {
+    "控制台": {"code": "01"},
+    "权限与系统": {"code": "02"},
+    "瞭望与数据": {"code": "03"},
+    "模型与问数": {"code": "04"},
+    "数智监管": {"code": "05"},
+    "安全审计": {"code": "06"},
+}
+
 
 def _dict(row):
     return dict(row) if row is not None else None
@@ -123,9 +132,16 @@ class MenuRepository:
 
     @staticmethod
     def grouped_for_role(role_id: int) -> list[dict]:
-        groups: list[dict] = []
+        """按任务域稳定分组，同名类别只出现一次。"""
+        groups: dict[str, dict] = {}
         for item in MenuRepository.list_for_role(role_id):
-            if not groups or groups[-1]["category"] != item["category"]:
-                groups.append({"category": item["category"], "items": []})
-            groups[-1]["items"].append(item)
-        return groups
+            category = item["category"]
+            if category not in groups:
+                meta = MENU_GROUP_META.get(category, {"code": "--"})
+                groups[category] = {
+                    "category": category,
+                    "code": meta["code"],
+                    "items": [],
+                }
+            groups[category]["items"].append(item)
+        return list(groups.values())

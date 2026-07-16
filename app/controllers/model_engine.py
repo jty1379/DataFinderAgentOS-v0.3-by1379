@@ -83,7 +83,7 @@ class AdminModelsHandler(AdminBaseHandler):
             model.setdefault("last_used_at", "")
         self.render_admin(
             "admin/models.html",
-            title="模型引擎 · 瞭望与问数系统",
+            title="模型引擎 · 零界",
             active_menu="model_engine",
             models=models,
             model_types=MODEL_TYPES,
@@ -113,6 +113,10 @@ class AdminModelsHandler(AdminBaseHandler):
                 max_tokens = _integer(self, "max_tokens", 1024)
                 context_messages = _integer(self, "context_messages", 8)
                 enabled = self.get_body_argument("enabled", "1") == "1"
+                vision_enabled = self.get_body_argument("vision_enabled", "0") == "1"
+                tts_enabled = self.get_body_argument("tts_enabled", "0") == "1"
+                image_enabled = self.get_body_argument("image_enabled", "0") == "1"
+                video_enabled = self.get_body_argument("video_enabled", "0") == "1"
                 if not 2 <= len(name) <= 60 or not 1 <= len(model_name) <= 120:
                     raise ValueError("显示名称或模型标识长度不正确")
                 if not 2 <= len(provider) <= 60 or model_type not in MODEL_TYPE_CODES:
@@ -139,6 +143,17 @@ class AdminModelsHandler(AdminBaseHandler):
                     max_tokens=max_tokens,
                     context_messages=context_messages,
                     enabled=enabled,
+                    vision_enabled=vision_enabled,
+                    tts_enabled=tts_enabled,
+                    tts_model=self.get_body_argument("tts_model", "").strip(),
+                    tts_voice=self.get_body_argument("tts_voice", "").strip(),
+                    tts_base_url=self.get_body_argument("tts_base_url", "").strip(),
+                    image_enabled=image_enabled,
+                    image_model=self.get_body_argument("image_model", "").strip(),
+                    image_base_url=self.get_body_argument("image_base_url", "").strip(),
+                    video_enabled=video_enabled,
+                    video_model=self.get_body_argument("video_model", "").strip(),
+                    video_base_url=self.get_body_argument("video_base_url", "").strip(),
                 )
                 if model_id:
                     result = ModelRepository.update(model_id=model_id, **values)

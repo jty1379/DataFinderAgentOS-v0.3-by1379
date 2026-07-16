@@ -33,21 +33,12 @@
         canvas.height = height * ratio;
         const context = canvas.getContext("2d");
         context.scale(ratio, ratio);
-        const pad = {left: 42, right: 20, top: 34, bottom: 42};
+        const pad = {left: 42, right: 20, top: 18, bottom: 42};
         const chartWidth = width - pad.left - pad.right;
         const chartHeight = height - pad.top - pad.bottom;
         const values = [...queryTrend, ...collectionTrend].map((item) => Number(item.value || 0));
         const maximum = Math.max(1, ...values);
         context.font = '11px "Microsoft YaHei"';
-        context.fillStyle = "#8fa9c2";
-        context.fillText("新增会话", pad.left, 16);
-        context.strokeStyle = "#5ba5d9";
-        context.beginPath(); context.moveTo(pad.left + 58, 12); context.lineTo(pad.left + 82, 12); context.stroke();
-        context.fillText("采集结果", pad.left + 104, 16);
-        context.strokeStyle = "#d7a04c";
-        context.setLineDash([6, 5]);
-        context.beginPath(); context.moveTo(pad.left + 164, 12); context.lineTo(pad.left + 188, 12); context.stroke();
-        context.setLineDash([]);
         for (let index = 0; index <= 4; index += 1) {
             const y = pad.top + chartHeight * index / 4;
             context.strokeStyle = "rgba(143,169,194,.18)";

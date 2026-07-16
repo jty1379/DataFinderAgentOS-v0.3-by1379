@@ -57,7 +57,7 @@ class AdminLookoutHandler(AdminBaseHandler):
             run["status_text"] = status_text.get(run["status"], run["status"])
         self.render_admin(
             "admin/lookout.html",
-            title="瞭望采集 · 瞭望与问数系统",
+            title="瞭望采集 · 零界",
             active_menu="lookout_management",
             available_rules=available_rules,
             recent_runs=recent_runs,

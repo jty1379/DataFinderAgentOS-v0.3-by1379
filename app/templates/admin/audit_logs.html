@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ title }}{% end %}
 {% block admin_content %}
-<section class="v02-page-head"><div><span class="v02-eyebrow">系统内操作留痕</span><h2>操作审计日志</h2><p>记录管理端写操作的操作者、资源、结果和请求编号；外部代码扫描由 MonkeyScan 独立完成。</p></div></section>
+<section class="v02-page-head"><div><span class="v02-eyebrow">系统内操作留痕</span><h2>操作审计日志</h2><p>按操作者、资源和结果查询管理端操作记录。</p></div></section>
 <section class="v02-panel">
   <form class="v02-filter-grid" action="/admin/audit/logs" method="get">
     <label class="v02-field"><span>操作类型</span><select class="v02-select" name="action_type"><option value="">全部</option>{% for at in action_types %}<option value="{{ at }}" {% if selected_action == at %}selected{% end %}>{{ at }}</option>{% end %}</select></label>
@@ -13,7 +13,7 @@
     <div class="v02-filter-actions"><button class="v02-button" type="submit">查询</button><a class="v02-button-secondary" href="/admin/audit/logs">重置</a></div>
   </form>
 </section>
-<section class="v02-panel"><header class="v02-panel-header"><div><h3>审计记录</h3><p>日志不保存密码、Token、密钥或完整请求体</p></div><span class="v02-count">{{ pager['total'] }} 条</span></header>
+<section class="v02-panel"><header class="v02-panel-header"><div><h3>审计记录</h3><p>按发生时间倒序展示</p></div><span class="v02-count">{{ pager['total'] }} 条</span></header>
   <div class="v02-table-wrap"><table class="v02-table"><thead><tr><th>ID / 时间</th><th>动作</th><th>资源</th><th>操作者</th><th>请求来源</th><th>结果</th><th>详情</th></tr></thead><tbody>
   {% for log in logs %}<tr><td><div class="v02-cell-title"><b>#{{ log['id'] }}</b><small>{{ log['created_at'] }}</small></div></td><td><span class="v02-status {{ 'error' if log['action_type']=='delete' else 'enabled' }}">{{ log['action_type'] }}</span></td><td><div class="v02-cell-title"><b>{{ log['resource_type'] }}</b><small>ID {{ log['resource_id'] or '-' }}</small></div></td><td><div class="v02-cell-title"><b>{{ log['user_name'] or '-' }}</b><small>用户 {{ log['user_id'] or '-' }}</small></div></td><td>{{ log['ip_address'] or '-' }}</td><td><span class="v02-status {{ 'enabled' if log['success'] else 'error' }}">{{ '成功' if log['success'] else '失败' }}</span></td><td><small>{{ log['detail'] or '-' }}{% if log['error_message'] %}<br>{{ log['error_message'] }}{% end %}</small></td></tr>{% end %}
   {% if not logs %}<tr><td colspan="7">没有符合条件的审计记录</td></tr>{% end %}

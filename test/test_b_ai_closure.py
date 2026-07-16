@@ -142,9 +142,13 @@ class TestAIRuntimeClosure(unittest.TestCase):
             asyncio.run(
                 DigitalEmployeeService.execute(analyst["id"], "drop table users", None)
             )
-        self.assertFalse(
-            DigitalEmployeeRepository.list_call_logs(analyst["id"], 1)[0]["success"]
-        )
+        with db.connection_scope() as connection:
+            latest = connection.execute(
+                """SELECT success FROM employee_call_logs
+                   WHERE employee_id=? ORDER BY id DESC LIMIT 1""",
+                (analyst["id"],),
+            ).fetchone()
+        self.assertFalse(bool(latest["success"]))
 
     def test_tts_uses_database_config_and_records_cache(self):
         TTSConfigRepository.update_config(
@@ -210,6 +214,87 @@ class TestAIRuntimeClosure(unittest.TestCase):
         self.assertEqual(failed["status"], "failed")
         self.assertIn("未配置/不可用", failed["error_message"])
         self.assertEqual(MultimodalTaskRepository.stats()["total_calls"], 2)
+
+    def test_minimax_tts_and_image_generation_protocols(self):
+        captured = {}
+
+        async def fake_tts_fetch(request, raise_error=False):
+            del raise_error
+            captured["tts_url"] = request.url
+            captured["tts_payload"] = json.loads(request.body)
+            request.streaming_callback(
+                json.dumps(
+                    {
+                        "data": {"audio": b"ID3-audio".hex(), "status": 2},
+                        "base_resp": {"status_code": 0, "status_msg": "success"},
+                    }
+                ).encode()
+            )
+            return SimpleNamespace(code=200)
+
+        tts_config = {
+            "provider": "minimax",
+            "api_key_env": "TEST_MINIMAX_KEY",
+            "base_url": "https://api.minimaxi.com/v1",
+            "rate": 0,
+            "volume": 0,
+            "pitch": 0,
+        }
+        with (
+            patch.dict(os.environ, {"TEST_MINIMAX_KEY": "secret-value"}),
+            patch(
+                "app.services.tts.AsyncHTTPClient",
+                return_value=SimpleNamespace(fetch=fake_tts_fetch),
+            ),
+        ):
+            audio = asyncio.run(
+                TTSService._minimax_tts("协议测试", "male-qn-qingse", tts_config)
+            )
+        self.assertEqual(audio, b"ID3-audio")
+        self.assertEqual(captured["tts_url"], "https://api.minimaxi.com/v1/t2a_v2")
+        self.assertEqual(captured["tts_payload"]["model"], "speech-2.8-hd")
+
+        MultimodalConfigRepository.update_config(
+            {
+                "enabled": True,
+                "provider": "minimax",
+                "api_key_env": "TEST_MINIMAX_KEY",
+                "base_url": "https://api.minimaxi.com/v1",
+                "image_model": "image-01",
+                "default_image_size": "1024x1024",
+            }
+        )
+        with patch.object(MultimodalService, "schedule"):
+            image_task = MultimodalService.submit("image", "蓝色政务数据图标")
+
+        async def fake_image_fetch(request, raise_error=False):
+            del raise_error
+            captured["image_url"] = request.url
+            captured["image_payload"] = json.loads(request.body)
+            request.streaming_callback(
+                json.dumps(
+                    {
+                        "id": "minimax-image-1",
+                        "data": {"image_urls": ["https://cdn.example.com/minimax.png"]},
+                        "base_resp": {"status_code": 0, "status_msg": "success"},
+                    }
+                ).encode()
+            )
+            return SimpleNamespace(code=200)
+
+        with (
+            patch.dict(os.environ, {"TEST_MINIMAX_KEY": "secret-value"}),
+            patch("app.services.multimodal._validate_public_url", AsyncMock()),
+            patch(
+                "app.services.multimodal.AsyncHTTPClient",
+                return_value=SimpleNamespace(fetch=fake_image_fetch),
+            ),
+        ):
+            completed = asyncio.run(MultimodalService.run(image_task["task_id"]))
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual(captured["image_url"], "https://api.minimaxi.com/v1/image_generation")
+        self.assertEqual(captured["image_payload"]["model"], "image-01")
+        self.assertEqual(completed["resource_url"], "https://cdn.example.com/minimax.png")
 
     def test_secret_fields_accept_environment_names_only(self):
         with self.assertRaises(ValueError):

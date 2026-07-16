@@ -82,6 +82,14 @@
             if (event.target === dialog) dialog.close();
         });
     });
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        const openDialogs = qsa("dialog[open]");
+        if (!openDialogs.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openDialogs[openDialogs.length - 1].close();
+    }, true);
     qsa("form[data-confirm]").forEach((form) => {
         form.addEventListener("submit", (event) => {
             if (!window.confirm(form.dataset.confirm)) event.preventDefault();

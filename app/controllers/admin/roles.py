@@ -27,7 +27,7 @@ class AdminRolesHandler(AdminBaseHandler):
         tree = layui_feature_tree(FeatureRepository.tree_features())
         self.render_admin(
             "admin/roles.html",
-            title="角色管理 · 瞭望与问数系统",
+            title="角色管理 · 零界",
             active_menu="role_management",
             roles=roles,
             features=FeatureRepository.list_features(),

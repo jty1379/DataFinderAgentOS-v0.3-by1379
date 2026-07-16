@@ -14,13 +14,13 @@
     </div>
 
     <article class="v02-panel">
-        <header class="v02-panel-header"><div><h3>服务配置</h3><p>密钥仅保存环境变量名；地址和模型均不提供不可验证的默认值</p></div></header>
+        <header class="v02-panel-header"><div><h3>服务配置</h3><p>配置图片生成服务、模型与默认输出规格</p></div></header>
         <form class="v02-panel-body multimodal-form-grid" method="post" action="/admin/multimodal/config">
             {% raw xsrf_form_html() %}
             <label class="v02-field"><span>运行状态</span><select class="v02-select" name="enabled"><option value="1" {% if config['enabled'] %}selected{% end %}>启用</option><option value="0" {% if not config['enabled'] %}selected{% end %}>停用</option></select></label>
-            <label class="v02-field"><span>协议</span><select class="v02-select" name="provider">{% for value,label in provider_options %}<option value="{{ value }}" selected>{{ label }}</option>{% end %}</select></label>
+            <label class="v02-field"><span>协议</span><select class="v02-select" name="provider">{% for value,label in provider_options %}<option value="{{ value }}" {% if config['provider'] == value %}selected{% end %}>{{ label }}</option>{% end %}</select></label>
             <label class="v02-field"><span>默认尺寸</span><select class="v02-select" name="default_image_size">{% for value,label in image_sizes %}<option value="{{ value }}" {% if config['default_image_size'] == value %}selected{% end %}>{{ label }}</option>{% end %}</select></label>
-            <label class="v02-field full"><span>服务基础地址</span><input class="v02-input" type="url" name="base_url" value="{{ config['base_url'] }}" placeholder="https://provider.example.com/v1"><small>系统将请求 <code>/images/generations</code>；必须使用公网 HTTPS。</small></label>
+            <label class="v02-field full"><span>服务基础地址</span><input class="v02-input" type="url" name="base_url" value="{{ config['base_url'] }}" placeholder="https://api.minimaxi.com/v1"><small>MiniMax 将请求 <code>/image_generation</code>；其他兼容服务请求 <code>/images/generations</code>。</small></label>
             <label class="v02-field"><span>图片模型</span><input class="v02-input" name="image_model" value="{{ config['image_model'] }}" placeholder="由服务商提供的模型名"></label>
             <label class="v02-field"><span>API Key 环境变量</span><input class="v02-input" name="api_key_env" value="{{ config['api_key_env'] }}" placeholder="MULTIMODAL_API_KEY"></label>
             <label class="v02-field"><span>API Secret 环境变量</span><input class="v02-input" name="api_secret_env" value="{{ config['api_secret_env'] }}" placeholder="可选"></label>

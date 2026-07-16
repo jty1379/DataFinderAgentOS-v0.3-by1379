@@ -24,7 +24,7 @@ class AdminUsersHandler(AdminBaseHandler):
         users, pager = UserRepository.paginate_users(keyword, role_id, status, query_page(self), 20)
         self.render_admin(
             "admin/users.html",
-            title="用户管理 · 瞭望与问数系统",
+            title="用户管理 · 零界",
             active_menu="user_management",
             users=users,
             roles=RoleRepository.list_roles(),

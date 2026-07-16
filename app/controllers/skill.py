@@ -52,7 +52,7 @@ class AdminSkillsHandler(AdminBaseHandler):
             )
         self.render_admin(
             "admin/skills.html",
-            title="技能管理 · 瞭望与问数系统",
+            title="技能管理 · 零界",
             active_menu="skill_management",
             skills=skills,
             keyword=keyword,

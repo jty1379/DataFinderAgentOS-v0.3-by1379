@@ -37,6 +37,8 @@ a { color: inherit; text-decoration: none; }
 .auth-visual { position: relative; min-height: 100vh; padding: 48px 7vw; display: flex; flex-direction: column; justify-content: space-between; isolation: isolate; }
 .brand-lockup { display: inline-flex; align-items: center; gap: 13px; z-index: 2; }
 .brand-mark { width: 42px; height: 42px; display: inline-grid; place-items: center; flex: 0 0 auto; border: 1px solid #4b8fca; border-radius: 8px; color: #fff; background: #367bb7; font-size: 20px; font-weight: 900; }
+.brand-logo { width: 44px; height: 44px; flex: 0 0 auto; object-fit: contain; }
+.brand-logo-sm { width: 34px; height: 34px; }
 .brand-lockup strong { display: block; font-size: 17px; letter-spacing: .06em; }
 .brand-lockup small { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; letter-spacing: .22em; }
 .auth-copy { position: relative; z-index: 2; max-width: 620px; margin: auto 0; }
@@ -52,6 +54,7 @@ a { color: inherit; text-decoration: none; }
 .auth-muted { margin: 0 0 27px; color: var(--muted); font-size: 13px; }
 .mobile-brand { display: none; align-items: center; gap: 10px; margin-bottom: 30px; font-weight: 700; }
 .mobile-brand .brand-mark { width: 34px; height: 34px; font-size: 15px; }
+.mobile-brand .brand-logo { width: 34px; height: 34px; }
 .notice { margin: 0 0 18px; padding: 11px 13px; border-radius: 10px; font-size: 13px; }
 .notice.error { color: #fecdd3; border: 1px solid rgba(251, 113, 133, .3); background: rgba(136, 19, 55, .18); }
 .notice.success { color: #a7f3d0; border: 1px solid rgba(52, 211, 153, .3); background: rgba(6, 95, 70, .18); }

@@ -67,7 +67,7 @@
             const payload = await app.request(`/admin/multimodal/tasks${filter ? `?type=${filter}` : ""}`, {method: "GET"});
             list.innerHTML = payload.data.length ? payload.data.map((task) => `
                 <article class="multimodal-task-item">
-                    <div><b>${app.escapeHtml(task.prompt)}</b><small>${app.escapeHtml(task.task_type === "image" ? "图片" : "视频")} · ${app.escapeHtml(task.created_at)}</small></div>
+                    <div><b>${app.escapeHtml(task.display_prompt || task.prompt || `生成任务 #${task.id}`)}</b><small>${app.escapeHtml(task.task_type === "image" ? "图片" : "视频")} · ${app.escapeHtml(task.created_at)}</small></div>
                     <span class="v02-status ${task.status === "completed" ? "enabled" : task.status === "failed" ? "error" : "warning"}">${statusText[task.status] || app.escapeHtml(task.status)}</span>
                     <small>${task.status === "failed" ? app.escapeHtml(task.error_message) : `${Number(task.latency_ms || 0)} ms`}</small>
                     <button class="v02-row-action danger" type="button" data-mm-delete="${task.task_id}">删除</button>

@@ -12,9 +12,19 @@
     const remove = dialog.querySelector("[data-face-delete]");
     let stream = null;
     let mode = "";
+    let gestureLoopActive = false;
+    let gestureLoopToken = 0;
+    let requestRunning = false;
 
     function message(text, level = "") { status.textContent = text; status.className = `biometric-status ${level}`; }
-    function stopCamera() { if (stream) stream.getTracks().forEach((track) => track.stop()); stream = null; video.srcObject = null; }
+    function wait(ms) { return new Promise((resolve) => window.setTimeout(resolve, ms)); }
+    function stopCamera() {
+        gestureLoopActive = false;
+        gestureLoopToken += 1;
+        if (stream) stream.getTracks().forEach((track) => track.stop());
+        stream = null;
+        video.srcObject = null;
+    }
     async function startCamera() {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error("当前浏览器不支持摄像头访问");
         stopCamera();
@@ -22,15 +32,15 @@
         video.srcObject = stream;
         await video.play();
     }
-    async function frames(count) {
+    async function frames(count, quiet = false) {
         const output = [];
         canvas.width = 480; canvas.height = 360;
         const context = canvas.getContext("2d", {alpha: false});
         for (let index = 0; index < count; index += 1) {
-            message(`正在采集第 ${index + 1} / ${count} 帧，请保持在取景框内…`);
+            if (!quiet) message(`正在采集第 ${index + 1} / ${count} 帧，请保持在取景框内…`);
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             output.push(canvas.toDataURL("image/jpeg", .78));
-            await new Promise((resolve) => setTimeout(resolve, 260));
+            await wait(quiet ? 170 : 260);
         }
         return output;
     }
@@ -42,16 +52,60 @@
         if (passwordWrap) passwordWrap.hidden = mode !== "enroll";
         if (remove) remove.hidden = mode !== "enroll";
         if (title) title.textContent = mode === "gesture" ? "手势快捷调度" : "管理我的人脸登录";
-        if (kicker) kicker.textContent = mode === "gesture" ? "MediaPipe · 多帧确认" : "指定账号 · 活体校验";
-        if (hint) hint.textContent = mode === "gesture" ? "胜利=天气 · 握拳=音乐 · 张开手掌=新闻" : "请正对镜头，并轻微转头或眨眼";
-        capture.textContent = mode === "gesture" ? "识别手势" : mode === "enroll" ? "录入 / 重新录入" : "开始验证";
+        if (kicker) kicker.textContent = mode === "gesture" ? "自动取帧 · 连续识别" : "指定账号 · 活体校验";
+        if (hint) hint.textContent = mode === "gesture" ? "胜利=天气 · 握拳=音乐 · 张开手掌=新闻；无需点击识别" : "请正对镜头，并轻微转头或眨眼";
+        capture.textContent = mode === "gesture" ? (gestureLoopActive ? "暂停自动识别" : "继续自动识别") : mode === "enroll" ? "录入 / 重新录入" : "开始验证";
+    }
+    function applyGesture(result) {
+        const input = document.querySelector("[data-question-input]");
+        const employee = result.employee_id ? document.querySelector(`[data-employee-id="${result.employee_id}"]`) : null;
+        employee?.click();
+        if (input) {
+            input.value = result.prompt;
+            input.dispatchEvent(new Event("input", {bubbles: true}));
+            input.focus();
+        }
+        app.announce(`${result.label}已写入输入框（置信度 ${Math.round(Number(result.confidence || 0) * 100)}%）`, "success");
+        gestureLoopActive = false;
+        window.setTimeout(() => dialog.close(), 650);
+    }
+    async function gestureLoop() {
+        if (!stream || requestRunning) return;
+        gestureLoopActive = true;
+        configure("gesture");
+        const token = ++gestureLoopToken;
+        message("自动识别中，请在镜头前保持手势约 1 秒…");
+        while (gestureLoopActive && stream && token === gestureLoopToken && dialog.open) {
+            requestRunning = true;
+            try {
+                const result = await app.request("/api/gestures/recognize", {method: "POST", json: {frames: await frames(5, true)}, timeoutMs: 60000});
+                if (result.prompt) { message(`${result.label || "手势"}识别成功`, "success"); applyGesture(result); break; }
+            } catch (error) {
+                message(`${app.errorMessage(error)}；仍在继续识别`, "");
+            } finally {
+                requestRunning = false;
+            }
+            await wait(650);
+        }
+        configure("gesture");
     }
     async function open(nextMode) {
-        configure(nextMode); message("正在申请摄像头权限…"); dialog.showModal();
-        try { await startCamera(); message("摄像头已开启，画面不会保存为原始照片。"); }
-        catch (error) { message(error.message || "无法开启摄像头", "error"); }
+        configure(nextMode);
+        message("正在申请摄像头权限…");
+        dialog.showModal();
+        try {
+            await startCamera();
+            message(nextMode === "gesture" ? "摄像头已开启，正在自动识别手势…" : "摄像头已开启，画面不会保存为原始照片。");
+            if (nextMode === "gesture") gestureLoop();
+        } catch (error) { message(error.message || "无法开启摄像头", "error"); }
     }
     async function submit() {
+        if (mode === "gesture") {
+            if (!stream) return message("请先允许摄像头权限", "error");
+            gestureLoopActive = !gestureLoopActive;
+            if (gestureLoopActive) gestureLoop(); else { gestureLoopToken += 1; message("自动识别已暂停"); configure("gesture"); }
+            return;
+        }
         if (!stream) return message("请先允许摄像头权限", "error");
         app.setBusy(capture, true, "多帧校验中…");
         try {
@@ -59,25 +113,17 @@
             let endpoint = "/api/auth/face-login";
             let payload = {frames: captured, username: document.querySelector("#username")?.value.trim() || ""};
             if (mode === "enroll") { endpoint = "/api/profile/face"; payload = {frames: captured, password: password.value}; }
-            if (mode === "gesture") { endpoint = "/api/gestures/recognize"; payload = {frames: captured}; }
             const result = await app.request(endpoint, {method: "POST", json: payload, timeoutMs: 60000});
-            message(result.message || `${result.label || "验证"}已完成`, "success");
+            message(result.message || "验证已完成", "success");
             if (result.redirect) window.location.assign(result.redirect);
-            if (mode === "gesture" && result.prompt) {
-                const input = document.querySelector("[data-question-input]");
-                const employee = result.employee_id ? document.querySelector(`[data-employee-id="${result.employee_id}"]`) : null;
-                employee?.click();
-                input.value = result.prompt; input.dispatchEvent(new Event("input", {bubbles: true})); input.focus();
-                app.announce(`${result.label}已写入输入框（置信度 ${Math.round(result.confidence * 100)}%）`, "success");
-                setTimeout(() => dialog.close(), 800);
-            }
             if (mode === "enroll") { password.value = ""; app.announce(result.message, "success"); }
         } catch (error) { message(app.errorMessage(error), "error"); }
         finally { app.setBusy(capture, false); configure(mode); }
     }
     document.querySelectorAll("[data-biometric-open]").forEach((button) => button.addEventListener("click", () => open(button.dataset.biometricOpen)));
     dialog.querySelectorAll("[data-biometric-close]").forEach((button) => button.addEventListener("click", () => dialog.close()));
-    dialog.addEventListener("close", stopCamera); capture.addEventListener("click", submit);
+    dialog.addEventListener("close", stopCamera);
+    capture.addEventListener("click", submit);
     remove?.addEventListener("click", async () => {
         if (!window.confirm("确认删除你的人脸档案？删除后仍可使用密码登录。")) return;
         try { const result = await app.request("/api/profile/face", {method: "DELETE"}); message(result.message, "success"); app.announce(result.message, "success"); }

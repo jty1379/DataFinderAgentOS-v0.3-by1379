@@ -385,7 +385,7 @@ class RuleRepository:
             raise ValueError("分页起点或步长无效")
         if not 1 <= result["page_size"] <= 100:
             raise ValueError("每页条数需为 1—100")
-        if result["parser_type"] not in {"baidu_news", "generic_links"}:
+        if result["parser_type"] not in {"baidu_news", "generic_links", "bing_news", "chinanews"}:
             raise ValueError("不支持的解析器类型")
         fixed = values.get(
             "fixed_params", values.get("params_json", current.get("fixed_params", {}))

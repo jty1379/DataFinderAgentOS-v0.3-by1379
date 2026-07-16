@@ -7,11 +7,28 @@ import sqlite3
 from urllib.parse import urlsplit
 
 from app.models.db import connection_scope
+from app.models.model_engine import ModelRepository
 
 
 class TTSConfigRepository:
     @staticmethod
     def get_config() -> dict:
+        model = ModelRepository.get_for_capability("tts")
+        if model:
+            provider_text = f"{model.get('provider', '')} {model.get('model_name', '')}".lower()
+            return {
+                "enabled": True,
+                "provider": "minimax" if "minimax" in provider_text else "openai_compatible",
+                "default_voice": model.get("tts_voice") or "male-qn-qingse",
+                "api_key_env": model.get("api_key_env") or "",
+                "api_secret_env": "",
+                "base_url": model.get("tts_base_url") or model.get("base_url") or "",
+                "tts_model": model.get("tts_model") or "",
+                "model_id": model.get("id"),
+                "rate": 0,
+                "volume": 0,
+                "pitch": 0,
+            }
         with connection_scope() as connection:
             row = connection.execute(
                 "SELECT * FROM tts_config WHERE id = 1"
@@ -39,7 +56,7 @@ class TTSConfigRepository:
             else bool(raw_enabled)
         )
         provider = str(values.get("provider", "volcengine")).lower()
-        if provider not in {"volcengine", "aliyun", "local"}:
+        if provider not in {"minimax", "volcengine", "aliyun", "local"}:
             raise ValueError("不支持的 TTS 提供商")
         default_voice = str(values.get("default_voice", "zh_female")).strip()
         api_key_env = str(values.get("api_key_env", "")).strip()

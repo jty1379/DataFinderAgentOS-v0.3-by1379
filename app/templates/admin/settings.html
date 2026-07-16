@@ -2,31 +2,71 @@
 {% block title %}{{ title }}{% end %}
 {% block admin_content %}
 <section class="v02-page settings-page">
-  <header class="v02-heading"><div><p class="section-kicker">运行参数</p><h2>系统设置</h2><p>保存前执行类型与范围校验；修改结果写入操作审计并由业务代码即时读取。</p></div></header>
-  <form method="post" action="/admin/settings" class="settings-form">{% raw xsrf_form_html() %}<input type="hidden" name="action" value="batch_update">
-    <article class="v02-panel"><header class="v02-panel-header"><div><h3>品牌与首页</h3><p>用户侧和管理侧共用的基础信息</p></div></header><div class="settings-grid">
-      <label class="v02-field"><span>系统名称</span><input class="v02-input" name="setting_system_name" value="{{ settings.get('system_name','') }}" maxlength="100" required></label>
-      <label class="v02-field"><span>Logo 地址</span><input class="v02-input" name="setting_system_logo" value="{{ settings.get('system_logo','') }}" maxlength="500" placeholder="本地静态资源路径"></label>
-      <label class="v02-field full"><span>系统简介</span><textarea class="v02-textarea" name="setting_system_description" maxlength="1000">{{ settings.get('system_description','') }}</textarea></label>
-      <label class="v02-field full"><span>首页公告</span><textarea class="v02-textarea" name="setting_home_announcement" maxlength="1000">{{ settings.get('home_announcement','') }}</textarea></label>
-      <label class="v02-field"><span>默认模型 ID</span><input class="v02-input" name="setting_default_model" value="{{ settings.get('default_model','') }}" inputmode="numeric" placeholder="留空时使用模型引擎默认项"></label>
-    </div></article>
-    <article class="v02-panel"><header class="v02-panel-header"><div><h3>功能开关</h3><p>关闭状态会由登录、用户端和服务入口直接执行</p></div></header><div class="settings-switches">
-      <label><input type="checkbox" name="setting_allow_register" value="true" {% if settings.get('allow_register') == 'true' %}checked{% end %}><span>允许新用户注册</span></label>
-      <label><input type="checkbox" name="setting_enable_face_login" value="true" {% if settings.get('enable_face_login') == 'true' %}checked{% end %}><span>启用人脸登录</span></label>
-      <label><input type="checkbox" name="setting_enable_voice_report" value="true" {% if settings.get('enable_voice_report') == 'true' %}checked{% end %}><span>启用语音播报</span></label>
-      <label><input type="checkbox" name="setting_maintenance_mode" value="true" {% if settings.get('maintenance_mode') == 'true' %}checked{% end %}><span>用户侧维护模式</span></label>
-    </div></article>
-    <article class="v02-panel"><header class="v02-panel-header"><div><h3>容量与超时</h3><p>输入不在安全范围内时整批设置不会保存</p></div></header><div class="settings-grid compact">
-      <label class="v02-field"><span>敏感词阈值（1—100）</span><input class="v02-input" type="number" min="1" max="100" name="setting_sensitive_word_threshold" value="{{ settings.get('sensitive_word_threshold','5') }}"></label>
-      <label class="v02-field"><span>大屏刷新秒数（5—3600）</span><input class="v02-input" type="number" min="5" max="3600" name="setting_screen_refresh_interval" value="{{ settings.get('screen_refresh_interval','30') }}"></label>
-      <label class="v02-field"><span>采集超时秒数（3—120）</span><input class="v02-input" type="number" min="3" max="120" name="setting_default_collect_timeout" value="{{ settings.get('default_collect_timeout','30') }}"></label>
-      <label class="v02-field"><span>单次最大采集量（1—1000）</span><input class="v02-input" type="number" min="1" max="1000" name="setting_max_collect_count" value="{{ settings.get('max_collect_count','100') }}"></label>
-      <label class="v02-field"><span>单文件上传字节（1MB—100MB）</span><input class="v02-input" type="number" min="1048576" max="104857600" name="setting_max_upload_size" value="{{ settings.get('max_upload_size','52428800') }}"></label>
-      <label class="v02-field"><span>登录会话分钟（5—10080）</span><input class="v02-input" type="number" min="5" max="10080" name="setting_session_timeout_minutes" value="{{ settings.get('session_timeout_minutes','1440') }}"></label>
-      <label class="v02-field"><span>无活动超时分钟（1—1440）</span><input class="v02-input" type="number" min="1" max="1440" name="setting_session_inactivity_timeout_minutes" value="{{ settings.get('session_inactivity_timeout_minutes','30') }}"></label>
-    </div></article>
-    <div class="settings-submit"><button class="v02-button" type="submit">保存全部设置</button><span>敏感配置只允许保存环境变量名，不接受密钥明文。</span></div>
-  </form>
+    <header class="v02-heading settings-heading">
+        <div>
+            <p class="section-kicker">运行参数</p>
+            <h2>系统设置</h2>
+            <p>集中维护品牌信息、业务开关、容量限制与运行超时。</p>
+        </div>
+        <div class="v02-heading-actions">
+            {% if can_write %}
+            <button class="v02-button" type="submit" form="system-settings-form"><i class="layui-icon layui-icon-ok"></i>保存设置</button>
+            {% else %}
+            <span class="v02-readonly"><i class="layui-icon layui-icon-auz"></i>只读角色</span>
+            {% end %}
+        </div>
+    </header>
+
+    <div class="settings-workspace">
+        <aside class="settings-index" aria-label="设置分组">
+            <p>设置分组</p>
+            <a href="#settings-brand"><i class="layui-icon layui-icon-website"></i><span><b>品牌与首页</b><small>名称、简介、公告</small></span></a>
+            <a href="#settings-features"><i class="layui-icon layui-icon-set"></i><span><b>功能开关</b><small>注册与辅助能力</small></span></a>
+            <a href="#settings-limits"><i class="layui-icon layui-icon-engine"></i><span><b>容量与超时</b><small>阈值、时限、上限</small></span></a>
+        </aside>
+
+        <form id="system-settings-form" method="post" action="/admin/settings" class="settings-form">
+            {% raw xsrf_form_html() %}
+            <input type="hidden" name="action" value="batch_update">
+
+            <article class="v02-panel settings-section" id="settings-brand">
+                <header class="v02-panel-header"><div><h3>品牌与首页</h3><p>用户侧与管理侧共用的基础展示信息</p></div><span class="settings-section-code">GENERAL</span></header>
+                <div class="settings-grid">
+                    <label class="v02-field"><span>系统名称 <em>必填</em></span><input class="v02-input" name="setting_system_name" value="{{ settings.get('system_name','') }}" maxlength="100" required {% if not can_write %}disabled{% end %}></label>
+                    <label class="v02-field"><span>Logo 地址</span><input class="v02-input" name="setting_system_logo" value="{{ settings.get('system_logo','') }}" maxlength="500" placeholder="例如 /static/favicon.svg" {% if not can_write %}disabled{% end %}><small class="v02-help">请使用项目内静态资源路径，避免外部资源失效。</small></label>
+                    <label class="v02-field full"><span>系统简介</span><textarea class="v02-textarea" name="setting_system_description" maxlength="1000" placeholder="说明系统定位与核心能力" {% if not can_write %}disabled{% end %}>{{ settings.get('system_description','') }}</textarea></label>
+                    <label class="v02-field full"><span>首页公告</span><textarea class="v02-textarea" name="setting_home_announcement" maxlength="1000" placeholder="留空则不显示公告" {% if not can_write %}disabled{% end %}>{{ settings.get('home_announcement','') }}</textarea></label>
+                    <label class="v02-field"><span>默认模型 ID</span><input class="v02-input" name="setting_default_model" value="{{ settings.get('default_model','') }}" inputmode="numeric" placeholder="留空时使用模型引擎默认项" {% if not can_write %}disabled{% end %}></label>
+                </div>
+            </article>
+
+            <article class="v02-panel settings-section" id="settings-features">
+                <header class="v02-panel-header"><div><h3>功能开关</h3><p>关闭后由登录、用户端和服务入口即时执行</p></div><span class="settings-section-code">FEATURES</span></header>
+                <div class="settings-switches">
+                    <label class="settings-toggle"><span><b>允许新用户注册</b><small>开放用户侧自助注册入口</small></span><input type="checkbox" name="setting_allow_register" value="true" {% if settings.get('allow_register') == 'true' %}checked{% end %} {% if not can_write %}disabled{% end %}><i aria-hidden="true"></i></label>
+                    <label class="settings-toggle"><span><b>启用人脸登录</b><small>允许已录入用户使用活体认证</small></span><input type="checkbox" name="setting_enable_face_login" value="true" {% if settings.get('enable_face_login') == 'true' %}checked{% end %} {% if not can_write %}disabled{% end %}><i aria-hidden="true"></i></label>
+                    <label class="settings-toggle"><span><b>启用语音播报</b><small>允许前台调用已配置语音服务</small></span><input type="checkbox" name="setting_enable_voice_report" value="true" {% if settings.get('enable_voice_report') == 'true' %}checked{% end %} {% if not can_write %}disabled{% end %}><i aria-hidden="true"></i></label>
+                    <label class="settings-toggle warning"><span><b>用户侧维护模式</b><small>开启后暂停普通用户访问</small></span><input type="checkbox" name="setting_maintenance_mode" value="true" {% if settings.get('maintenance_mode') == 'true' %}checked{% end %} {% if not can_write %}disabled{% end %}><i aria-hidden="true"></i></label>
+                </div>
+            </article>
+
+            <article class="v02-panel settings-section" id="settings-limits">
+                <header class="v02-panel-header"><div><h3>容量与超时</h3><p>统一设置采集、上传、刷新和登录时限</p></div><span class="settings-section-code">LIMITS</span></header>
+                <div class="settings-grid compact">
+                    <label class="v02-field"><span>敏感词阈值</span><div class="settings-number"><input class="v02-input" type="number" min="1" max="100" name="setting_sensitive_word_threshold" value="{{ settings.get('sensitive_word_threshold','5') }}" {% if not can_write %}disabled{% end %}><small>1—100</small></div></label>
+                    <label class="v02-field"><span>大屏刷新间隔</span><div class="settings-number"><input class="v02-input" type="number" min="5" max="3600" name="setting_screen_refresh_interval" value="{{ settings.get('screen_refresh_interval','30') }}" {% if not can_write %}disabled{% end %}><small>秒</small></div></label>
+                    <label class="v02-field"><span>默认采集超时</span><div class="settings-number"><input class="v02-input" type="number" min="3" max="120" name="setting_default_collect_timeout" value="{{ settings.get('default_collect_timeout','30') }}" {% if not can_write %}disabled{% end %}><small>秒</small></div></label>
+                    <label class="v02-field"><span>单次最大采集量</span><div class="settings-number"><input class="v02-input" type="number" min="1" max="1000" name="setting_max_collect_count" value="{{ settings.get('max_collect_count','100') }}" {% if not can_write %}disabled{% end %}><small>条</small></div></label>
+                    <label class="v02-field"><span>单文件上传上限</span><div class="settings-number"><input class="v02-input" type="number" min="1048576" max="104857600" name="setting_max_upload_size" value="{{ settings.get('max_upload_size','52428800') }}" {% if not can_write %}disabled{% end %}><small>字节</small></div></label>
+                    <label class="v02-field"><span>登录会话时长</span><div class="settings-number"><input class="v02-input" type="number" min="5" max="10080" name="setting_session_timeout_minutes" value="{{ settings.get('session_timeout_minutes','1440') }}" {% if not can_write %}disabled{% end %}><small>分钟</small></div></label>
+                    <label class="v02-field"><span>无活动超时</span><div class="settings-number"><input class="v02-input" type="number" min="1" max="1440" name="setting_session_inactivity_timeout_minutes" value="{{ settings.get('session_inactivity_timeout_minutes','30') }}" {% if not can_write %}disabled{% end %}><small>分钟</small></div></label>
+                </div>
+            </article>
+
+            {% if can_write %}
+            <div class="settings-submit"><span>保存后立即应用于新请求。</span><button class="v02-button" type="submit"><i class="layui-icon layui-icon-ok"></i>保存全部设置</button></div>
+            {% end %}
+        </form>
+    </div>
 </section>
 {% end %}

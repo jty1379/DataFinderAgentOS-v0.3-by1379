@@ -64,7 +64,7 @@ class AdminSessionsHandler(AdminBaseHandler):
         employees, _ = DigitalEmployeeRepository.list(page=1, page_size=100)
         self.render_admin(
             "admin/sessions.html",
-            title="会话管理 · 瞭望与问数系统",
+            title="会话管理 · 零界",
             active_menu="session_management",
             conversations=conversations,
             users=UserRepository.list_users(),
@@ -113,7 +113,7 @@ class AdminMessagesHandler(AdminBaseHandler):
             return self.redirect_with_message("/admin/sessions", "会话不存在", "error")
         self.render_admin(
             "admin/messages.html",
-            title="对话详情 · 瞭望与问数系统",
+            title="对话详情 · 零界",
             active_menu="session_management",
             conversation=conversation,
             messages=ConversationRepository._messages_for_admin(conversation["id"]),

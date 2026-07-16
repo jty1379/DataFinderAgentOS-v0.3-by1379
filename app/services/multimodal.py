@@ -100,13 +100,15 @@ class MultimodalService:
         return MultimodalTaskRepository.get(task_id)
 
     @staticmethod
-    def _endpoint(base_url: str) -> str:
+    def _endpoint(base_url: str, provider: str = "openai_compatible") -> str:
         base_url = str(base_url or "").strip().rstrip("/")
         if not base_url:
-            raise MultimodalError("请先配置 OpenAI 兼容服务地址")
+            raise MultimodalError("请先配置多模态服务地址")
         parsed = urlsplit(base_url)
         if parsed.scheme != "https" or not parsed.hostname:
-            raise MultimodalError("OpenAI 兼容服务地址必须使用 HTTPS")
+            raise MultimodalError("多模态服务地址必须使用 HTTPS")
+        if provider == "minimax":
+            return base_url if base_url.endswith("/image_generation") else base_url + "/image_generation"
         return (
             base_url
             if base_url.endswith("/images/generations")
@@ -115,25 +117,38 @@ class MultimodalService:
 
     @staticmethod
     async def _image(task: dict, config: dict) -> tuple[str, str, dict]:
-        endpoint = MultimodalService._endpoint(config.get("base_url") or "")
+        provider = str(config.get("provider") or "openai_compatible")
+        endpoint = MultimodalService._endpoint(config.get("base_url") or "", provider)
         await _validate_public_url(endpoint)
         api_key = SETTINGS.secret_from_env(str(config.get("api_key_env") or ""))
         if not api_key:
             raise MultimodalError("多模态 API Key 环境变量未配置或没有值")
         model = str(config.get("image_model") or "").strip()
         if not model:
-            raise MultimodalError("请配置 OpenAI 兼容图片模型名称")
+            raise MultimodalError("请配置图片模型名称")
         parameters = task.get("parameters") or {}
         prompt = task["prompt"]
         style = str(parameters.get("style") or "default")
         if style != "default":
             prompt = f"风格要求：{style}\n{prompt}"
-        payload = {
-            "model": model,
-            "prompt": prompt,
-            "n": 1,
-            "size": parameters.get("image_size") or "1024x1024",
-        }
+        image_size = parameters.get("image_size") or "1024x1024"
+        if provider == "minimax":
+            aspect_ratios = {
+                "512x512": "1:1",
+                "1024x1024": "1:1",
+                "1024x1536": "2:3",
+                "1536x1024": "3:2",
+            }
+            payload = {
+                "model": model,
+                "prompt": prompt,
+                "aspect_ratio": aspect_ratios.get(image_size, "1:1"),
+                "response_format": "url",
+                "n": 1,
+                "prompt_optimizer": True,
+            }
+        else:
+            payload = {"model": model, "prompt": prompt, "n": 1, "size": image_size}
         chunks = bytearray()
 
         def receive(chunk: bytes) -> None:
@@ -171,7 +186,17 @@ class MultimodalService:
         if response.code < 200 or response.code >= 300:
             message = data.get("error", {}).get("message") if isinstance(data, dict) else ""
             raise MultimodalError(message or f"多模态服务返回 HTTP {response.code}")
-        entries = data.get("data") if isinstance(data, dict) else None
+        if provider == "minimax" and isinstance(data, dict):
+            base_resp = data.get("base_resp") if isinstance(data.get("base_resp"), dict) else {}
+            if int(base_resp.get("status_code", 0) or 0) != 0:
+                raise MultimodalError(str(base_resp.get("status_msg") or "MiniMax 图片生成失败")[:500])
+            result_data = data.get("data") if isinstance(data.get("data"), dict) else {}
+            urls = result_data.get("image_urls") if isinstance(result_data.get("image_urls"), list) else []
+            encoded_items = result_data.get("image_base64") if isinstance(result_data.get("image_base64"), list) else []
+            entries = ([{"url": urls[0]}] if urls else
+                       [{"b64_json": encoded_items[0]}] if encoded_items else [])
+        else:
+            entries = data.get("data") if isinstance(data, dict) else None
         if not isinstance(entries, list) or not entries or not isinstance(entries[0], dict):
             raise MultimodalError("多模态服务响应缺少图片结果")
         item = entries[0]

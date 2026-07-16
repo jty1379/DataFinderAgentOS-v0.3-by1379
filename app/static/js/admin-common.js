@@ -18,6 +18,18 @@
         });
     }
 
+    const sidebarNav = app.qs(".admin-sidebar-nav");
+    const activeLink = app.qs(".admin-nav a.active", sidebarNav || document);
+    if (sidebarNav && activeLink) {
+        window.requestAnimationFrame(() => {
+            const navRect = sidebarNav.getBoundingClientRect();
+            const linkRect = activeLink.getBoundingClientRect();
+            if (linkRect.top < navRect.top || linkRect.bottom > navRect.bottom) {
+                activeLink.scrollIntoView({block: "center"});
+            }
+        });
+    }
+
     // 兼容现有管理模块名称；实现统一由 DataFinderApp 提供。
     window.DataFinderAdmin = Object.freeze({
         announce: app.announce,

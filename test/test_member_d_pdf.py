@@ -85,7 +85,7 @@ def sample_pdf() -> bytes:
             "created_at": "2026-07-16 10:03",
         },
     ]
-    return build_conversation_pdf(conversation, messages, "齐语林")
+    return build_conversation_pdf(conversation, messages, "系统管理员")
 
 
 class MemberDPdfTest(unittest.TestCase):
@@ -95,7 +95,7 @@ class MemberDPdfTest(unittest.TestCase):
         reader = PdfReader(io.BytesIO(content))
         self.assertGreaterEqual(len(reader.pages), 2)
         text = "\n".join(page.extract_text() or "" for page in reader.pages)
-        for expected in ("瞭望与问数系统", "齐语林", "成都市政务数据七日运行分析", "政务公开网", "处置建议"):
+        for expected in ("零界", "系统管理员", "成都市政务数据七日运行分析", "政务公开网", "处置建议"):
             self.assertIn(expected, text)
 
 

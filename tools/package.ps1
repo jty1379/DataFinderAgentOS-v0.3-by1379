@@ -1,6 +1,6 @@
 ﻿param(
     [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
-    [string]$ArchiveName = "零界-齐语林-瞭望与问数系统v0.3源码.zip"
+    [string]$ArchiveName = "零界-0xBoundary-v0.3源码.zip"
 )
 
 $ErrorActionPreference = "Stop"

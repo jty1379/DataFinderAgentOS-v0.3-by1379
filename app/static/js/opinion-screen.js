@@ -4,7 +4,7 @@
     if(!root||!app||!echarts)return;
     const colors={blue:"#5ba5d9",amber:"#d7a04c",red:"#d86b78",green:"#55d6a3",purple:"#9b84d7",text:"#8fa9c2",grid:"rgba(143,169,194,.16)"};
     const charts=new Map();let timer=null,paused=false;
-    const riskLabels={critical:"重大",high:"高",medium:"中",low:"低"},statusLabels={pending:"待处理",processing:"处理中",resolved:"已解决",false_positive:"误报"},sourceLabels={chat:"用户消息",user_message:"用户消息",collection:"采集内容",employee:"数字员工",news:"新闻"};
+    const riskLabels={critical:"重大",high:"高",medium:"中",low:"低"},statusLabels={pending:"待处理",processing:"处理中",resolved:"已解决",false_positive:"误报"},sourceLabels={chat:"用户对话",user:"用户提问",assistant:"模型回复",unknown:"历史对话"};
     function chart(name){if(charts.has(name))return charts.get(name);const instance=echarts.init(root.querySelector(`[data-chart="${name}"]`));charts.set(name,instance);return instance;}
     function axis(){return{axisLine:{lineStyle:{color:colors.grid}},axisLabel:{color:colors.text,fontSize:10},splitLine:{lineStyle:{color:colors.grid}}};}
     function bar(items,map={}){return{animation:false,tooltip:{trigger:"axis"},grid:{left:58,right:18,top:18,bottom:30},xAxis:{...axis(),type:"value",minInterval:1},yAxis:{...axis(),type:"category",data:items.map(item=>map[item.label]||item.label)},series:[{type:"bar",data:items.map(item=>item.value),barMaxWidth:22,itemStyle:{color:colors.amber,borderRadius:[0,3,3,0]},label:{show:true,position:"right",color:"#dceaf5"}}]};}

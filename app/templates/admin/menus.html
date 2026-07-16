@@ -6,7 +6,7 @@
         <div>
             <p class="section-kicker">导航映射</p>
             <h2>菜单管理</h2>
-            <p>菜单根据当前角色授权自动生成，是“角色 + 已启用功能”的可视化结果；这里仅调整名称、顺序、显隐并按角色预览。</p>
+            <p>只负责把已启用功能映射到左侧导航，并调整菜单名称、分组、顺序和显隐。</p>
         </div>
         {% if not can_write %}<span class="v02-readonly"><i class="layui-icon layui-icon-auz"></i>只读角色</span>{% end %}
     </header>
@@ -54,7 +54,7 @@
                 <label for="preview-role-select">预览角色</label>
                 <div><select id="preview-role-select" name="preview_role_id">{% for role in preview_roles %}<option value="{{ role['id'] }}" {% if selected_preview_role_id == role['id'] %}selected{% end %}>{{ role["name"] }}</option>{% end %}</select><button type="submit">预览</button></div>
             </form>
-            <div class="preview-brand"><i>D</i><strong>瞭望与问数</strong></div>
+            <div class="preview-brand"><img class="brand-logo brand-logo-sm" src="{{ static_url('img/logo-mark.png') }}" alt="零界"><strong>零界</strong></div>
             <nav aria-label="角色菜单预览">{% for item in preview_menus %}<a class="{% if active_menu == item['code'] %}active{% end %}"><i class="layui-icon {{ item['icon'] }}"></i>{{ item["title"] }}</a>{% end %}{% if not preview_menus %}<span class="preview-empty">该角色暂无可见菜单</span>{% end %}</nav>
             <p>只显示“功能启用 + 菜单显示 + 所选角色已授权”的交集，实际左侧菜单与此规则一致。</p>
         </aside>

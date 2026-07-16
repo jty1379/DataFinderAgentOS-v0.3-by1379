@@ -6,7 +6,7 @@
         <div>
             <p class="section-kicker">OpenAI API 兼容服务</p>
             <h2>模型引擎</h2>
-            <p>集中配置模型端点、生成参数与默认调用策略；密钥只填写环境变量名，不在页面或数据库中保存明文。</p>
+            <p>集中配置模型服务、生成参数与默认调用策略，供问数和数字员工统一选择。</p>
         </div>
         <div class="v02-heading-actions">
             {% if can_write %}<button class="v02-button" type="button" data-dialog-open="create-model"><i class="layui-icon layui-icon-add-1"></i>新增模型</button>{% else %}<span class="v02-readonly"><i class="layui-icon layui-icon-auz"></i>只读角色</span>{% end %}
@@ -36,7 +36,7 @@
             <header>
                 <span class="model-icon"><i class="layui-icon layui-icon-engine"></i></span>
                 <div class="model-title"><h3>{{ item["name"] }}</h3><code>{{ item["provider"] }} / {{ item["model_name"] }}</code></div>
-                <div class="model-badges"><span class="model-badge">{{ item["type_label"] }}</span>{% if item["is_default"] %}<span class="model-badge default">默认</span>{% end %}</div>
+                <div class="model-badges"><span class="model-badge">{{ item["type_label"] }}</span>{% for label in item["capability_labels"] %}<span class="model-badge capability">{{ label }}</span>{% end %}{% if item["is_default"] %}<span class="model-badge default">默认</span>{% end %}</div>
             </header>
             <div class="model-meta">
                 <div><strong>{{ item["total_calls"] }}</strong><span>累计调用</span></div>
@@ -48,6 +48,8 @@
                 <button class="v02-button-secondary" type="button" data-open-usage-stats data-model-id="{{ item['id'] }}" data-model-name="{{ item['name'] }}"><i class="layui-icon layui-icon-chart"></i>统计详情</button>
                 <button class="v02-button-secondary" type="button" data-open-failure-logs data-model-id="{{ item['id'] }}" data-model-name="{{ item['name'] }}"><i class="layui-icon layui-icon-error"></i>失败日志</button>
                 <button class="v02-button-secondary" type="button" data-dialog-open="model-chat" data-chat-model="{{ item['id'] }}" data-chat-model-name="{{ item['name'] }}" {% if not item['enabled'] or not can_write %}disabled{% end %}><i class="layui-icon layui-icon-dialogue"></i>模型对话</button>
+                {% if item['tts_enabled'] %}<a class="v02-row-action" href="/admin/tts"><i class="layui-icon layui-icon-voice"></i>语音测试</a>{% end %}
+                {% if item['image_enabled'] or item['video_enabled'] %}<a class="v02-row-action" href="/admin/multimodal"><i class="layui-icon layui-icon-picture"></i>生成任务</a>{% end %}
                 {% if can_write %}
                 <button class="v02-row-action" type="button" data-dialog-open="edit-model-{{ item['id'] }}">设置</button>
                 <form method="post"><input type="hidden" name="action" value="toggle"><input type="hidden" name="model_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action" type="submit">{{ "停用" if item["enabled"] else "启用" }}</button></form>
@@ -80,6 +82,23 @@
         <label class="v02-dialog-field"><span>最大 Token</span><input class="v02-input" name="max_tokens" type="number" min="1" max="131072" value="2048" required></label>
         <label class="v02-dialog-field"><span>上下文消息数</span><input class="v02-input" name="context_messages" type="number" min="1" max="100" value="12" required></label>
         <label class="v02-dialog-field"><span>状态</span><select class="v02-select" name="enabled"><option value="1">启用</option><option value="0">停用</option></select></label>
+        <fieldset class="model-capability-fields full"><legend>扩展服务能力</legend><p>同一服务商的理解、语音与生成模型在这里统一登记；各能力仍使用服务商提供的独立模型标识。</p>
+            <div class="model-capability-grid">
+                <label class="v02-dialog-field"><span>原生视觉理解</span><select class="v02-select" name="vision_enabled"><option value="0">未启用</option><option value="1">支持图片/视频输入</option></select></label>
+                <span class="model-capability-note">视觉理解使用上方主模型标识，无需重复填写。</span>
+                <label class="v02-dialog-field"><span>语音合成</span><select class="v02-select" name="tts_enabled"><option value="0">未启用</option><option value="1">启用</option></select></label>
+                <label class="v02-dialog-field"><span>语音模型</span><input class="v02-input" name="tts_model" maxlength="120" placeholder="speech-2.8-hd"></label>
+                <label class="v02-dialog-field"><span>默认音色</span><input class="v02-input" name="tts_voice" maxlength="120" placeholder="male-qn-qingse"></label>
+                <label class="v02-dialog-field"><span>语音服务地址</span><input class="v02-input" name="tts_base_url" type="url" placeholder="留空则使用主 Base URL"></label>
+                <label class="v02-dialog-field"><span>图像生成</span><select class="v02-select" name="image_enabled"><option value="0">未启用</option><option value="1">启用</option></select></label>
+                <label class="v02-dialog-field"><span>图片模型</span><input class="v02-input" name="image_model" maxlength="120" placeholder="image-01"></label>
+                <label class="v02-dialog-field"><span>图片服务地址</span><input class="v02-input" name="image_base_url" type="url" placeholder="留空则使用主 Base URL"></label>
+                <span class="model-capability-note">图片生成会进入多模态任务中心，任务和结果继续持久化。</span>
+                <label class="v02-dialog-field"><span>视频生成</span><select class="v02-select" name="video_enabled"><option value="0">未启用</option><option value="1">启用</option></select></label>
+                <label class="v02-dialog-field"><span>视频模型</span><input class="v02-input" name="video_model" maxlength="120" placeholder="MiniMax-Hailuo-2.3"></label>
+                <label class="v02-dialog-field"><span>视频服务地址</span><input class="v02-input" name="video_base_url" type="url" placeholder="留空则使用主 Base URL"></label>
+            </div>
+        </fieldset>
     </div>
     <footer><button type="button" data-dialog-close>取消</button><button class="v02-button" type="submit">创建模型</button></footer>
 </form></dialog>
@@ -100,6 +119,23 @@
         <label class="v02-dialog-field"><span>最大 Token</span><input class="v02-input" name="max_tokens" type="number" min="1" max="131072" value="{{ item['max_tokens'] }}" required></label>
         <label class="v02-dialog-field"><span>上下文消息数</span><input class="v02-input" name="context_messages" type="number" min="1" max="100" value="{{ item['context_messages'] }}" required></label>
         <label class="v02-dialog-field"><span>状态</span><select class="v02-select" name="enabled"><option value="1" {% if item['enabled'] %}selected{% end %}>启用</option><option value="0" {% if not item['enabled'] %}selected{% end %}>停用</option></select></label>
+        <fieldset class="model-capability-fields full"><legend>扩展服务能力</legend><p>集中维护当前服务商的多模态理解、语音合成和内容生成接口。</p>
+            <div class="model-capability-grid">
+                <label class="v02-dialog-field"><span>原生视觉理解</span><select class="v02-select" name="vision_enabled"><option value="0" {% if not item['vision_enabled'] %}selected{% end %}>未启用</option><option value="1" {% if item['vision_enabled'] %}selected{% end %}>支持图片/视频输入</option></select></label>
+                <span class="model-capability-note">视觉理解使用主模型：{{ item['model_name'] }}</span>
+                <label class="v02-dialog-field"><span>语音合成</span><select class="v02-select" name="tts_enabled"><option value="0" {% if not item['tts_enabled'] %}selected{% end %}>未启用</option><option value="1" {% if item['tts_enabled'] %}selected{% end %}>启用</option></select></label>
+                <label class="v02-dialog-field"><span>语音模型</span><input class="v02-input" name="tts_model" value="{{ item['tts_model'] }}" maxlength="120" placeholder="speech-2.8-hd"></label>
+                <label class="v02-dialog-field"><span>默认音色</span><input class="v02-input" name="tts_voice" value="{{ item['tts_voice'] }}" maxlength="120"></label>
+                <label class="v02-dialog-field"><span>语音服务地址</span><input class="v02-input" name="tts_base_url" type="url" value="{{ item['tts_base_url'] }}" placeholder="留空则使用主 Base URL"></label>
+                <label class="v02-dialog-field"><span>图像生成</span><select class="v02-select" name="image_enabled"><option value="0" {% if not item['image_enabled'] %}selected{% end %}>未启用</option><option value="1" {% if item['image_enabled'] %}selected{% end %}>启用</option></select></label>
+                <label class="v02-dialog-field"><span>图片模型</span><input class="v02-input" name="image_model" value="{{ item['image_model'] }}" maxlength="120"></label>
+                <label class="v02-dialog-field"><span>图片服务地址</span><input class="v02-input" name="image_base_url" type="url" value="{{ item['image_base_url'] }}" placeholder="留空则使用主 Base URL"></label>
+                <span class="model-capability-note">生成测试仍从模型卡片的能力入口进入。</span>
+                <label class="v02-dialog-field"><span>视频生成</span><select class="v02-select" name="video_enabled"><option value="0" {% if not item['video_enabled'] %}selected{% end %}>未启用</option><option value="1" {% if item['video_enabled'] %}selected{% end %}>启用</option></select></label>
+                <label class="v02-dialog-field"><span>视频模型</span><input class="v02-input" name="video_model" value="{{ item['video_model'] }}" maxlength="120"></label>
+                <label class="v02-dialog-field"><span>视频服务地址</span><input class="v02-input" name="video_base_url" type="url" value="{{ item['video_base_url'] }}" placeholder="留空则使用主 Base URL"></label>
+            </div>
+        </fieldset>
     </div>
     <footer><button type="button" data-dialog-close>取消</button><button class="v02-button" type="submit">保存设置</button></footer>
 </form></dialog>
@@ -130,7 +166,13 @@
         <button type="button" data-dialog-close aria-label="关闭">×</button>
     </header>
     <div class="dialog-body">
-        <div class="model-usage-filters">
+        <div class="model-usage-overview" data-usage-overview aria-label="调用统计摘要">
+            <div><span>筛选后调用</span><strong data-usage-count>0</strong></div>
+            <div><span>成功率</span><strong data-usage-rate>0%</strong></div>
+            <div><span>累计 Token</span><strong data-usage-tokens>0</strong></div>
+            <div><span>平均耗时</span><strong data-usage-latency>0 ms</strong></div>
+        </div>
+        <div class="model-usage-filters" role="group" aria-label="调用状态筛选">
             <button class="v02-button-secondary" type="button" data-filter="all" aria-pressed="true">全部</button>
             <button class="v02-button-secondary" type="button" data-filter="success" aria-pressed="false">成功</button>
             <button class="v02-button-secondary" type="button" data-filter="failure" aria-pressed="false">失败</button>
@@ -139,6 +181,7 @@
             <div class="v02-feedback"><i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop"></i><h4>加载中...</h4></div>
         </div>
     </div>
+    <footer><span class="model-usage-caption">最多显示最近 50 次调用</span><button type="button" data-dialog-close>关闭</button></footer>
 </dialog>
 
 <dialog class="management-dialog v02-dialog extra-wide" id="model-failure-logs" aria-labelledby="model-failure-logs-title">

@@ -19,7 +19,7 @@ class SensitiveWordRepository:
     @staticmethod
     def list_words(keyword: str = "", category: str = "", page: int = 1, page_size: int = 20):
         pattern = f"%{keyword}%"
-        clauses = []
+        clauses = ["a.source_type = 'chat'"]
         params = []
         if keyword:
             clauses.append("word LIKE ?")
@@ -131,23 +131,23 @@ class OpinionAlertRepository:
         page: int = 1,
         page_size: int = 20,
     ):
-        clauses = []
-        params = []
+        clauses = ["a.source_type = ?"]
+        params = ["chat"]
         if status:
-            clauses.append("status = ?")
+            clauses.append("a.status = ?")
             params.append(status)
         if risk_level:
-            clauses.append("risk_level = ?")
+            clauses.append("a.risk_level = ?")
             params.append(risk_level)
         if user_id:
-            clauses.append("user_id = ?")
+            clauses.append("a.user_id = ?")
             params.append(user_id)
         
         where_sql = " AND ".join(clauses) if clauses else "1=1"
         
         with connection_scope() as connection:
             total_row = connection.execute(
-                f"SELECT COUNT(*) AS total FROM opinion_alerts WHERE {where_sql}", params
+                f"SELECT COUNT(*) AS total FROM opinion_alerts a WHERE {where_sql}", params
             ).fetchone()
             total = int(total_row["total"])
             offset = (page - 1) * page_size
@@ -173,10 +173,12 @@ class OpinionAlertRepository:
         with connection_scope() as connection:
             row = connection.execute(
                 """
-                SELECT a.*, u.username AS user_name
+                SELECT a.*, u.username AS user_name,
+                       handler.username AS handled_by_name
                 FROM opinion_alerts a
                 LEFT JOIN users u ON u.id = a.user_id
-                WHERE a.id = ?
+                LEFT JOIN users handler ON handler.id = a.handled_by
+                WHERE a.id = ? AND a.source_type='chat'
                 """,
                 (alert_id,),
             ).fetchone()
@@ -260,6 +262,7 @@ class OpinionAlertRepository:
                 """
                 SELECT status, COUNT(*) AS count
                 FROM opinion_alerts
+                WHERE source_type='chat'
                 GROUP BY status
                 """
             ).fetchall()
@@ -272,6 +275,7 @@ class OpinionAlertRepository:
                 """
                 SELECT risk_level, COUNT(*) AS count
                 FROM opinion_alerts
+                WHERE source_type='chat'
                 GROUP BY risk_level
                 """
             ).fetchall()

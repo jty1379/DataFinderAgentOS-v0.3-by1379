@@ -29,17 +29,23 @@ DOMAIN_WORDS = (
     "舆情",
     "报告",
 )
-CITY_COORDINATES = {
-    "北京": (116.40, 39.90),
-    "上海": (121.47, 31.23),
-    "成都": (104.07, 30.67),
-    "广州": (113.26, 23.13),
-    "深圳": (114.06, 22.55),
-    "武汉": (114.30, 30.59),
-    "西安": (108.94, 34.34),
-    "杭州": (120.15, 30.28),
-    "重庆": (106.55, 29.56),
-    "南京": (118.80, 32.06),
+NEWS_REGIONS = {
+    "四川": ((104.07, 30.67), ("四川", "成都", "川大", "九寨沟", "绵阳", "宜宾")),
+    "北京": ((116.40, 39.90), ("北京",)),
+    "上海": ((121.47, 31.23), ("上海",)),
+    "广东": ((113.26, 23.13), ("广东", "广州", "深圳")),
+    "湖北": ((114.30, 30.59), ("湖北", "武汉")),
+    "陕西": ((108.94, 34.34), ("陕西", "西安")),
+    "浙江": ((120.15, 30.28), ("浙江", "杭州")),
+    "重庆": ((106.55, 29.56), ("重庆",)),
+    "江苏": ((118.80, 32.06), ("江苏", "南京", "苏州")),
+    "山东": ((117.00, 36.65), ("山东", "济南", "青岛")),
+    "河南": ((113.62, 34.75), ("河南", "郑州")),
+    "湖南": ((112.94, 28.23), ("湖南", "长沙")),
+    "福建": ((119.30, 26.08), ("福建", "福州", "厦门")),
+    "云南": ((102.71, 25.04), ("云南", "昆明")),
+    "新疆": ((87.62, 43.82), ("新疆", "乌鲁木齐")),
+    "海南": ((110.35, 20.02), ("海南", "海口")),
 }
 
 
@@ -94,26 +100,18 @@ def _risk(text: str) -> tuple[str, list[str]] | None:
 class DashboardRepository:
     @staticmethod
     def sync_opinion_alerts(limit: int = 100) -> int:
-        """从真实用户消息和入仓内容生成可追溯预警，不写入演示假数据。"""
+        """从真实用户对话生成可追溯预警，不把新闻采集结果混入舆情大屏。"""
         inserted = 0
         with connection_scope() as connection:
             candidates = connection.execute(
                 """
-                SELECT * FROM (
-                    SELECT 'chat' AS source_type, m.id AS source_id,
-                           c.title AS title, m.content AS body, m.created_at AS created_at
-                    FROM user_messages m
-                    JOIN user_conversations c ON c.id=m.conversation_id
-                    LEFT JOIN opinion_alerts a ON a.source_type='chat' AND a.source_id=m.id
-                    WHERE a.id IS NULL
-                    UNION ALL
-                    SELECT 'collection' AS source_type, w.id AS source_id, w.title AS title,
-                           COALESCE(NULLIF(w.content,''), NULLIF(w.summary,''), w.title) AS body,
-                           w.created_at AS created_at
-                    FROM warehouse_items w
-                    LEFT JOIN opinion_alerts a ON a.source_type='collection' AND a.source_id=w.id
-                    WHERE a.id IS NULL
-                ) candidates ORDER BY created_at DESC LIMIT ?
+                SELECT 'chat' AS source_type, m.id AS source_id, c.user_id AS user_id,
+                       c.title AS title, m.content AS body, m.created_at AS created_at
+                FROM user_messages m
+                JOIN user_conversations c ON c.id=m.conversation_id
+                LEFT JOIN opinion_alerts a ON a.source_type='chat' AND a.source_id=m.id
+                WHERE a.id IS NULL
+                ORDER BY m.created_at DESC LIMIT ?
                 """,
                 (max(1, min(500, int(limit))),),
             ).fetchall()
@@ -127,13 +125,14 @@ class DashboardRepository:
                 connection.execute(
                     """
                     INSERT OR IGNORE INTO opinion_alerts
-                    (source_type, source_id, title, content, excerpt, risk_level, matched_words,
+                    (source_type, source_id, user_id, title, content, excerpt, risk_level, matched_words,
                      ai_analysis, status, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
                     """,
                     (
                         row["source_type"],
                         row["source_id"],
+                        row["user_id"],
                         str(row["title"] or "未命名内容")[:300],
                         body,
                         body[:500],
@@ -160,7 +159,7 @@ class DashboardRepository:
                 "model_calls": _count(connection, "SELECT COUNT(*) FROM model_usage WHERE date(created_at)=date('now')"),
                 "today_collection": _count(connection, "SELECT COUNT(*) FROM collection_results WHERE date(created_at)=date('now')"),
                 "collection_success_rate": round(successful_runs * 100 / total_runs) if total_runs else 0,
-                "high_risk_alerts": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE risk_level IN ('high','critical') AND status IN ('pending','processing')"),
+                "high_risk_alerts": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE source_type='chat' AND risk_level IN ('high','critical') AND status IN ('pending','processing')"),
                 "employee_count": _count(connection, "SELECT COUNT(*) FROM digital_employees WHERE enabled=1"),
                 "source_count": _count(connection, "SELECT COUNT(*) FROM lookout_sources WHERE enabled=1"),
             }
@@ -172,7 +171,7 @@ class DashboardRepository:
                            keyword AS title, status, result_count AS amount, created_at
                     FROM collection_runs
                     UNION ALL
-                    SELECT '深采', 'DEEP-' || t.id, w.title, t.status,
+                    SELECT '正文补全', 'DEEP-' || t.id, w.title, t.status,
                            t.progress, t.created_at
                     FROM deep_collection_tasks t JOIN warehouse_items w ON w.id=t.warehouse_item_id
                     ORDER BY created_at DESC LIMIT 8
@@ -233,13 +232,46 @@ class DashboardRepository:
             risk_distribution = [
                 {"label": row["risk_level"], "value": int(row["value"])}
                 for row in connection.execute(
-                    "SELECT risk_level, COUNT(*) AS value FROM opinion_alerts GROUP BY risk_level"
+                    "SELECT risk_level, COUNT(*) AS value FROM opinion_alerts WHERE source_type='chat' GROUP BY risk_level"
                 ).fetchall()
             ]
+            news_rows = [
+                dict(row)
+                for row in connection.execute(
+                    """SELECT id,title,url,summary,
+                              COALESCE(NULLIF(source_name,''),'未标注来源') AS source,
+                              COALESCE(NULLIF(published_at,''),created_at) AS published_at
+                       FROM warehouse_items ORDER BY id DESC LIMIT 500"""
+                ).fetchall()
+            ]
+            regional_news = []
+            for region, ((longitude, latitude), keywords) in NEWS_REGIONS.items():
+                matches = []
+                for news in news_rows:
+                    body = f"{news.get('title', '')} {news.get('summary', '')}"
+                    if any(keyword in body for keyword in keywords):
+                        matches.append(
+                            {
+                                "id": news["id"],
+                                "title": news["title"],
+                                "url": news["url"],
+                                "source": news["source"],
+                                "published_at": news["published_at"],
+                            }
+                        )
+                if matches:
+                    regional_news.append(
+                        {
+                            "name": region,
+                            "count": len(matches),
+                            "value": [longitude, latitude, len(matches)],
+                            "articles": matches[:6],
+                        }
+                    )
+            regional_news.sort(key=lambda item: item["count"], reverse=True)
             geo_points = [
-                {"name": city, "value": [longitude, latitude, corpus.count(city)]}
-                for city, (longitude, latitude) in CITY_COORDINATES.items()
-                if corpus.count(city)
+                {"name": item["name"], "value": item["value"]}
+                for item in regional_news
             ]
         return {
             **overview,
@@ -251,6 +283,7 @@ class DashboardRepository:
             "hotspots": hotspots,
             "risk_distribution": risk_distribution,
             "geo_points": geo_points,
+            "regional_news": regional_news,
             "refreshed_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         }
 
@@ -264,12 +297,12 @@ class DashboardRepository:
         DashboardRepository.sync_opinion_alerts()
         with connection_scope() as connection:
             summary = {
-                "total": _count(connection, "SELECT COUNT(*) FROM opinion_alerts"),
-                "today": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE date(created_at)=date('now')"),
-                "open": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE status IN ('pending','processing')"),
-                "critical": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE risk_level='critical' AND status IN ('pending','processing')"),
+                "total": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE source_type='chat'"),
+                "today": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE source_type='chat' AND date(created_at)=date('now')"),
+                "open": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE source_type='chat' AND status IN ('pending','processing')"),
+                "critical": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE source_type='chat' AND risk_level='critical' AND status IN ('pending','processing')"),
             }
-            rows = connection.execute("SELECT * FROM opinion_alerts ORDER BY CASE risk_level WHEN 'critical' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END DESC, id DESC LIMIT 30").fetchall()
+            rows = connection.execute("SELECT * FROM opinion_alerts WHERE source_type='chat' ORDER BY CASE risk_level WHEN 'critical' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END DESC, id DESC LIMIT 30").fetchall()
             alerts = []
             words: Counter[str] = Counter()
             for row in rows:
@@ -285,9 +318,17 @@ class DashboardRepository:
                     item["sensitive_words"] = []
                 words.update(item["sensitive_words"])
                 alerts.append(item)
-            risk_distribution = [{"label": row["risk_level"], "value": int(row["value"])} for row in connection.execute("SELECT risk_level, COUNT(*) AS value FROM opinion_alerts GROUP BY risk_level").fetchall()]
-            status_distribution = [{"label": row["status"], "value": int(row["value"])} for row in connection.execute("SELECT status, COUNT(*) AS value FROM opinion_alerts GROUP BY status").fetchall()]
-            source_ratio = [{"label": row["source_type"], "value": int(row["value"])} for row in connection.execute("SELECT source_type, COUNT(*) AS value FROM opinion_alerts GROUP BY source_type").fetchall()]
+            risk_distribution = [{"label": row["risk_level"], "value": int(row["value"])} for row in connection.execute("SELECT risk_level, COUNT(*) AS value FROM opinion_alerts WHERE source_type='chat' GROUP BY risk_level").fetchall()]
+            status_distribution = [{"label": row["status"], "value": int(row["value"])} for row in connection.execute("SELECT status, COUNT(*) AS value FROM opinion_alerts WHERE source_type='chat' GROUP BY status").fetchall()]
+            source_ratio = [
+                {"label": row["role"], "value": int(row["value"])}
+                for row in connection.execute(
+                    """SELECT COALESCE(m.role,'unknown') AS role, COUNT(*) AS value
+                       FROM opinion_alerts a
+                       LEFT JOIN user_messages m ON m.id=a.source_id
+                       WHERE a.source_type='chat' GROUP BY COALESCE(m.role,'unknown')"""
+                ).fetchall()
+            ]
         return {
             "summary": summary,
             "alerts": alerts,
@@ -295,7 +336,7 @@ class DashboardRepository:
             "status_distribution": status_distribution,
             "source_ratio": source_ratio,
             "sensitive_words": [{"name": name, "value": value} for name, value in words.most_common(12)],
-            "risk_trend": DashboardRepository._trend("opinion_alerts"),
+            "risk_trend": DashboardRepository._opinion_trend(),
             "refreshed_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         }
 
@@ -314,3 +355,17 @@ class DashboardRepository:
             )
             connection.commit()
         return bool(cursor.rowcount)
+
+    @staticmethod
+    def _opinion_trend() -> list[dict]:
+        with connection_scope() as connection:
+            rows = connection.execute(
+                """WITH RECURSIVE dates(day) AS (
+                       SELECT date('now','-6 days') UNION ALL
+                       SELECT date(day,'+1 day') FROM dates WHERE day < date('now')
+                   )
+                   SELECT day AS label, COUNT(a.id) AS value FROM dates
+                   LEFT JOIN opinion_alerts a ON date(a.created_at)=day AND a.source_type='chat'
+                   GROUP BY day ORDER BY day"""
+            ).fetchall()
+        return [{"label": row["label"], "value": int(row["value"])} for row in rows]

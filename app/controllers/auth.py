@@ -26,7 +26,7 @@ class UserLoginHandler(BaseHandler):
             return self.redirect("/index" if self.current_user["role_scope"] == "user" else "/admin/")
         self.render(
             "login.html",
-            title="用户登录 · 瞭望与问数系统",
+            title="用户登录 · 零界",
             error=None,
             registered=self.get_query_argument("registered", "") == "1",
             username="",
@@ -40,7 +40,7 @@ class UserLoginHandler(BaseHandler):
         if not username or not password:
             return self.render(
                 "login.html",
-                title="用户登录 · 瞭望与问数系统",
+                title="用户登录 · 零界",
                 error="用户名和密码不能为空",
                 registered=False,
                 username=username,
@@ -51,7 +51,7 @@ class UserLoginHandler(BaseHandler):
             AuditLogService.log_login(0, username, self.get_client_ip(), success=False, error_message="用户名或密码错误")
             return self.render(
                 "login.html",
-                title="用户登录 · 瞭望与问数系统",
+                title="用户登录 · 零界",
                 error="用户名或密码错误",
                 registered=False,
                 username=username,
@@ -69,7 +69,7 @@ class RegisterHandler(BaseHandler):
             raise tornado.web.HTTPError(403, reason="系统当前已关闭用户注册")
         self.render(
             "register.html",
-            title="创建账号 · 瞭望与问数系统",
+            title="创建账号 · 零界",
             error=None,
             username="",
         )
@@ -92,7 +92,7 @@ class RegisterHandler(BaseHandler):
         if error:
             return self.render(
                 "register.html",
-                title="创建账号 · 瞭望与问数系统",
+                title="创建账号 · 零界",
                 error=error,
                 username=username,
             )
@@ -107,7 +107,7 @@ class AdminLoginHandler(BaseHandler):
                 return self.redirect(landing)
         self.render(
             "admin/login.html",
-            title="管理端登录 · 瞭望与问数系统",
+            title="管理端登录 · 零界",
             error=None,
             username="admin",
         )
@@ -121,7 +121,7 @@ class AdminLoginHandler(BaseHandler):
             AuditLogService.log_login(0, username, self.get_client_ip(), success=False, error_message="管理员账号或密码错误")
             return self.render(
                 "admin/login.html",
-                title="管理端登录 · 瞭望与问数系统",
+                title="管理端登录 · 零界",
                 error="管理员账号或密码错误",
                 username=username,
             )
@@ -129,7 +129,7 @@ class AdminLoginHandler(BaseHandler):
         if not landing:
             return self.render(
                 "admin/login.html",
-                title="管理端登录 · 瞭望与问数系统",
+                title="管理端登录 · 零界",
                 error="该管理员角色尚未分配可访问功能，请联系超级管理员授权",
                 username=username,
             )

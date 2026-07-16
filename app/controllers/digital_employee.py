@@ -37,8 +37,11 @@ class AdminDigitalEmployeesHandler(AdminBaseHandler):
             status = ""
         page = _page(self)
         employees, total = DigitalEmployeeRepository.list(
-            keyword=keyword, employee_type=employee_type, status=status,
-            page=page, page_size=8,
+            keyword=keyword,
+            employee_type=employee_type,
+            status=status,
+            page=page,
+            page_size=8,
         )
         for employee in employees:
             employee["prompt_files"] = list_files(employee["id"])
@@ -46,11 +49,17 @@ class AdminDigitalEmployeesHandler(AdminBaseHandler):
         interfaces, _ = InterfaceRepository.list(status="enabled", page=1, page_size=100)
         self.render_admin(
             "admin/digital_employees.html",
-            title="数字员工 · 瞭望与问数系统",
+            title="数字员工 · 零界",
             active_menu="digital_employees",
-            employees=employees, models=models, interfaces=interfaces, keyword=keyword,
-            selected_type=employee_type, selected_status=status,
-            page=page, pages=max(1, (total + 7) // 8), total=total,
+            employees=employees,
+            models=models,
+            interfaces=interfaces,
+            keyword=keyword,
+            selected_type=employee_type,
+            selected_status=status,
+            page=page,
+            pages=max(1, (total + 7) // 8),
+            total=total,
         )
 
     def post(self):
@@ -60,15 +69,17 @@ class AdminDigitalEmployeesHandler(AdminBaseHandler):
         try:
             employee_id = int(self.get_body_argument("employee_id", "0") or 0)
             if action in {"create", "update"}:
+                employee_type = self.get_body_argument("employee_type", "llm")
+                model_id = self.get_body_argument("model_id", "")
                 values = {
                     "code": self.get_body_argument("code", ""),
                     "name": self.get_body_argument("name", ""),
                     "mention": self.get_body_argument("mention", ""),
-                    "employee_type": self.get_body_argument("employee_type", "llm"),
+                    "employee_type": employee_type,
                     "description": self.get_body_argument("description", ""),
-                    "model_id": self.get_body_argument("model_id", ""),
+                    "model_id": model_id,
                     "interface_id": self.get_body_argument("interface_id", ""),
-                    "use_default_model": self.get_body_argument("use_default_model", "0"),
+                    "use_default_model": "1" if employee_type == "llm" and not model_id else "0",
                     "system_prompt": self.get_body_argument("system_prompt", ""),
                     "prompt_template": self.get_body_argument("prompt_template", "{{input}}"),
                     "skills": self.get_body_argument("skills", ""),
@@ -136,32 +147,3 @@ class AdminDigitalEmployeePreviewHandler(AdminJsonHandler):
         except (TypeError, ValueError) as exc:
             return self.write_json({"ok": False, "message": str(exc)}, 400)
         return self.write_json({"ok": True, "result": result})
-
-
-class AdminDigitalEmployeeHealthHandler(AdminJsonHandler):
-    required_feature = "digital_employees"
-
-    async def get(self):
-        try:
-            employee_id = int(self.get_query_argument("id", "0") or 0)
-            if not employee_id:
-                return self.write_json({"ok": False, "message": "缺少员工ID"}, 400)
-            health = await DigitalEmployeeService.health_check(employee_id)
-            return self.write_json({"ok": True, "health": health})
-        except Exception as exc:
-            return self.write_json({"ok": False, "message": str(exc)}, 400)
-
-
-class AdminDigitalEmployeeLogsHandler(AdminJsonHandler):
-    required_feature = "digital_employees"
-
-    async def get(self):
-        try:
-            employee_id = int(self.get_query_argument("id", "0") or 0)
-            limit = min(50, int(self.get_query_argument("limit", "20") or 20))
-            if not employee_id:
-                return self.write_json({"ok": False, "message": "缺少员工ID"}, 400)
-            logs = DigitalEmployeeRepository.list_call_logs(employee_id, limit=limit)
-            return self.write_json({"ok": True, "logs": logs})
-        except Exception as exc:
-            return self.write_json({"ok": False, "message": str(exc)}, 400)
