@@ -48,7 +48,10 @@
         <div class="rail-account">
             <span class="account-avatar">{{ user["username"][0].upper() }}</span>
             <div><b>{{ user["username"] }}</b><small>普通用户 · 已安全登录</small></div>
-            <a href="/logout" title="退出登录" aria-label="退出登录"><i class="layui-icon layui-icon-logout"></i></a>
+            <a href="/logout" class="logout-btn" title="退出登录" aria-label="退出登录">
+                <i class="layui-icon layui-icon-logout"></i>
+                <span>退出</span>
+            </a>
         </div>
     </aside>
 
