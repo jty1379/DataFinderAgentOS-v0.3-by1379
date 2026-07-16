@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 from urllib.parse import urlparse
 
@@ -12,6 +13,8 @@ from tornado.iostream import StreamClosedError
 from app.controllers.base import AdminBaseHandler, AdminJsonHandler
 from app.models.model_engine import ModelRepository
 from app.services.llm import LLMService
+
+LOGGER = logging.getLogger("model")
 
 
 MODEL_TYPES = (
@@ -192,7 +195,7 @@ class AdminModelChatHandler(AdminJsonHandler):
         self.set_header("Cache-Control", "no-cache, no-transform")
         self.set_header("X-Accel-Buffering", "no")
         try:
-            await self._event("status", {"status": "正在连接模型服务"})
+            await self._event("meta", {"status": "正在连接模型服务", "request_id": self.request_id})
             result = await LLMService.complete(model, prompt)
             text = str(result.get("text", ""))
             for offset in range(0, len(text), 12):
@@ -210,11 +213,11 @@ class AdminModelChatHandler(AdminJsonHandler):
                 success=True,
                 **usage,
             )
-            await self._event("usage", {"usage": usage})
-            await self._event("done", {"status": "已完成", "ok": True})
+            await self._event("done", {"status": "已完成", "ok": True, "usage": usage})
         except StreamClosedError:
             return
         except Exception as exc:
+            LOGGER.exception("admin model stream failed", extra={"user_id": self.current_user["id"], "request_id": self.request_id, "event": "admin_model_stream_failed"})
             message = str(exc)[:300] or "模型服务调用失败"
             ModelRepository.record_usage(
                 model_id=model["id"],

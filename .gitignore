@@ -13,6 +13,9 @@ database/*.db-shm
 database/*.db-wal
 database/*.sqlite
 database/*.sqlite3
+data/*.db
+data/*.db-shm
+data/*.db-wal
 
 # 运行密钥与本地环境
 config/runtime_secret.txt
@@ -20,10 +23,12 @@ config/runtime_model_secrets.json
 config/model_secrets.json
 .env
 .env.*
+!.env.example
 *.key
 
 # 日志与测试产物
 *.log
+logs/
 .coverage
 coverage.xml
 htmlcov/

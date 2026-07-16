@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+
 from app.controllers.base import AdminBaseHandler, AdminJsonHandler
 from app.models.lookout import CollectionRepository
 from app.models.source import RuleRepository
 from app.services.collector import CollectorService
+
+LOGGER = logging.getLogger("collection")
 
 
 def _positive_int(value: str, *, default: int, maximum: int) -> int:
@@ -93,6 +97,7 @@ class AdminLookoutCollectHandler(AdminJsonHandler):
                 }
             )
         except Exception as exc:  # 外部站点错误需要转换成可恢复反馈
+            LOGGER.exception("lookout collection failed", extra={"task_id": run_id, "user_id": self.current_user["id"], "request_id": self.request_id, "event": "lookout_collection_failed"})
             message = str(exc)[:300] or "外部站点暂时不可用"
             CollectionRepository.fail_run(run_id, message)
             return self.write_json(

@@ -391,9 +391,12 @@
                     if (eventName === "delta") {
                         reply.content += data.text || "";
                         const target = pending.querySelector(".message-content"); target.classList.remove("error"); target.textContent = reply.content;
-                    } else if (eventName === "message") reply = data;
-                    else if (eventName === "usage") reply.metadata = Object.assign({}, reply.metadata || {}, {usage: {total_tokens: data.total_tokens || 0}, elapsed_seconds: data.elapsed_seconds || 0, employee: data.source});
-                    else if (eventName === "conversation") { conversationId = data.id; addOrUpdateHistory(data); }
+                    } else if (eventName === "card") reply = data;
+                    else if (eventName === "done") {
+                        const usage = data.usage || {};
+                        reply.metadata = Object.assign({}, reply.metadata || {}, {usage: {total_tokens: usage.total_tokens || 0}, elapsed_seconds: usage.elapsed_seconds || 0, employee: usage.source});
+                        if (data.conversation) { conversationId = data.conversation.id; addOrUpdateHistory(data.conversation); }
+                    }
                     else if (eventName === "error") { if (data.conversation_id) conversationId = data.conversation_id; streamError = new Error(data.message || "问数服务暂时不可用"); }
                 });
                 if (chunk.done) break;

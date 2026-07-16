@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import os
 import re
 import sqlite3
 from urllib.parse import urlsplit
 
 from app.models.db import connection_scope
+from config.settings import SETTINGS
 
 
 MODEL_TYPES = ("text", "image", "audio", "video", "multimodal", "embedding")
@@ -27,7 +27,7 @@ def _model(row) -> dict | None:
     item["enabled"] = bool(item["enabled"])
     item["is_default"] = bool(item["is_default"])
     item["api_key_configured"] = bool(
-        item.get("api_key_env") and os.getenv(item["api_key_env"], "").strip()
+        item.get("api_key_env") and SETTINGS.secret_from_env(item["api_key_env"])
     )
     return item
 

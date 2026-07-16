@@ -91,7 +91,7 @@ class UserChatStreamHandler(UserJsonHandler):
 
         task = None
         try:
-            await emit("status", {"message": "正在识别意图并查询数据"})
+            await emit("meta", {"status": "正在识别意图并查询数据", "request_id": self.request_id})
             queue = asyncio.Queue()
             task = asyncio.create_task(UserChatService.process(
                 self.json_body(), self.current_user["id"], queue.put_nowait
@@ -114,16 +114,15 @@ class UserChatStreamHandler(UserJsonHandler):
                 for start in range(0, len(text), 24):
                     await emit("delta", {"text": text[start:start + 24]})
             else:
-                await emit("message", message)
+                await emit("card", message)
             metadata = message.get("metadata") or {}
             usage = metadata.get("usage") or {}
-            await emit("usage", {
+            final_meta = {
                 "total_tokens": int(usage.get("total_tokens") or 0),
                 "elapsed_seconds": float(metadata.get("elapsed_seconds") or 0),
                 "source": metadata.get("employee") or metadata.get("model") or "问数分析器",
-            })
-            await emit("conversation", result["conversation"])
-            await emit("done", {"ok": True})
+            }
+            await emit("done", {"ok": True, "usage": final_meta, "conversation": result["conversation"]})
         except UserChatError as exc:
             await emit("error", {
                 "message": str(exc), "conversation_id": exc.conversation_id,

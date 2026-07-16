@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
@@ -12,6 +13,8 @@ from app.models.model_engine import ModelRepository
 from app.services.collector import _validate_public_url
 from app.services.llm import LLMService
 from app.services.employee_knowledge import prompt_context
+
+LOGGER = logging.getLogger("model")
 
 
 class DigitalEmployeeError(ValueError):
@@ -75,6 +78,7 @@ class DigitalEmployeeService:
                 latency_ms=result.get("latency_ms", 0),
             )
         except Exception as exc:
+            LOGGER.exception("digital employee model call failed", extra={"user_id": user_id, "event": "employee_model_failed"})
             ModelRepository.record_usage(
                 model_id=model["id"], user_id=user_id, success=False,
                 error_message=str(exc)[:500],
@@ -132,6 +136,7 @@ class DigitalEmployeeService:
         except DigitalEmployeeError:
             raise
         except Exception as exc:
+            LOGGER.exception("digital employee api call failed", extra={"event": "employee_api_failed"})
             raise DigitalEmployeeError("接口连接失败或超时") from exc
         if response.code != 200:
             raise DigitalEmployeeError(f"接口返回 HTTP {response.code}")

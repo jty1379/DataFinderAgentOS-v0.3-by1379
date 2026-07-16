@@ -5,11 +5,14 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import json
+import logging
 import socket
 from html.parser import HTMLParser
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+
+LOGGER = logging.getLogger("collection")
 
 
 class CollectionError(ValueError):
@@ -260,6 +263,7 @@ class CollectorService:
         except CollectionError:
             raise
         except Exception as exc:
+            LOGGER.exception("external collection request failed", extra={"event": "collection_request_failed"})
             raise CollectionError("外部瞭源请求失败或超时") from exc
         if 300 <= response.code < 400:
             location = response.headers.get("Location", "").lower()
@@ -286,6 +290,7 @@ class CollectorService:
         try:
             parser.feed(html)
         except Exception as exc:
+            LOGGER.exception("collection response parse failed", extra={"event": "collection_parse_failed"})
             raise CollectionError("瞭源页面解析失败") from exc
         source_name = str(rule.get("source_name") or "").strip()
         output: list[dict] = []

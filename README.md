@@ -2,6 +2,8 @@
 
 基于 Tornado + SQLite 的政务数据采集与智能问数系统。v0.3 已集成权限、采集、仓库、模型引擎、数字员工、Crawl4AI 深采、OpenAI 兼容 SSE 问答、真实仓库统计分析、数据报告、关系图谱及数字员工 Markdown 资料。
 
+团队开发请先阅读 [开发指南](README_DEV.md)、[部署指南](README_DEPLOY.md) 和 [协作规范](CONTRIBUTING.md)。冻结的 API、数据库与 SSE 契约位于 `docs/`。
+
 ## 技术栈
 
 - Python 3.12 / Tornado 6.5.7

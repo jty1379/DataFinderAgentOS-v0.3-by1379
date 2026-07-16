@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 
 from app.models.conversation import ConversationRepository
@@ -11,6 +12,8 @@ from app.models.model_engine import ModelRepository
 from app.services.digital_employee import DigitalEmployeeError, DigitalEmployeeService
 from app.services.llm import LLMService
 from app.services.query_intent import QueryIntentService, UnsafeQueryError
+
+LOGGER = logging.getLogger("model")
 
 
 class UserChatError(ValueError):
@@ -102,6 +105,7 @@ class UserChatService:
                 },
             }
         except Exception as exc:
+            LOGGER.exception("user chat processing failed", extra={"user_id": user_id, "event": "user_chat_failed"})
             message = str(exc)[:500] or "问数服务调用失败，请稍后重试"
             if model and not employee:
                 ModelRepository.record_usage(

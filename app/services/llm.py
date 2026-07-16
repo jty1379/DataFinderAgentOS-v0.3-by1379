@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import json
-import os
+import logging
 import time
 from urllib.parse import urlsplit
 
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+
+from config.settings import SETTINGS
+
+LOGGER = logging.getLogger("model")
 
 
 class LLMError(ValueError):
@@ -50,7 +54,7 @@ class LLMService:
         if not model_name:
             raise LLMError("模型调用标识未配置")
         api_key_env = str(model.get("api_key_env") or "").strip()
-        api_key = os.getenv(api_key_env, "").strip() if api_key_env else ""
+        api_key = SETTINGS.secret_from_env(api_key_env)
         if api_key_env and not api_key:
             raise LLMError(f"环境变量 {api_key_env} 未配置")
 
@@ -96,6 +100,7 @@ class LLMService:
         except LLMError:
             raise
         except Exception as exc:
+            LOGGER.exception("model completion request failed", extra={"event": "model_request_failed"})
             raise LLMError("模型服务连接失败或超时") from exc
         latency_ms = max(0, int((time.monotonic() - started) * 1000))
         try:
@@ -147,7 +152,7 @@ class LLMService:
         if not model_name:
             raise LLMError("模型调用标识未配置")
         api_key_env = str(model.get("api_key_env") or "").strip()
-        api_key = os.getenv(api_key_env, "").strip() if api_key_env else ""
+        api_key = SETTINGS.secret_from_env(api_key_env)
         if api_key_env and not api_key:
             raise LLMError(f"环境变量 {api_key_env} 未配置")
         messages = []
@@ -223,6 +228,7 @@ class LLMService:
         except LLMError:
             raise
         except Exception as exc:
+            LOGGER.exception("model stream request failed", extra={"event": "model_stream_failed"})
             raise LLMError("模型服务连接失败或超时") from exc
         latency_ms = max(0, int((time.monotonic() - started) * 1000))
         if pending:

@@ -2,16 +2,11 @@
 
 from __future__ import annotations
 
-import re
-
 import tornado.web
 
 from app.controllers.base import BaseHandler
-from app.models.rbac import MenuRepository, RoleRepository
-from app.models.user import UserRepository
-
-
-USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_\u4e00-\u9fff]{3,20}$")
+from app.core.exceptions import AppError
+from app.services.user_service import UserService
 
 
 def _admin_landing_path(user: dict) -> str | None:
@@ -20,10 +15,7 @@ def _admin_landing_path(user: dict) -> str | None:
     A delegated administrator may own only ``user_management`` and therefore
     cannot be sent blindly to the dashboard.  This is the Task 2.1 login fix.
     """
-    if RoleRepository.has_feature(user["role_id"], "dashboard"):
-        return "/admin/"
-    menus = MenuRepository.list_for_role(user["role_id"])
-    return menus[0]["route"] if menus else None
+    return UserService.admin_landing_path(user)
 
 
 class UserLoginHandler(BaseHandler):
@@ -51,8 +43,9 @@ class UserLoginHandler(BaseHandler):
                 registered=False,
                 username=username,
             )
-        user = UserRepository.authenticate(username, password)
-        if not user or user["role_scope"] != "user":
+        try:
+            user = UserService.authenticate(username, password, "user")
+        except AppError:
             return self.render(
                 "login.html",
                 title="用户登录 · 瞭望与问数系统",
@@ -83,14 +76,10 @@ class RegisterHandler(BaseHandler):
         password_confirm = self.get_body_argument("password_confirm", "")
 
         error = None
-        if not USERNAME_PATTERN.fullmatch(username):
-            error = "用户名需为 3—20 位中文、字母、数字或下划线"
-        elif len(password) < 6 or len(password) > 64:
-            error = "密码长度需为 6—64 位"
-        elif password != password_confirm:
-            error = "两次输入的密码不一致"
-        elif not UserRepository.create_user(username, password, role="user"):
-            error = "该用户名已存在，请更换后重试"
+        try:
+            UserService.register(username, password, password_confirm)
+        except AppError as exc:
+            error = exc.public_message
 
         if error:
             return self.render(
@@ -118,8 +107,9 @@ class AdminLoginHandler(BaseHandler):
     def post(self):
         username = self.get_body_argument("username", "").strip()
         password = self.get_body_argument("password", "")
-        user = UserRepository.authenticate(username, password)
-        if not user or user["role_scope"] != "admin":
+        try:
+            user = UserService.authenticate(username, password, "admin")
+        except AppError:
             return self.render(
                 "admin/login.html",
                 title="管理端登录 · 瞭望与问数系统",

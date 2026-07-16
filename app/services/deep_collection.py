@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
@@ -11,6 +12,8 @@ from app.models.deep_collection import DeepCollectionRepository
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.warehouse import WarehouseRepository
 from app.services.collector import CollectionError, _validate_public_url
+
+LOGGER = logging.getLogger("collection")
 
 
 class DeepCollectionService:
@@ -49,6 +52,7 @@ class DeepCollectionService:
             async with AsyncWebCrawler(config=browser_config) as crawler:
                 result = await crawler.arun(url=url, config=run_config)
         except Exception as exc:
+            LOGGER.exception("crawl4ai request failed", extra={"event": "deep_collection_request_failed"})
             raise CollectionError(f"Crawl4AI 启动或网页访问失败：{str(exc)[:180]}") from exc
         if not result or not result.success:
             message = getattr(result, "error_message", "") if result else "未返回采集结果"
@@ -99,4 +103,5 @@ class DeepCollectionService:
                 content[:500], metadata,
             )
         except Exception as exc:
+            LOGGER.exception("deep collection task failed", extra={"task_id": task_id, "event": "deep_collection_task_failed"})
             DeepCollectionRepository.fail(task_id, str(exc) or "深度采集失败")

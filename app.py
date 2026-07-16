@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 import tornado.ioloop
 import tornado.web
 from tornado.httpserver import HTTPServer
@@ -44,12 +46,10 @@ from app.controllers.admin import (
 from app.models.db import init_db
 from app.models.deep_collection import DeepCollectionRepository
 from app.models.user import UserRepository
-from config.settings import (
-    APP_PORT,
-    BASE_DIR,
-    COOKIE_SECRET,
-    DEBUG,
-)
+from app.core.logging import configure_logging
+from config.settings import BASE_DIR, SETTINGS
+
+LOGGER = logging.getLogger("app")
 
 
 def make_app() -> tornado.web.Application:
@@ -88,11 +88,11 @@ def make_app() -> tornado.web.Application:
         ],
         template_path=str(BASE_DIR / "app" / "templates"),
         static_path=str(BASE_DIR / "app" / "static"),
-        cookie_secret=COOKIE_SECRET,
+        cookie_secret=SETTINGS.cookie_secret,
         login_url="/",
-        xsrf_cookies=True,
-        debug=DEBUG,
-        autoreload=DEBUG,
+        xsrf_cookies=SETTINGS.xsrf_cookies,
+        debug=SETTINGS.debug,
+        autoreload=SETTINGS.debug,
     )
 
 
@@ -104,16 +104,13 @@ def prepare_runtime() -> bool:
 
 
 def main() -> None:
+    configure_logging(SETTINGS)
     admin_created = prepare_runtime()
-    server = HTTPServer(make_app())
-    server.listen(APP_PORT)
-    print("=" * 62, flush=True)
-    print("  瞭望与问数系统 DataFinderAgentOS v0.3", flush=True)
-    print(f"  用户端: http://localhost:{APP_PORT}/", flush=True)
-    print(f"  管理端: http://localhost:{APP_PORT}/admin/login", flush=True)
+    server = HTTPServer(make_app(), max_buffer_size=SETTINGS.upload_size_limit)
+    server.listen(SETTINGS.port, address=SETTINGS.host)
+    LOGGER.info("application started config=%s", SETTINGS.public_summary(), extra={"event": "application_started"})
     if admin_created:
-        print("  已创建演示管理员: admin / 123456", flush=True)
-    print("=" * 62, flush=True)
+        LOGGER.info("demo administrator created", extra={"event": "administrator_seeded"})
     tornado.ioloop.IOLoop.current().start()
 
 

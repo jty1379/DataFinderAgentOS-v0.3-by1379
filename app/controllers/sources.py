@@ -7,7 +7,7 @@ import re
 from urllib.parse import urlparse
 
 from app.controllers.base import AdminBaseHandler
-from app.models.source import RuleRepository, SourceRepository
+from app.repositories.source_repository import RuleRepository, SourceRepository
 from app.services.collector import CollectorService
 
 
