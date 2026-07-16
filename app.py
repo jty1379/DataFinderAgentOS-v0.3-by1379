@@ -96,6 +96,10 @@ from app.controllers.warehouse import (
     AdminWarehouseHandler,
     AdminWarehouseImportHandler,
     WarehouseStatsHandler,
+    AdminWarehouseRiskAnalysisHandler,
+    AdminWarehouseHighRiskHandler,
+    AdminWarehouseBatchDeleteHandler,
+    AdminWarehouseDeduplicationHandler,
 )
 from app.core.logging import configure_logging
 from app.models.db import init_db
@@ -140,6 +144,10 @@ def make_app() -> tornado.web.Application:
             (r"/admin/warehouse/deep-tasks/([0-9]+)", AdminWarehouseDeepTaskHandler),
             (r"/admin/warehouse/deep-results/([0-9]+)", AdminWarehouseDeepResultHandler),
             (r"/api/warehouse/stats", WarehouseStatsHandler),
+            (r"/admin/warehouse/risk-analysis", AdminWarehouseRiskAnalysisHandler),
+            (r"/admin/warehouse/high-risk", AdminWarehouseHighRiskHandler),
+            (r"/admin/warehouse/batch-delete", AdminWarehouseBatchDeleteHandler),
+            (r"/admin/warehouse/deduplication", AdminWarehouseDeduplicationHandler),
             (r"/admin/models", AdminModelsHandler),
             (r"/admin/models/chat", AdminModelChatHandler),
             (r"/admin/models/usage-logs", AdminModelUsageLogsHandler),
