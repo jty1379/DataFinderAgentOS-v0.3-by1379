@@ -10,19 +10,20 @@ class BiometricRepository:
     def face_login_enabled() -> bool:
         with connection_scope() as connection:
             row = connection.execute(
-                "SELECT value FROM system_settings WHERE key='face_login_enabled'"
+                "SELECT setting_value FROM system_settings WHERE setting_key='enable_face_login'"
             ).fetchone()
-        return row is not None and row["value"] == "1"
+        return row is not None and str(row["setting_value"]).lower() in {"1", "true", "yes", "on"}
 
     @staticmethod
     def set_face_login_enabled(enabled: bool, actor_id: int) -> None:
         with connection_scope() as connection:
             connection.execute(
-                """INSERT INTO system_settings(key,value,updated_by,updated_at)
-                   VALUES ('face_login_enabled',?,?,CURRENT_TIMESTAMP)
-                   ON CONFLICT(key) DO UPDATE SET value=excluded.value,
+                """INSERT INTO system_settings
+                   (setting_key,setting_value,setting_type,description,updated_by,updated_at)
+                   VALUES ('enable_face_login',?,'boolean','是否启用人脸登录',?,CURRENT_TIMESTAMP)
+                   ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value,
                    updated_by=excluded.updated_by,updated_at=CURRENT_TIMESTAMP""",
-                ("1" if enabled else "0", actor_id),
+                ("true" if enabled else "false", actor_id),
             )
             connection.commit()
 

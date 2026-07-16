@@ -54,7 +54,7 @@ class MemberDRepositoryTest(unittest.TestCase):
         self.assertEqual(dashboard["metrics"]["high_risk_alerts"], 1)
         opinion = DashboardRepository.opinion()
         self.assertEqual(opinion["summary"]["total"], 1)
-        self.assertEqual(opinion["alerts"][0]["source_type"], "user_message")
+        self.assertEqual(opinion["alerts"][0]["source_type"], "chat")
 
     def test_face_profile_global_switch_and_gesture_cooldown(self):
         embedding = json.dumps([0.1] * 255)

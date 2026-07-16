@@ -50,7 +50,12 @@ class WarehouseRepository:
                          published_at, raw_data, created_by)
                     SELECT id, rule_id, title, url, summary, source_name,
                            published_at, raw_data, ?
-                    FROM collection_results WHERE id = ?
+                    FROM collection_results r
+                    WHERE r.id = ?
+                      AND NOT EXISTS (
+                          SELECT 1 FROM warehouse_items w
+                          WHERE w.source_result_id = r.id OR w.url = r.url
+                      )
                     """,
                     (user_id, result_id),
                 )
@@ -231,8 +236,7 @@ class WarehouseRepository:
             # 完全匹配或相似度较高
             rows = connection.execute(
                 """
-                SELECT id, title, url, created_at
-                FROM warehouse_items
+                SELECT * FROM warehouse_items
                 WHERE (url = ? OR title = ?)
                 ORDER BY id DESC LIMIT 10
                 """,

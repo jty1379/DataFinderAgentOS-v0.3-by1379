@@ -99,11 +99,11 @@ class DashboardRepository:
             candidates = connection.execute(
                 """
                 SELECT * FROM (
-                    SELECT 'user_message' AS source_type, m.id AS source_id,
+                    SELECT 'chat' AS source_type, m.id AS source_id,
                            c.title AS title, m.content AS body, m.created_at AS created_at
                     FROM user_messages m
                     JOIN user_conversations c ON c.id=m.conversation_id
-                    LEFT JOIN opinion_alerts a ON a.source_type='user_message' AND a.source_id=m.id
+                    LEFT JOIN opinion_alerts a ON a.source_type='chat' AND a.source_id=m.id
                     WHERE a.id IS NULL
                     UNION ALL
                     SELECT 'collection' AS source_type, w.id AS source_id, w.title AS title,
@@ -126,18 +126,20 @@ class DashboardRepository:
                 connection.execute(
                     """
                     INSERT OR IGNORE INTO opinion_alerts
-                    (source_type, source_id, title, excerpt, risk_level, sensitive_words,
-                     ai_analysis, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (source_type, source_id, title, content, excerpt, risk_level, matched_words,
+                     ai_analysis, status, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
                     """,
                     (
                         row["source_type"],
                         row["source_id"],
                         str(row["title"] or "未命名内容")[:300],
+                        body,
                         body[:500],
                         level,
                         json.dumps(words, ensure_ascii=False),
                         f"智能规则识别到{label}风险，命中关键词：{'、'.join(words)}。建议结合原始内容人工复核。",
+                        row["created_at"],
                         row["created_at"],
                     ),
                 )
@@ -157,7 +159,7 @@ class DashboardRepository:
                 "model_calls": _count(connection, "SELECT COUNT(*) FROM model_usage WHERE date(created_at)=date('now')"),
                 "today_collection": _count(connection, "SELECT COUNT(*) FROM collection_results WHERE date(created_at)=date('now')"),
                 "collection_success_rate": round(successful_runs * 100 / total_runs) if total_runs else 0,
-                "high_risk_alerts": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE risk_level IN ('high','critical') AND status IN ('new','processing')"),
+                "high_risk_alerts": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE risk_level IN ('high','critical') AND status IN ('pending','processing')"),
                 "employee_count": _count(connection, "SELECT COUNT(*) FROM digital_employees WHERE enabled=1"),
                 "source_count": _count(connection, "SELECT COUNT(*) FROM lookout_sources WHERE enabled=1"),
             }
@@ -262,8 +264,8 @@ class DashboardRepository:
             summary = {
                 "total": _count(connection, "SELECT COUNT(*) FROM opinion_alerts"),
                 "today": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE date(created_at)=date('now')"),
-                "open": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE status IN ('new','processing')"),
-                "critical": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE risk_level='critical' AND status IN ('new','processing')"),
+                "open": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE status IN ('pending','processing')"),
+                "critical": _count(connection, "SELECT COUNT(*) FROM opinion_alerts WHERE risk_level='critical' AND status IN ('pending','processing')"),
             }
             rows = connection.execute("SELECT * FROM opinion_alerts ORDER BY CASE risk_level WHEN 'critical' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END DESC, id DESC LIMIT 30").fetchall()
             alerts = []
@@ -271,7 +273,12 @@ class DashboardRepository:
             for row in rows:
                 item = dict(row)
                 try:
-                    item["sensitive_words"] = json.loads(item["sensitive_words"] or "[]")
+                    parsed_words = json.loads(item["matched_words"] or "[]")
+                    item["sensitive_words"] = [
+                        str(entry.get("word") or "") if isinstance(entry, dict) else str(entry)
+                        for entry in parsed_words
+                        if (entry.get("word") if isinstance(entry, dict) else entry)
+                    ]
                 except json.JSONDecodeError:
                     item["sensitive_words"] = []
                 words.update(item["sensitive_words"])
@@ -299,8 +306,8 @@ class DashboardRepository:
             raise ValueError("请填写处理备注")
         with connection_scope() as connection:
             cursor = connection.execute(
-                """UPDATE opinion_alerts SET status=?, handler_note=?, handled_by=?,
-                   updated_at=CURRENT_TIMESTAMP WHERE id=?""",
+                """UPDATE opinion_alerts SET status=?, handle_note=?, handled_by=?,
+                   handled_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?""",
                 (status, note[:1000], user_id, int(alert_id)),
             )
             connection.commit()

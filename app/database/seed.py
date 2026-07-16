@@ -214,7 +214,9 @@ def seed_database(connection: sqlite3.Connection) -> None:
     _seed_employees(connection)
     _seed_settings(connection)
     _seed_opinion(connection)
-    for version, description in ((2, "permissions and collection"), (3, "feature hierarchy"), (4, "digital employees"), (5, "conversations"), (7, "system settings"), (8, "opinion security")):
+    # 2—5 是早期课堂版已并入基线表结构的历史版本；7 以后均由正式迁移器记录，
+    # 不能在种子阶段抢占版本号，否则成员分支的新迁移会被静默跳过。
+    for version, description in ((2, "permissions and collection"), (3, "feature hierarchy"), (4, "digital employees"), (5, "conversations")):
         connection.execute("INSERT OR IGNORE INTO schema_migrations(version,name,description,checksum) VALUES (?,?,?,'legacy')", (version, f"legacy_{version}", description))
 
 

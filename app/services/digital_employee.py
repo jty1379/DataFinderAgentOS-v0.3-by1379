@@ -13,8 +13,8 @@ from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.model_engine import ModelRepository
 from app.services.collector import _validate_public_url
-from app.services.llm import LLMService
 from app.services.employee_knowledge import prompt_context
+from app.services.llm import LLMService
 
 LOGGER = logging.getLogger("model")
 
@@ -30,48 +30,20 @@ class DigitalEmployeeError(ValueError):
 
 async def _validate_employee_url(url: str) -> None:
     """数字员工专用的URL验证，允许 localhost/127.0.0.1 内部调用。"""
-    import asyncio
-    import ipaddress
-    import socket
-
     parsed = urlsplit(url)
     if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
         raise DigitalEmployeeError("接口地址仅支持 http/https")
     if parsed.username or parsed.password:
         raise DigitalEmployeeError("接口地址不允许携带用户凭据")
     hostname = parsed.hostname.rstrip(".").lower()
-    # 允许 localhost 和 127.0.0.1 内部调用
+    # 数据分析员工需要访问本服务的只读统计接口；其余地址复用采集层
+    # 的 DNS 与私网校验，避免两套 SSRF 规则发生漂移。
     if hostname in {"localhost", "127.0.0.1", "::1", "0.0.0.0"}:
         return
     try:
-        literal = ipaddress.ip_address(hostname)
-    except ValueError:
-        literal = None
-    if literal is not None:
-        if not _public_ip(str(literal)):
-            raise DigitalEmployeeError("不允许访问私网、回环或链路本地地址")
-        return
-    port = parsed.port or (443 if parsed.scheme.lower() == "https" else 80)
-    try:
-        records = await asyncio.wait_for(
-            asyncio.to_thread(socket.getaddrinfo, hostname, port, 0, socket.SOCK_STREAM),
-            timeout=5,
-        )
-    except (OSError, asyncio.TimeoutError) as exc:
-        raise DigitalEmployeeError("接口域名无法解析") from exc
-    addresses = {record[4][0].split("%")[0] for record in records}
-    if not addresses or any(not _public_ip(address) for address in addresses):
-        raise DigitalEmployeeError("接口域名解析到受限网络地址")
-
-
-def _public_ip(address: str) -> bool:
-    """判断是否为公网IP地址。"""
-    import ipaddress
-    try:
-        ip = ipaddress.ip_address(address)
-        return ip.is_global and not ip.is_loopback and not ip.is_private and not ip.is_link_local
-    except ValueError:
-        return False
+        await _validate_public_url(url)
+    except Exception as exc:
+        raise DigitalEmployeeError(str(exc) or "接口地址未通过网络安全校验") from exc
 
 
 def _replace(value, text: str):
@@ -98,7 +70,6 @@ class DigitalEmployeeService:
         text = DigitalEmployeeService._sanitize_input(text)
 
         start_time = time.time()
-        last_error = None
         response_data = None
         tokens_used = 0
 
@@ -254,7 +225,7 @@ class DigitalEmployeeService:
     @staticmethod
     async def _preview_api(employee: dict, text: str) -> dict:
         url = str(_replace(employee["api_url"], text))
-        await DigitalEmployeeService._validate_employee_url(url)
+        await _validate_employee_url(url)
         params = _replace(employee.get("request_params") or {}, text)
         headers = {
             "Accept": "application/json",

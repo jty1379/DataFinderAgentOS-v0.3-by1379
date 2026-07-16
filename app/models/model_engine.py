@@ -9,7 +9,6 @@ from urllib.parse import urlsplit
 from app.models.db import connection_scope
 from config.settings import SETTINGS
 
-
 MODEL_TYPES = ("text", "image", "audio", "video", "multimodal", "embedding")
 ENV_PATTERN = re.compile(r"^[A-Z_][A-Z0-9_]{1,127}$")
 
@@ -72,7 +71,7 @@ class ModelRepository:
             clauses.append("m.enabled = 1")
         elif normalized_status in {"0", "disabled", "false"}:
             clauses.append("m.enabled = 0")
-        where = " AND ".join(clauses)
+        where = " AND ".join(clauses) if clauses else "1=1"
         with connection_scope() as connection:
             total = int(
                 connection.execute(

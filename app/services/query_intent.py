@@ -18,7 +18,8 @@ class QueryIntentService:
     )
     _INJECTION_TERMS = (
         "忽略之前", "忽略以上", "系统提示词", "泄露提示词", "显示提示词",
-        "越权", "绕过权限", "扮演管理员", "开发者指令", "prompt injection",
+        "越权", "绕过权限", "扮演管理员", "你现在是管理员", "执行删除", "删除操作",
+        "开发者指令", "prompt injection",
     )
 
     @classmethod
@@ -33,6 +34,20 @@ class QueryIntentService:
     def analyze(cls, text: str) -> dict | None:
         text = str(text or "").strip()
         cls.validate(text)
+        # 先匹配信息量更高的业务意图，避免“统计、采集、来源”等宽泛词
+        # 抢占“失败率、性能、各来源”等明确问法。
+        if any(term in text for term in ("失败率", "失败", "出错")):
+            return cls._failure_analysis()
+        if any(term in text for term in ("耗时", "平均耗时", "性能", "速度", "最慢")):
+            return cls._performance_analysis()
+        if any(term in text for term in ("高风险", "风险内容", "敏感", "风险等级")):
+            return cls._risk_analysis()
+        if any(term in text for term in ("关键词", "频率最高", "热词")):
+            return cls._keyword_analysis()
+        if any(term in text for term in ("各来源", "各个来源", "来源分别")):
+            return cls._sources_breakdown()
+        if any(term in text for term in ("采集了多少", "今天采集", "采集数量", "采集了")):
+            return cls._daily_collection()
         if any(term in text for term in ("报告", "简报", "研判")):
             return cls._report()
         if any(term in text for term in ("知识图谱", "图谱", "关联关系", "来源关联", "关系挖掘")):
@@ -45,19 +60,6 @@ class QueryIntentService:
             return cls._deep()
         if any(term in text for term in ("统计", "总数", "概览", "数据仓库", "采集数据", "数据分析")):
             return cls._overview()
-        # 新增问法
-        if any(term in text for term in ("采集了多少", "今天采集", "采集数量", "采集了")):
-            return cls._daily_collection()
-        if any(term in text for term in ("各来源", "各个来源", "来源分别")):
-            return cls._sources_breakdown()
-        if any(term in text for term in ("失败率", "失败", "出错")):
-            return cls._failure_analysis()
-        if any(term in text for term in ("高风险", "风险内容", "敏感", "风险等级")):
-            return cls._risk_analysis()
-        if any(term in text for term in ("关键词", "频率最高", "热词")):
-            return cls._keyword_analysis()
-        if any(term in text for term in ("耗时", "平均耗时", "性能", "速度")):
-            return cls._performance_analysis()
         return None
 
     @staticmethod
@@ -158,8 +160,6 @@ class QueryIntentService:
     @classmethod
     def _daily_collection(cls) -> dict:
         """回答：今天采集了多少条数据？"""
-        from datetime import datetime, timedelta
-        today = datetime.now().strftime("%Y-%m-%d")
         rows = AnalyticsRepository.daily_trend(1)
         today_count = rows[-1]["value"] if rows else 0
 

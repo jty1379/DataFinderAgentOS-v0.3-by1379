@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-import json
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from app.models.warehouse import WarehouseRepository
+from app.models import db
 from app.models.db import connection_scope
+from app.models.warehouse import WarehouseRepository
 
 
 class TestWarehouseOperations(unittest.TestCase):
@@ -14,10 +17,14 @@ class TestWarehouseOperations(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
-        # Clear warehouse
-        with connection_scope() as connection:
-            connection.execute("DELETE FROM warehouse_items")
-            connection.commit()
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.db_patch = patch.object(db, "DATABASE_PATH", Path(self.temp_dir.name) / "warehouse.db")
+        self.db_patch.start()
+        db.init_db()
+
+    def tearDown(self):
+        self.db_patch.stop()
+        self.temp_dir.cleanup()
 
     def test_warehouse_item_creation(self):
         """Test creating warehouse items."""

@@ -58,6 +58,7 @@ class V03RepositoryTest(unittest.TestCase):
         self.assertTrue(collector["enabled"])
         self.assertTrue(collector["crawl4ai_enabled"])
         self.assertEqual(DigitalEmployeeRepository.delete(collector["id"])[0], False)
+        _, initial_api_total = DigitalEmployeeRepository.list(employee_type="api", page_size=100)
         employee_id = DigitalEmployeeRepository.create(
             code="weather_api", name="天气接口", mention="气象测试",
             employee_type="api", description="读取公开天气数据",
@@ -67,8 +68,8 @@ class V03RepositoryTest(unittest.TestCase):
         )
         self.assertIsInstance(employee_id, int)
         rows, total = DigitalEmployeeRepository.list(employee_type="api", page_size=1)
-        self.assertEqual(total, 2)
-        self.assertIn(rows[0]["mention"], {"天气", "气象测试"})
+        self.assertEqual(total, initial_api_total + 1)
+        self.assertEqual(DigitalEmployeeRepository.get(employee_id)["mention"], "气象测试")
         self.assertTrue(DigitalEmployeeRepository.update(employee_id, description="新说明"))
         self.assertEqual(DigitalEmployeeRepository.get(employee_id)["description"], "新说明")
         self.assertTrue(DigitalEmployeeRepository.toggle(employee_id)[0])

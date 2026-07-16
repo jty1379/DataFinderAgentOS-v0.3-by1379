@@ -8,7 +8,6 @@ import re
 
 from app.models.db import connection_scope
 
-
 DEFAULT_SENSITIVE_WORDS = [
     ("敏感词示例1", "default", 2, "示例敏感词"),
     ("敏感词示例2", "default", 3, "示例敏感词"),
@@ -198,14 +197,17 @@ class OpinionAlertRepository:
                 cursor = connection.execute(
                     """
                     INSERT INTO opinion_alerts
-                    (source_type, source_id, user_id, content, matched_words, risk_level, ai_analysis)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (source_type, source_id, user_id, title, content, excerpt,
+                     matched_words, risk_level, ai_analysis)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         source_type,
                         source_id,
                         user_id,
+                        content[:80],
                         content,
+                        content[:500],
                         json.dumps(matched_words, ensure_ascii=False),
                         risk_level,
                         ai_analysis,

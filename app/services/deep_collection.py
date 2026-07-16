@@ -25,10 +25,11 @@ def _import_crawl4ai():
     global _crawl4ai_imported, AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig, CRAWL4AI_VERSION
     if not _crawl4ai_imported:
         crawl4ai = importlib.import_module("crawl4ai")
-        AsyncWebCrawler = crawl4ai.AsyncWebCrawler
-        BrowserConfig = crawl4ai.BrowserConfig
-        CacheMode = crawl4ai.CacheMode
-        CrawlerRunConfig = crawl4ai.CrawlerRunConfig
+        # 允许专项测试或部署适配器预先注入单个组件；只补齐未设置项。
+        AsyncWebCrawler = AsyncWebCrawler or crawl4ai.AsyncWebCrawler
+        BrowserConfig = BrowserConfig or crawl4ai.BrowserConfig
+        CacheMode = CacheMode or crawl4ai.CacheMode
+        CrawlerRunConfig = CrawlerRunConfig or crawl4ai.CrawlerRunConfig
         CRAWL4AI_VERSION = crawl4ai.__version__
         _crawl4ai_imported = True
 

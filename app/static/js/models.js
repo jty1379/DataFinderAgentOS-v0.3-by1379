@@ -192,14 +192,7 @@
             if (filter === "success") params.append("success", "1");
             if (filter === "failure") params.append("failure", "1");
 
-            const response = await fetch(`/admin/models/usage-logs?${params}`, {
-                headers: {"X-Xsrftoken": api.xsrfToken()}
-            });
-            const data = await api.responseData(response);
-
-            if (!data.ok) {
-                throw new Error(data.message || "加载失败");
-            }
+            const data = await api.request(`/admin/models/usage-logs?${params}`);
 
             renderUsageTable(data.logs, modelName);
         } catch (error) {
@@ -282,14 +275,7 @@
 
         try {
             const params = new URLSearchParams({model_id: modelId, failure: "1", limit: "50"});
-            const response = await fetch(`/admin/models/usage-logs?${params}`, {
-                headers: {"X-Xsrftoken": api.xsrfToken()}
-            });
-            const data = await api.responseData(response);
-
-            if (!data.ok) {
-                throw new Error(data.message || "加载失败");
-            }
+            const data = await api.request(`/admin/models/usage-logs?${params}`);
 
             renderFailureTable(data.logs, modelName);
         } catch (error) {

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-import json
+import tempfile
 import unittest
-from unittest.mock import MagicMock, patch
+from pathlib import Path
+from unittest.mock import patch
 
-from app.models.source import SourceRepository, RuleRepository
+from app.models import db
 from app.models.db import connection_scope
+from app.models.source import RuleRepository, SourceRepository
 
 
 class TestCollectionSources(unittest.TestCase):
@@ -15,6 +17,14 @@ class TestCollectionSources(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.db_patch = patch.object(db, "DATABASE_PATH", Path(self.temp_dir.name) / "sources.db")
+        self.db_patch.start()
+        db.init_db()
+        with connection_scope() as connection:
+            connection.execute("DELETE FROM collection_rules")
+            connection.execute("DELETE FROM lookout_sources")
+            connection.commit()
         self.sources = [
             {
                 "code": "baidu_news",
@@ -35,6 +45,10 @@ class TestCollectionSources(unittest.TestCase):
                 "description": "创投行业动态",
             },
         ]
+
+    def tearDown(self):
+        self.db_patch.stop()
+        self.temp_dir.cleanup()
 
     def test_source_creation(self):
         """Test creating collection sources."""
@@ -135,6 +149,7 @@ class TestCollectionSources(unittest.TestCase):
 
     def test_three_real_sources_present(self):
         """Test that three real sources are configured."""
+        db.init_db()
         # This test verifies the database contains the three sources
         with connection_scope() as connection:
             rows = connection.execute(
@@ -144,8 +159,7 @@ class TestCollectionSources(unittest.TestCase):
                 """
             ).fetchall()
 
-        # Should have at least the three sources
-        self.assertGreaterEqual(len(rows), 1)  # At least one should be present
+        self.assertEqual(len(rows), 3)
 
 
 if __name__ == "__main__":
