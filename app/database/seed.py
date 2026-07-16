@@ -18,6 +18,10 @@ DEFAULT_FEATURES = (
     ("collection_management", "瞭源管理", "/admin/sources", "layui-icon-download-circle", "数据与智能", "维护公开数据源、请求头和采集规则", 80, 1),
     ("digital_employees", "数字员工", "/admin/agents", "layui-icon-username", "数据与智能", "配置模型型与接口型数字员工，并支持后台任务调度", 90, 1),
     ("model_engine", "模型引擎", "/admin/models", "layui-icon-engine", "数据与智能", "配置 OpenAI 兼容模型、默认服务和生成参数", 100, 1),
+    ("tts_config", "语音合成", "/admin/tts", "layui-icon-voice", "数据与智能", "配置语音合成服务和参数", 107, 1),
+    ("multimodal_config", "多模态服务", "/admin/multimodal", "layui-icon-picture", "数据与智能", "配置生图、生视频等多模态服务", 108, 1),
+    ("interface_management", "接口管理", "/admin/interfaces", "layui-icon-link", "数据与智能", "配置外部 API 接口、测试和查看调用日志", 105, 1),
+    ("skill_management", "技能管理", "/admin/skills", "layui-icon-star", "数据与智能", "管理技能配置和绑定到数字员工", 106, 1),
     ("intelligence_screen", "数智大屏", "/admin/modules/intelligence", "layui-icon-chart", "数据与智能", "呈现核心业务指标", 110, 1),
     ("opinion_screen", "舆情大屏", "/admin/modules/opinion", "layui-icon-fire", "数据与智能", "聚合热点事件与舆情趋势", 120, 1),
     ("user_portal", "用户侧门户", "/index", "layui-icon-dialogue", "用户侧", "用户登录、问数与数字员工入口", 130, 1),
@@ -125,6 +129,45 @@ def _seed_employees(connection: sqlite3.Connection) -> None:
         (code,name,mention,employee_type,description,use_default_model,skills,api_method,api_url,request_headers,request_params,response_mode,timeout_seconds,enabled,is_system)
         VALUES ('weather','天气专员','天气','api',?,1,?,'GET','https://wttr.in/{{input_url}}','{}',?,'card',20,1,1)""",
         ("通过 wttr.in 公共接口查询城市当前天气与未来三日预报。", json.dumps(["实时天气", "三日预报", "城市气象"], ensure_ascii=False), '{"format":"j1","lang":"zh"}'),
+    )
+    connection.execute(
+        """INSERT OR IGNORE INTO digital_employees
+        (code,name,mention,employee_type,description,use_default_model,system_prompt,prompt_template,skills,enabled,is_system)
+        VALUES ('chuan','川哥','川哥','llm',?,1,?,?,?,1,1)""",
+        ("川大校园问答助手，解答关于四川大学的各类问题。",
+         "你是川哥，四川大学的校园助手。你熟悉川大的历史、文化、校区、专业、生活等方方面面。请用友好、专业的语气回答用户的问题，如果不确定请如实说明。",
+         "请回答关于川大的问题：{{input}}",
+         json.dumps(["校园问答", "川大信息", "生活指南"], ensure_ascii=False)),
+    )
+    connection.execute(
+        """INSERT OR IGNORE INTO digital_employees
+        (code,name,mention,employee_type,description,use_default_model,system_prompt,prompt_template,skills,enabled,is_system)
+        VALUES ('copywriter','文案写作助手','文案助手','llm',?,1,?,?,?,1,1)""",
+        ("专业的文案创作助手，帮助撰写各类宣传文案。",
+         "你是专业的文案写作助手。你擅长撰写活动宣传、产品推广、品牌故事等各类文案。请根据用户需求创作高质量、有吸引力的文案内容。",
+         "请帮我写一段文案：{{input}}",
+         json.dumps(["文案创作", "活动策划", "品牌宣传"], ensure_ascii=False)),
+    )
+    connection.execute(
+        """INSERT OR IGNORE INTO digital_employees
+        (code,name,mention,employee_type,description,use_default_model,skills,api_method,api_url,request_headers,request_params,response_mode,timeout_seconds,enabled,is_system)
+        VALUES ('music','随机音乐','音乐','api',?,1,?,'GET','https://itunes.apple.com/search','{}',?,'card',20,1,1)""",
+        ("通过 iTunes Search API 搜索音乐。", json.dumps(["音乐推荐", "歌曲搜索", "随机播放"], ensure_ascii=False), '{"term":"{{input}}","media":"music","limit":10}'),
+    )
+    connection.execute(
+        """INSERT OR IGNORE INTO digital_employees
+        (code,name,mention,employee_type,description,use_default_model,system_prompt,prompt_template,skills,enabled,is_system)
+        VALUES ('news','新闻专员','新闻','llm',?,1,?,?,?,1,1)""",
+        ("新闻摘要助手，为用户解读新闻热点。",
+         "你是新闻专员，擅长将新闻热点整理为简洁的摘要。请用清晰的格式输出新闻要点，包括标题、核心内容和影响分析。",
+         "请帮我整理以下新闻热点：{{input}}",
+         json.dumps(["新闻热点", "时事资讯", "头条新闻"], ensure_ascii=False)),
+    )
+    connection.execute(
+        """INSERT OR IGNORE INTO digital_employees
+        (code,name,mention,employee_type,description,use_default_model,skills,api_method,api_url,request_headers,request_params,response_mode,timeout_seconds,enabled,is_system)
+        VALUES ('analyst','数据分析师','分析师','api',?,1,?,'GET','http://localhost:10010/api/warehouse/stats','{}',?,'json',20,1,1)""",
+        ("分析数据仓库的统计信息，提供数据趋势分析。", json.dumps(["数据分析", "趋势分析", "统计报告"], ensure_ascii=False), '{"period":"week"}'),
     )
 
 

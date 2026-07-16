@@ -59,8 +59,11 @@ class ModelRepository:
         offset = (page - 1) * page_size
         keyword = keyword.strip()
         pattern = f"%{keyword}%"
-        clauses = ["(? = '' OR m.name LIKE ? OR m.model_name LIKE ? OR m.provider LIKE ?)"]
-        params: list[object] = [keyword, pattern, pattern, pattern]
+        clauses: list[str] = []
+        params: list[object] = []
+        if keyword:
+            clauses.append("(m.name LIKE ? OR m.model_name LIKE ? OR m.provider LIKE ?)")
+            params.extend([pattern, pattern, pattern])
         if model_type in MODEL_TYPES:
             clauses.append("m.model_type = ?")
             params.append(model_type)
@@ -343,3 +346,31 @@ class ModelRepository:
                 (model_id,),
             ).fetchone()
         return dict(row)
+
+    @staticmethod
+    def list_usage_logs(
+        model_id: int,
+        success_only: bool = False,
+        failure_only: bool = False,
+        limit: int = 20,
+    ) -> list[dict]:
+        """获取模型的调用日志明细。"""
+        limit = min(100, max(1, int(limit or 20)))
+        clauses = ["model_id = ?"]
+        params: list[object] = [model_id]
+        if success_only:
+            clauses.append("success = 1")
+        elif failure_only:
+            clauses.append("success = 0")
+        where = " AND ".join(clauses)
+        with connection_scope() as connection:
+            rows = connection.execute(
+                f"""SELECT mu.*, u.username AS user_name
+                    FROM model_usage mu
+                    LEFT JOIN users u ON u.id = mu.user_id
+                    WHERE {where}
+                    ORDER BY mu.created_at DESC
+                    LIMIT ?""",
+                (*params, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]

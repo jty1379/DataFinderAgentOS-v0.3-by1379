@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block admin_content %}
+<section class="v02-page tts-config-page">
+    <header class="v02-heading">
+        <div>
+            <p class="section-kicker">TTS 服务</p>
+            <h2>语音合成配置</h2>
+            <p>配置语音合成服务，支持火山引擎、阿里云和本地 TTS。</p>
+        </div>
+    </header>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>使用统计</h3><p>语音合成服务调用情况</p></div></header>
+        <div class="v02-panel-body">
+            <div class="tts-stats-table">
+                <div class="tts-stat-row">
+                    <span class="tts-stat-label">总调用次数</span>
+                    <span class="tts-stat-value">{{ stats["total_calls"] }}</span>
+                </div>
+                <div class="tts-stat-row">
+                    <span class="tts-stat-label">成功次数</span>
+                    <span class="tts-stat-value">{{ stats["success_calls"] }}</span>
+                </div>
+                <div class="tts-stat-row">
+                    <span class="tts-stat-label">缓存命中</span>
+                    <span class="tts-stat-value">{{ stats["cached_calls"] }}</span>
+                </div>
+                <div class="tts-stat-row">
+                    <span class="tts-stat-label">合成字符数</span>
+                    <span class="tts-stat-value">{{ stats["total_chars"] }}</span>
+                </div>
+            </div>
+        </div>
+    </article>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>服务配置</h3><p>配置语音合成服务参数</p></div></header>
+        <div class="v02-panel-body">
+            <form method="post">
+                <input type="hidden" name="action" value="save">{% raw xsrf_form_html() %}
+                <div class="tts-form-grid">
+                    <label class="tts-form-field"><span>启用语音合成</span><select class="v02-select" name="enabled"><option value="1" {% if config["enabled"] %}selected{% end %}>启用</option><option value="0" {% if not config["enabled"] %}selected{% end %}>停用</option></select></label>
+                    <label class="tts-form-field"><span>TTS 提供商</span><select class="v02-select" name="provider"><option value="volcengine" {% if config["provider"] == "volcengine" %}selected{% end %}>火山引擎</option><option value="aliyun" {% if config["provider"] == "aliyun" %}selected{% end %}>阿里云</option><option value="local" {% if config["provider"] == "local" %}selected{% end %}>本地 (pyttsx3)</option></select></label>
+                    <label class="tts-form-field"><span>默认语音</span><select class="v02-select" name="default_voice">{% for value, label in voice_options %}<option value="{{ value }}" {% if config["default_voice"] == value %}selected{% end %}>{{ label }}</option>{% end %}</select></label>
+                    <label class="tts-form-field"><span>语速</span><input class="v02-input" type="number" name="rate" value="{{ config["rate"] }}" min="-100" max="100" placeholder="0"></label>
+                    <label class="tts-form-field"><span>音量</span><input class="v02-input" type="number" name="volume" value="{{ config["volume"] }}" min="-100" max="100" placeholder="0"></label>
+                    <label class="tts-form-field"><span>音调</span><input class="v02-input" type="number" name="pitch" value="{{ config["pitch"] }}" min="-100" max="100" placeholder="0"></label>
+                    <label class="tts-form-field full"><span>API Key 环境变量</span><input class="v02-input" name="api_key_env" value="{{ config["api_key_env"] }}" placeholder="例如：TTS_API_KEY"><small class="v02-help">只保存环境变量名；请勿在此粘贴真实密钥。</small></label>
+                    <label class="tts-form-field full"><span>API Secret 环境变量</span><input class="v02-input" name="api_secret_env" value="{{ config["api_secret_env"] }}" placeholder="例如：TTS_API_SECRET"><small class="v02-help">只保存环境变量名；请勿在此粘贴真实密钥。</small></label>
+                    <label class="tts-form-field full"><span>服务地址</span><input class="v02-input" name="base_url" value="{{ config["base_url"] }}" placeholder="例如：https://openspeech.bytedance.net"><small class="v02-help">火山引擎默认地址：https://openspeech.bytedance.net</small></label>
+                </div>
+                <div class="tts-form-actions">
+                    <button class="v02-button" type="submit"><i class="layui-icon layui-icon-set"></i>保存配置</button>
+                </div>
+            </form>
+        </div>
+    </article>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>语音合成测试</h3><p>测试语音合成效果</p></div></header>
+        <div class="v02-panel-body">
+            <div class="tts-form-grid">
+                <label class="tts-form-field full"><span>测试文本</span><textarea class="v02-textarea" id="tts-test-text" rows="3" placeholder="请输入要合成的文本..."></textarea></label>
+                <label class="tts-form-field"><span>选择语音</span><select class="v02-select" id="tts-test-voice">{% for value, label in voice_options %}<option value="{{ value }}" {% if config["default_voice"] == value %}selected{% end %}>{{ label }}</option>{% end %}</select></label>
+            </div>
+            <div class="tts-form-actions">
+                <button class="v02-button" id="tts-test-btn" type="button"><i class="layui-icon layui-icon-sound"></i>合成语音</button>
+                <button class="v02-button-secondary" id="tts-play-btn" type="button" disabled><i class="layui-icon layui-icon-play"></i>播放音频</button>
+            </div>
+            <div id="tts-test-result" class="v02-feedback hidden"></div>
+            <audio id="tts-audio" style="display:none;">
+        </div>
+    </article>
+</section>
+
+<style>
+.tts-stats-table { width: 100%; }
+.tts-stat-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--admin-v02-line); }
+.tts-stat-row:last-child { border-bottom: 0; }
+.tts-stat-label { color: var(--admin-v02-muted); font-size: 13px; }
+.tts-stat-value { color: #fff; font-size: 18px; font-weight: 650; font-family: Consolas, monospace; }
+.tts-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 960px) { .tts-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .tts-form-grid { grid-template-columns: 1fr; } }
+.tts-form-field { display: grid; gap: 7px; color: var(--admin-v02-muted); font-size: 12px; }
+.tts-form-field > span { font-weight: 600; }
+.tts-form-field.full { grid-column: 1 / -1; }
+@media (max-width: 600px) { .tts-form-field.full { grid-column: auto; } }
+.tts-form-actions { margin-top: 16px; display: flex; gap: 10px; }
+</style>
+
+<script>
+(function() {
+    var testBtn = document.getElementById('tts-test-btn');
+    var playBtn = document.getElementById('tts-play-btn');
+    var resultDiv = document.getElementById('tts-test-result');
+    var audio = document.getElementById('tts-audio');
+    var testText = document.getElementById('tts-test-text');
+    var testVoice = document.getElementById('tts-test-voice');
+
+    testBtn.addEventListener('click', async function() {
+        var text = testText.value.trim();
+        if (!text) {
+            showResult('error', '请输入测试文本');
+            return;
+        }
+        testBtn.disabled = true;
+        playBtn.disabled = true;
+        showResult('info', '正在合成语音...');
+        try {
+            var response = await fetch('/admin/tts/preview', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-XSRFToken': '{{ xsrf_token }}',
+                },
+                body: JSON.stringify({ text: text, voice: testVoice.value }),
+            });
+            var data = await response.json();
+            if (data.ok && data.audio_url) {
+                audio.src = data.audio_url;
+                showResult('success', '语音合成成功！');
+                playBtn.disabled = false;
+            } else {
+                showResult('error', data.message || '合成失败');
+            }
+        } catch (error) {
+            showResult('error', '请求失败: ' + error.message);
+        } finally {
+            testBtn.disabled = false;
+        }
+    });
+
+    playBtn.addEventListener('click', function() {
+        audio.play().catch(function(error) {
+            showResult('error', '播放失败: ' + error.message);
+        });
+    });
+
+    function showResult(type, message) {
+        resultDiv.className = 'v02-feedback ' + type;
+        resultDiv.innerHTML = '<p>' + message + '</p>';
+        resultDiv.classList.remove('hidden');
+    }
+})();
+</script>
+{% end %}

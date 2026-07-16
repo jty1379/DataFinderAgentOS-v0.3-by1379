@@ -294,3 +294,53 @@ class DigitalEmployeeRepository:
             )
             connection.commit()
         return True, "状态已更新"
+
+    @staticmethod
+    def record_call(employee_id: int, success: bool) -> None:
+        """记录数字员工的调用次数和失败次数。"""
+        with connection_scope() as connection:
+            if success:
+                connection.execute(
+                    "UPDATE digital_employees SET call_count = COALESCE(call_count, 0) + 1, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (employee_id,),
+                )
+            else:
+                connection.execute(
+                    "UPDATE digital_employees SET call_count = COALESCE(call_count, 0) + 1, failure_count = COALESCE(failure_count, 0) + 1, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                    (employee_id,),
+                )
+            connection.commit()
+
+    @staticmethod
+    def record_call_log(
+        employee_id: int,
+        user_id: int | None,
+        input_text: str,
+        success: bool,
+        response_data: str | None = None,
+        error_message: str | None = None,
+        latency_ms: int = 0,
+        tokens_used: int = 0,
+    ) -> None:
+        """记录数字员工的详细调用日志。"""
+        with connection_scope() as connection:
+            connection.execute(
+                """INSERT INTO employee_call_logs
+                (employee_id, user_id, input_text, success, response_data, error_message, latency_ms, tokens_used)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (employee_id, user_id, input_text[:2000], int(success), response_data, error_message, latency_ms, tokens_used),
+            )
+            connection.commit()
+
+    @staticmethod
+    def list_call_logs(employee_id: int, limit: int = 20) -> list[dict]:
+        """获取数字员工的最近调用日志。"""
+        with connection_scope() as connection:
+            rows = connection.execute(
+                """SELECT * FROM employee_call_logs
+                WHERE employee_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?""",
+                (employee_id, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]

@@ -164,4 +164,181 @@
             messageInput.focus();
         }
     });
+
+    // 模型调用统计详情
+    const usageStatsDialog = api.qs("#model-usage-stats");
+    const usageTitle = api.qs("[data-usage-title]", usageStatsDialog);
+    const usageTable = api.qs("[data-usage-table]", usageStatsDialog);
+    const filterButtons = api.qsa("[data-filter]", usageStatsDialog);
+    let currentModelId = null;
+    let currentFilter = "all";
+
+    function renderUsageTable(logs, modelName) {
+        if (!logs || logs.length === 0) {
+            usageTable.innerHTML = '<div class="v02-feedback"><i class="layui-icon layui-icon-chart"></i><h4>暂无调用记录</h4><p>该模型尚未被调用，或当前筛选条件下没有记录。</p></div>';
+            return;
+        }
+
+        const table = document.createElement("table");
+        table.className = "v02-table";
+        table.innerHTML = `
+            <thead>
+                <tr>
+                    <th>调用用户</th>
+                    <th>状态</th>
+                    <th>输入Token</th>
+                    <th>输出Token</th>
+                    <th>总Token</th>
+                    <th>耗时(ms)</th>
+                    <th>调用时间</th>
+                    <th>错误信息</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        `;
+        const tbody = table.querySelector("tbody");
+
+        logs.forEach(log => {
+            const row = document.createElement("tr");
+            row.className = log.success ? "success" : "error";
+            row.innerHTML = `
+                <td>${log.user_name || "系统"}</td>
+                <td><span class="v02-badge ${log.success ? "success" : "error"}">${log.success ? "成功" : "失败"}</span></td>
+                <td>${log.prompt_tokens}</td>
+                <td>${log.completion_tokens}</td>
+                <td>${log.total_tokens}</td>
+                <td>${log.latency_ms}</td>
+                <td>${log.created_at}</td>
+                <td>${log.error_message || "-"}</td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        usageTable.innerHTML = "";
+        usageTable.appendChild(table);
+    }
+
+    async function loadUsageLogs(modelId, modelName, filter = "all") {
+        usageTitle.textContent = `模型调用统计 · ${modelName}`;
+        usageTable.innerHTML = '<div class="v02-feedback"><i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop"></i><h4>加载中...</h4></div>';
+
+        try {
+            const params = new URLSearchParams({model_id: modelId, limit: "50"});
+            if (filter === "success") params.append("success", "1");
+            if (filter === "failure") params.append("failure", "1");
+
+            const response = await fetch(`/admin/models/usage-logs?${params}`, {
+                headers: {"X-Xsrftoken": api.xsrfToken()}
+            });
+            const data = await api.responseData(response);
+
+            if (!data.ok) {
+                throw new Error(data.message || "加载失败");
+            }
+
+            renderUsageTable(data.logs, modelName);
+        } catch (error) {
+            usageTable.innerHTML = `<div class="v02-feedback error"><i class="layui-icon layui-icon-error"></i><h4>加载失败</h4><p>${error.message || "未知错误"}</p></div>`;
+            api.announce(error.message || "加载调用统计失败", "error");
+        }
+    }
+
+    api.qsa("[data-open-usage-stats]").forEach(button => {
+        button.addEventListener("click", () => {
+            currentModelId = button.dataset.modelId;
+            const modelName = button.dataset.modelName;
+            currentFilter = "all";
+            filterButtons.forEach(btn => btn.setAttribute("aria-pressed", btn.dataset.filter === "all" ? "true" : "false"));
+            usageStatsDialog.showModal();
+            loadUsageLogs(currentModelId, modelName, currentFilter);
+        });
+    });
+
+    filterButtons.forEach(button => {
+        button.addEventListener("click", () => {
+            currentFilter = button.dataset.filter;
+            filterButtons.forEach(btn => btn.setAttribute("aria-pressed", btn === button ? "true" : "false"));
+            const modelName = usageTitle.textContent.replace("模型调用统计 · ", "");
+            loadUsageLogs(currentModelId, modelName, currentFilter);
+        });
+    });
+
+    // 模型失败日志
+    const failureLogsDialog = api.qs("#model-failure-logs");
+    const failureTitle = api.qs("[data-failure-title]", failureLogsDialog);
+    const failureTable = api.qs("[data-failure-table]", failureLogsDialog);
+
+    function renderFailureTable(logs, modelName) {
+        if (!logs || logs.length === 0) {
+            failureTable.innerHTML = '<div class="v02-feedback"><i class="layui-icon layui-icon-error"></i><h4>暂无失败记录</h4><p>该模型调用均成功，或尚未被调用。</p></div>';
+            return;
+        }
+
+        const table = document.createElement("table");
+        table.className = "v02-table";
+        table.innerHTML = `
+            <thead>
+                <tr>
+                    <th>调用用户</th>
+                    <th>输入Token</th>
+                    <th>输出Token</th>
+                    <th>总Token</th>
+                    <th>耗时(ms)</th>
+                    <th>调用时间</th>
+                    <th>错误信息</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        `;
+        const tbody = table.querySelector("tbody");
+
+        logs.forEach(log => {
+            const row = document.createElement("tr");
+            row.className = "error";
+            row.innerHTML = `
+                <td>${log.user_name || "系统"}</td>
+                <td>${log.prompt_tokens}</td>
+                <td>${log.completion_tokens}</td>
+                <td>${log.total_tokens}</td>
+                <td>${log.latency_ms}</td>
+                <td>${log.created_at}</td>
+                <td><span class="error-message">${log.error_message || "-"}</span></td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        failureTable.innerHTML = "";
+        failureTable.appendChild(table);
+    }
+
+    async function loadFailureLogs(modelId, modelName) {
+        failureTitle.textContent = `模型失败日志 · ${modelName}`;
+        failureTable.innerHTML = '<div class="v02-feedback"><i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop"></i><h4>加载中...</h4></div>';
+
+        try {
+            const params = new URLSearchParams({model_id: modelId, failure: "1", limit: "50"});
+            const response = await fetch(`/admin/models/usage-logs?${params}`, {
+                headers: {"X-Xsrftoken": api.xsrfToken()}
+            });
+            const data = await api.responseData(response);
+
+            if (!data.ok) {
+                throw new Error(data.message || "加载失败");
+            }
+
+            renderFailureTable(data.logs, modelName);
+        } catch (error) {
+            failureTable.innerHTML = `<div class="v02-feedback error"><i class="layui-icon layui-icon-error"></i><h4>加载失败</h4><p>${error.message || "未知错误"}</p></div>`;
+            api.announce(error.message || "加载失败日志失败", "error");
+        }
+    }
+
+    api.qsa("[data-open-failure-logs]").forEach(button => {
+        button.addEventListener("click", () => {
+            const modelId = button.dataset.modelId;
+            const modelName = button.dataset.modelName;
+            failureLogsDialog.showModal();
+            loadFailureLogs(modelId, modelName);
+        });
+    });
 })();

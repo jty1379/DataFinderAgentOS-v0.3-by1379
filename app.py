@@ -23,10 +23,41 @@ from app.controllers.home import (
     UserIndexHandler,
 )
 from app.controllers.lookout import AdminLookoutCollectHandler, AdminLookoutHandler
-from app.controllers.model_engine import AdminModelChatHandler, AdminModelsHandler
+from app.controllers.model_engine import (
+    AdminModelChatHandler,
+    AdminModelUsageLogsHandler,
+    AdminModelsHandler,
+)
 from app.controllers.digital_employee import (
+    AdminDigitalEmployeeHealthHandler,
+    AdminDigitalEmployeeLogsHandler,
     AdminDigitalEmployeePreviewHandler,
     AdminDigitalEmployeesHandler,
+)
+from app.controllers.interface import (
+    AdminInterfaceLogsHandler,
+    AdminInterfaceTestHandler,
+    AdminInterfacesHandler,
+)
+from app.controllers.skill import (
+    AdminSkillBindHandler,
+    AdminSkillSuggestHandler,
+    AdminSkillsHandler,
+)
+from app.controllers.tts import (
+    AdminTTSHandler,
+    AdminTTSPreviewHandler,
+    TTSAudioHandler,
+    UserTTSHandler,
+)
+from app.controllers.multimodal import (
+    AdminMultimodalConfigHandler,
+    AdminMultimodalGenerateHandler,
+    AdminMultimodalHandler,
+    AdminMultimodalTaskDeleteHandler,
+    AdminMultimodalTaskListHandler,
+    AdminMultimodalTaskStatusHandler,
+    UserMultimodalGenerateHandler,
 )
 from app.controllers.sources import AdminSourcesHandler
 from app.controllers.warehouse import (
@@ -35,6 +66,7 @@ from app.controllers.warehouse import (
     AdminWarehouseDeepTaskHandler,
     AdminWarehouseHandler,
     AdminWarehouseImportHandler,
+    WarehouseStatsHandler,
 )
 from app.controllers.admin import (
     AdminFeaturesHandler,
@@ -79,11 +111,32 @@ def make_app() -> tornado.web.Application:
             (r"/admin/warehouse/deep-collect", AdminWarehouseDeepCollectHandler),
             (r"/admin/warehouse/deep-tasks/([0-9]+)", AdminWarehouseDeepTaskHandler),
             (r"/admin/warehouse/deep-results/([0-9]+)", AdminWarehouseDeepResultHandler),
+            (r"/api/warehouse/stats", WarehouseStatsHandler),
             (r"/admin/models", AdminModelsHandler),
             (r"/admin/models/chat", AdminModelChatHandler),
+            (r"/admin/models/usage-logs", AdminModelUsageLogsHandler),
             (r"/admin/agents", AdminDigitalEmployeesHandler),
             (r"/admin/agents/preview", AdminDigitalEmployeePreviewHandler),
+            (r"/admin/agents/health", AdminDigitalEmployeeHealthHandler),
+            (r"/admin/agents/logs", AdminDigitalEmployeeLogsHandler),
             (r"/admin/modules/agents", tornado.web.RedirectHandler, {"url": "/admin/agents", "permanent": True}),
+            (r"/admin/interfaces", AdminInterfacesHandler),
+            (r"/admin/interfaces/test", AdminInterfaceTestHandler),
+            (r"/admin/interfaces/([0-9]+)/logs", AdminInterfaceLogsHandler),
+            (r"/admin/skills", AdminSkillsHandler),
+            (r"/admin/skills/([0-9]+)/bind", AdminSkillBindHandler),
+            (r"/admin/skills/suggest", AdminSkillSuggestHandler),
+            (r"/admin/tts", AdminTTSHandler),
+            (r"/admin/tts/preview", AdminTTSPreviewHandler),
+            (r"/tts/audio/(.*)", TTSAudioHandler),
+            (r"/api/tts", UserTTSHandler),
+            (r"/admin/multimodal", AdminMultimodalHandler),
+            (r"/admin/multimodal/config", AdminMultimodalConfigHandler),
+            (r"/admin/multimodal/generate", AdminMultimodalGenerateHandler),
+            (r"/admin/multimodal/tasks", AdminMultimodalTaskListHandler),
+            (r"/admin/multimodal/tasks/([a-zA-Z0-9-]+)", AdminMultimodalTaskStatusHandler),
+            (r"/admin/multimodal/tasks/([a-zA-Z0-9-]+)/delete", AdminMultimodalTaskDeleteHandler),
+            (r"/api/multimodal/generate", UserMultimodalGenerateHandler),
             (r"/admin/modules/([a-z]+)", AdminModuleHandler),
         ],
         template_path=str(BASE_DIR / "app" / "templates"),
@@ -92,7 +145,7 @@ def make_app() -> tornado.web.Application:
         login_url="/",
         xsrf_cookies=SETTINGS.xsrf_cookies,
         debug=SETTINGS.debug,
-        autoreload=SETTINGS.debug,
+        autoreload=False,
     )
 
 

@@ -45,6 +45,8 @@
             </div>
             <div class="token-usage"><header><span>Token 使用相对值</span><span>{{ item["last_used_at"] or "尚未调用" }}</span></header><div class="token-track" role="img" aria-label="{{ item['name'] }} 累计使用 {{ item['total_tokens'] }} Token"><span data-token-bar></span></div></div>
             <div class="model-actions">
+                <button class="v02-button-secondary" type="button" data-open-usage-stats data-model-id="{{ item['id'] }}" data-model-name="{{ item['name'] }}"><i class="layui-icon layui-icon-chart"></i>统计详情</button>
+                <button class="v02-button-secondary" type="button" data-open-failure-logs data-model-id="{{ item['id'] }}" data-model-name="{{ item['name'] }}"><i class="layui-icon layui-icon-error"></i>失败日志</button>
                 <button class="v02-button-secondary" type="button" data-dialog-open="model-chat" data-chat-model="{{ item['id'] }}" data-chat-model-name="{{ item['name'] }}" {% if not item['enabled'] or not can_write %}disabled{% end %}><i class="layui-icon layui-icon-dialogue"></i>模型对话</button>
                 {% if can_write %}
                 <button class="v02-row-action" type="button" data-dialog-open="edit-model-{{ item['id'] }}">设置</button>
@@ -117,6 +119,41 @@
             <div class="model-chat-composer"><label class="visually-hidden" for="model-chat-message">测试消息</label><textarea class="v02-textarea" id="model-chat-message" name="message" rows="2" maxlength="2000" required placeholder="输入测试问题，模型将以流式方式回答"></textarea><button class="v02-button" type="submit">发送</button><button class="v02-button-secondary" type="button" data-cancel-stream disabled>停止</button></div>
         </div>
     </form>
+</dialog>
+
+<dialog class="management-dialog v02-dialog extra-wide" id="model-usage-stats" aria-labelledby="model-usage-stats-title">
+    <header>
+        <div>
+            <h3 id="model-usage-stats-title" data-usage-title>模型调用统计</h3>
+            <p>查看该模型的调用日志明细，包括调用用户、Token使用量、耗时和状态。</p>
+        </div>
+        <button type="button" data-dialog-close aria-label="关闭">×</button>
+    </header>
+    <div class="dialog-body">
+        <div class="model-usage-filters">
+            <button class="v02-button-secondary" type="button" data-filter="all" aria-pressed="true">全部</button>
+            <button class="v02-button-secondary" type="button" data-filter="success" aria-pressed="false">成功</button>
+            <button class="v02-button-secondary" type="button" data-filter="failure" aria-pressed="false">失败</button>
+        </div>
+        <div class="model-usage-table-wrapper" data-usage-table>
+            <div class="v02-feedback"><i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop"></i><h4>加载中...</h4></div>
+        </div>
+    </div>
+</dialog>
+
+<dialog class="management-dialog v02-dialog extra-wide" id="model-failure-logs" aria-labelledby="model-failure-logs-title">
+    <header>
+        <div>
+            <h3 id="model-failure-logs-title" data-failure-title>模型失败日志</h3>
+            <p>查看该模型调用失败的详细记录，包括错误信息和调用时间。</p>
+        </div>
+        <button type="button" data-dialog-close aria-label="关闭">×</button>
+    </header>
+    <div class="dialog-body">
+        <div class="model-failure-table-wrapper" data-failure-table>
+            <div class="v02-feedback"><i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop"></i><h4>加载中...</h4></div>
+        </div>
+    </div>
 </dialog>
 {% end %}
 {% block admin_scripts %}<script src="{{ static_url('js/models.js') }}"></script>{% end %}

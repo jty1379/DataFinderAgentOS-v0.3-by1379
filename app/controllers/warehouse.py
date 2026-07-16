@@ -147,3 +147,46 @@ class AdminWarehouseDeepResultHandler(AdminJsonHandler):
         if not result:
             return self.write_json({"ok": False, "message": "该数据尚无深度采集结果"}, 404)
         return self.write_json({"ok": True, "result": result})
+
+
+class WarehouseStatsHandler(AdminJsonHandler):
+    """数据仓库统计接口，供数据分析师数字员工调用。"""
+
+    def get(self):
+        period = self.get_query_argument("period", "week").strip().lower()
+        if period not in {"today", "week", "month", "all"}:
+            period = "week"
+        from app.models.db import connection_scope
+        with connection_scope() as conn:
+            period_clause = ""
+            if period == "today":
+                period_clause = "AND w.created_at >= date('now', 'start of day')"
+            elif period == "week":
+                period_clause = "AND w.created_at >= date('now', '-7 days')"
+            elif period == "month":
+                period_clause = "AND w.created_at >= date('now', '-30 days')"
+
+            total = int(conn.execute(
+                "SELECT COUNT(*) AS c FROM warehouse_items w WHERE 1=1 " + period_clause
+            ).fetchone()["c"])
+            deep_count = int(conn.execute(
+                "SELECT COUNT(*) AS c FROM warehouse_items w WHERE w.deep_collected = 1 " + period_clause
+            ).fetchone()["c"])
+            sources = conn.execute(
+                "SELECT w.source_name, COUNT(*) AS cnt FROM warehouse_items w WHERE 1=1 "
+                + period_clause + " GROUP BY w.source_name ORDER BY cnt DESC LIMIT 10"
+            ).fetchall()
+            recent = conn.execute(
+                "SELECT w.title, w.source_name, w.created_at FROM warehouse_items w WHERE 1=1 "
+                + period_clause + " ORDER BY w.id DESC LIMIT 5"
+            ).fetchall()
+
+        return self.write_json({
+            "ok": True,
+            "period": period,
+            "total_items": total,
+            "deep_collected": deep_count,
+            "deep_rate": round(deep_count / total * 100, 1) if total else 0,
+            "sources": [{"name": r["source_name"] or "未知来源", "count": r["cnt"]} for r in sources],
+            "recent": [dict(r) for r in recent],
+        })
