@@ -1,0 +1,54 @@
+{% extends "../base.html" %}
+{% block head %}
+<link rel="stylesheet" href="{{ static_url('css/admin-v02.css') }}">
+{% block admin_head %}{% end %}
+{% end %}
+{% block content %}
+<div class="admin-app">
+    <aside class="admin-sidebar" data-admin-sidebar>
+        <a class="admin-logo" href="/admin/"><span>D</span><div><b>瞭望与问数</b><small>管理控制台</small></div></a>
+        {% for group in admin_menu_groups %}
+        <div class="nav-section-label">{{ group["category"] }}</div>
+        <nav class="admin-nav" aria-label="{{ group['category'] }}">
+            {% for item in group["items"] %}
+            <a href="{{ item['route'] }}" data-admin-link class="{% if active_menu == item['code'] %}active{% end %}"{% if active_menu == item['code'] %} aria-current="page"{% end %}>
+                <i class="layui-icon {{ item['icon'] }}"></i><span>{{ item["title"] }}</span>
+            </a>
+            {% end %}
+        </nav>
+        {% end %}
+        <div class="admin-version"><span></span> v0.3 · 智能问数版</div>
+    </aside>
+    <div class="admin-main">
+        <header class="admin-topbar">
+            <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-label="打开导航"><i class="layui-icon layui-icon-spread-left"></i></button>
+            <div><p class="section-kicker compact">管理控制台</p><h1>{{ page_title }}</h1></div>
+            <div class="topbar-actions">
+                <div class="system-online"><span></span><b>系统运行正常</b></div>
+                <time data-live-clock>--:--:--</time>
+                <details class="admin-account-menu">
+                    <summary aria-label="打开管理员账户菜单">
+                        <span class="admin-account-avatar" aria-hidden="true">{{ user["username"][0] }}</span>
+                        <span class="admin-account-summary"><b>{{ user["username"] }}</b><small>{{ user["role_name"] }}</small></span>
+                        <i class="layui-icon layui-icon-down" aria-hidden="true"></i>
+                    </summary>
+                    <div class="admin-account-dropdown">
+                        <div><span>账号</span><b>{{ user["username"] }}</b></div>
+                        <div><span>角色</span><b>{{ user["role_name"] }}</b></div>
+                        <a href="/admin/logout"><i class="layui-icon layui-icon-logout" aria-hidden="true"></i>退出登录</a>
+                    </div>
+                </details>
+            </div>
+        </header>
+        <main class="admin-content">
+            {% if flash_message %}<div class="flash-message {{ flash_level }}" role="status"><i class="layui-icon {% if flash_level == 'error' %}layui-icon-close-fill{% else %}layui-icon-ok-circle{% end %}"></i>{{ flash_message }}</div>{% end %}
+            {% block admin_content %}{% end %}
+        </main>
+    </div>
+    <button class="sidebar-backdrop" data-sidebar-backdrop aria-label="关闭导航"></button>
+</div>
+{% end %}
+{% block scripts %}
+<script src="{{ static_url('js/admin-common.js') }}"></script>
+{% block admin_scripts %}{% end %}
+{% end %}

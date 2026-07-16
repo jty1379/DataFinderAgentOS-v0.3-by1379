@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block head %}
+<link rel="stylesheet" href="{{ static_url('css/user-workspace.css') }}">
+{% end %}
+{% block content %}
+<div class="user-workspace" data-user-workspace>
+    <div class="workspace-scrim" data-workspace-scrim></div>
+    <aside class="task-rail" data-task-rail>
+        <div class="rail-brand">
+            <a href="/index" aria-label="返回问数首页"><span class="brand-mark">DF</span><span><b>瞭望与问数系统</b><small>DataFinder Agent OS</small></span></a>
+            <button class="rail-close" type="button" data-rail-close aria-label="关闭会话栏"><i class="layui-icon layui-icon-close"></i></button>
+        </div>
+
+        <section class="model-panel" aria-labelledby="model-label">
+            <label id="model-label" for="workspace-model">当前模型服务</label>
+            <div class="select-shell">
+                <i class="layui-icon layui-icon-engine"></i>
+                <select id="workspace-model" data-model-select {% if not models %}disabled{% end %}>
+                    {% if not models %}<option value="">尚未配置可用模型</option>{% end %}
+                    {% for model in models %}
+                    <option value="{{ model['id'] }}" {% if default_model and model['id'] == default_model['id'] %}selected{% end %}>{{ model["name"] }} · {{ model["provider"] }}</option>
+                    {% end %}
+                </select>
+            </div>
+            <p>数字员工有专属模型时将优先使用其配置。</p>
+        </section>
+
+        <button class="new-conversation" type="button" data-new-conversation>
+            <i class="layui-icon layui-icon-add-1"></i><span>新建问数任务</span>
+        </button>
+
+        <section class="history-panel" aria-labelledby="history-label">
+            <div class="rail-section-title"><span id="history-label">任务记录</span><small>{{ len(conversations) }} 项</small></div>
+            <div class="history-list" data-history-list>
+                {% for item in conversations %}
+                <button type="button" class="history-item" data-conversation-id="{{ item['id'] }}">
+                    <i class="layui-icon layui-icon-file-b"></i>
+                    <span><b>{{ item["title"] }}</b><small>{{ item["updated_at"][:16] }} · {{ item["message_count"] }} 条</small></span>
+                </button>
+                {% end %}
+                <div class="history-empty {% if conversations %}hidden{% end %}" data-history-empty>
+                    <i class="layui-icon layui-icon-survey"></i><b>还没有问数任务</b><span>首次提问后会自动生成任务标题</span>
+                </div>
+            </div>
+        </section>
+
+        <div class="rail-account">
+            <span class="account-avatar">{{ user["username"][0].upper() }}</span>
+            <div><b>{{ user["username"] }}</b><small>普通用户 · 已安全登录</small></div>
+            <a href="/logout" title="退出登录" aria-label="退出登录"><i class="layui-icon layui-icon-logout"></i></a>
+        </div>
+    </aside>
+
+    <main class="conversation-space">
+        <header class="conversation-header">
+            <button class="rail-open" type="button" data-rail-open aria-label="打开会话栏"><i class="layui-icon layui-icon-spread-left"></i></button>
+            <div><p>当前任务</p><h1 data-conversation-title>新建问数任务</h1></div>
+            <span class="service-state"><i></i>服务可用</span>
+        </header>
+
+        <section class="dialogue-area" data-dialogue-area aria-live="polite">
+            <div class="workspace-welcome" data-workspace-welcome>
+                <div class="welcome-badge"><i class="layui-icon layui-icon-dialogue"></i></div>
+                <p class="eyebrow">政务数据智能工作台</p>
+                <h2>你好，{{ user["username"] }}</h2>
+                <p class="welcome-copy">直接描述分析任务，或输入 <kbd>@</kbd> / <kbd>/</kbd> 调度数字员工。查询结果与任务上下文会自动保存。</p>
+                <div class="starter-grid">
+                    {% for employee in employees %}
+                    <button type="button" data-starter-employee="{{ employee['id'] }}" data-starter-mention="{{ employee['mention'] }}">
+                        <i class="layui-icon {% if employee['employee_type'] == 'api' %}layui-icon-release{% else %}layui-icon-username{% end %}"></i>
+                        <span><b>@{{ employee["mention"] }}</b><small>{{ employee["description"] }}</small></span>
+                    </button>
+                    {% end %}
+                    {% if not employees %}
+                    <div class="starter-empty">管理员启用数字员工后，将显示在这里。</div>
+                    {% end %}
+                </div>
+            </div>
+            <div class="message-stream" data-message-stream></div>
+        </section>
+
+        <section class="composer-zone">
+            <div class="employee-command" data-employee-command hidden>
+                <div class="command-heading"><span>调度数字员工</span><small>↑↓ 选择 · Enter 确认 · Esc 关闭</small></div>
+                <div class="command-list">
+                    {% for employee in employees %}
+                    <button type="button" data-employee-id="{{ employee['id'] }}" data-employee-mention="{{ employee['mention'] }}" data-employee-name="{{ employee['name'] }}">
+                        <i class="layui-icon {% if employee['employee_type'] == 'api' %}layui-icon-release{% else %}layui-icon-username{% end %}"></i>
+                        <span><b>@{{ employee["mention"] }}</b><small>{{ employee["name"] }} · {{ employee["description"] }}</small></span>
+                        <em>{{ "API" if employee["employee_type"] == "api" else "LLM" }}</em>
+                    </button>
+                    {% end %}
+                </div>
+            </div>
+            <div class="active-employee" data-active-employee hidden>
+                <span><i class="layui-icon layui-icon-username"></i><b data-active-employee-name></b> 已接入</span>
+                <button type="button" data-clear-employee>取消调度</button>
+            </div>
+            <form class="question-composer" data-question-composer>
+                <label class="sr-only" for="question-input">输入问数问题</label>
+                <textarea id="question-input" rows="1" maxlength="8000" autocomplete="off" placeholder="输入问题，或键入 @ / 调度数字员工" data-question-input></textarea>
+                <button type="submit" data-send-button><i class="layui-icon layui-icon-release"></i><span>发送</span></button>
+            </form>
+            <p class="composer-note">仓库问数来自本地只读统计；天气数据由 wttr.in 提供。回答请结合来源复核。</p>
+        </section>
+    </main>
+</div>
+{% end %}
+{% block scripts %}
+<script src="{{ static_url('js/user-workspace.js') }}"></script>
+{% end %}

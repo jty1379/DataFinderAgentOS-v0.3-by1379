@@ -1,0 +1,55 @@
+# Python 与虚拟环境
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 运行数据库
+database/*.db
+database/*.db-shm
+database/*.db-wal
+database/*.sqlite
+database/*.sqlite3
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# 运行密钥与本地环境
+config/runtime_secret.txt
+config/runtime_model_secrets.json
+config/model_secrets.json
+.env
+.env.*
+!.env.example
+*.key
+
+# 日志与测试产物
+*.log
+logs/
+.coverage
+coverage.xml
+htmlcov/
+.playwright-cli/
+playwright-report/
+test-results/
+test/screenshots/
+test/videos/
+test/traces/
+*.trace.zip
+
+# 编辑器、系统和临时文件
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+
+# 打包产物不回放进源码包
+*.zip
+
+# 数字员工运行时上传资料（仅保留目录说明）
+data/dgUser/*/

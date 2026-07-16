@@ -1,0 +1,169 @@
+"""可重复执行的系统角色、权限、采集源和数字员工种子数据。"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import secrets
+import sqlite3
+
+DEFAULT_FEATURES = (
+    ("dashboard", "工作台", "/admin/", "layui-icon-console", "核心工作区", "系统运行概览与关键指标", 10, 1),
+    ("user_management", "用户管理", "/admin/users", "layui-icon-user", "核心工作区", "集中管理普通用户与管理员账号", 20, 1),
+    ("feature_management", "功能管理", "/admin/features", "layui-icon-component", "核心工作区", "维护系统功能及启用状态", 30, 1),
+    ("menu_management", "菜单管理", "/admin/menus", "layui-icon-cols", "核心工作区", "配置、排序并预览管理端菜单", 40, 1),
+    ("role_management", "角色管理", "/admin/roles", "layui-icon-auz", "核心工作区", "维护角色及其功能授权", 50, 1),
+    ("lookout_management", "瞭望采集", "/admin/lookout", "layui-icon-chart-screen", "数据与智能", "按瞭源规则采集并预览公开数据", 60, 1),
+    ("data_management", "数据仓库", "/admin/warehouse", "layui-icon-diamond", "数据与智能", "管理已入库的采集数据与深度采集状态", 70, 1),
+    ("collection_management", "瞭源管理", "/admin/sources", "layui-icon-download-circle", "数据与智能", "维护公开数据源、请求头和采集规则", 80, 1),
+    ("digital_employees", "数字员工", "/admin/agents", "layui-icon-username", "数据与智能", "配置模型型与接口型数字员工，并支持后台任务调度", 90, 1),
+    ("model_engine", "模型引擎", "/admin/models", "layui-icon-engine", "数据与智能", "配置 OpenAI 兼容模型、默认服务和生成参数", 100, 1),
+    ("intelligence_screen", "数智大屏", "/admin/modules/intelligence", "layui-icon-chart", "数据与智能", "呈现核心业务指标", 110, 1),
+    ("opinion_screen", "舆情大屏", "/admin/modules/opinion", "layui-icon-fire", "数据与智能", "聚合热点事件与舆情趋势", 120, 1),
+    ("user_portal", "用户侧门户", "/index", "layui-icon-dialogue", "用户侧", "用户登录、问数与数字员工入口", 130, 1),
+)
+
+SAFE_BAIDU_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+}
+
+
+def _seed_permissions(connection: sqlite3.Connection) -> None:
+    connection.executemany(
+        "INSERT OR IGNORE INTO roles(code,name,description,access_scope,enabled,is_system) VALUES (?,?,?,?,1,1)",
+        (("user", "普通用户", "只能登录用户侧并使用已授权能力", "user"), ("admin", "系统管理员", "只能登录管理侧并维护系统配置", "admin")),
+    )
+    connection.executemany(
+        """INSERT OR IGNORE INTO features
+        (code,name,route,icon,category,description,sort_order,enabled,is_system)
+        VALUES (?,?,?,?,?,?,?,1,?)""",
+        DEFAULT_FEATURES,
+    )
+    for code, name, route, icon, category, description, sort_order, is_system in DEFAULT_FEATURES:
+        connection.execute(
+            """UPDATE features SET name=?,route=?,icon=?,category=?,description=?,sort_order=?,is_system=?,updated_at=CURRENT_TIMESTAMP
+            WHERE code=?""",
+            (name, route, icon, category, description, sort_order, is_system, code),
+        )
+    admin_role = connection.execute("SELECT id FROM roles WHERE code='admin'").fetchone()
+    user_role = connection.execute("SELECT id FROM roles WHERE code='user'").fetchone()
+    if admin_role:
+        connection.execute("INSERT OR IGNORE INTO role_features(role_id,feature_id) SELECT ?,id FROM features WHERE route LIKE '/admin/%' AND is_system=1", (admin_role["id"],))
+    if user_role:
+        connection.execute("INSERT OR IGNORE INTO role_features(role_id,feature_id) SELECT ?,id FROM features WHERE code='user_portal'", (user_role["id"],))
+    connection.execute("""INSERT OR IGNORE INTO menus(feature_id,title,icon,category,sort_order,enabled,is_system)
+        SELECT id,name,icon,category,sort_order,1,1 FROM features WHERE route LIKE '/admin/%'""")
+    connection.execute("""UPDATE menus SET title=(SELECT name FROM features WHERE id=menus.feature_id),
+        icon=(SELECT icon FROM features WHERE id=menus.feature_id), category=(SELECT category FROM features WHERE id=menus.feature_id),
+        sort_order=(SELECT sort_order FROM features WHERE id=menus.feature_id), updated_at=CURRENT_TIMESTAMP
+        WHERE feature_id IN (SELECT id FROM features WHERE code IN
+        ('lookout_management','data_management','collection_management','model_engine','digital_employees'))""")
+
+
+def _seed_admin(connection: sqlite3.Connection) -> None:
+    """只在不存在 admin 时创建课堂演示管理员，不覆盖已有密码。"""
+    if connection.execute("SELECT 1 FROM users WHERE username='admin' OR is_superadmin=1 LIMIT 1").fetchone():
+        return
+    role = connection.execute("SELECT id FROM roles WHERE code='admin'").fetchone()
+    if not role:
+        return
+    salt = secrets.token_bytes(16)
+    password_hash = hashlib.pbkdf2_hmac("sha256", b"123456", salt, 100_000).hex()
+    connection.execute(
+        """INSERT INTO users(username,password_hash,salt,role,role_id,status,is_superadmin)
+        VALUES ('admin',?,?, 'admin',?,'enabled',1)""",
+        (password_hash, salt.hex(), role["id"]),
+    )
+
+
+def _upgrade_legacy_users(connection: sqlite3.Connection) -> None:
+    connection.execute("UPDATE users SET role_id=(SELECT id FROM roles WHERE roles.code=users.role) WHERE role_id IS NULL")
+    connection.execute("UPDATE users SET updated_at=created_at WHERE updated_at='' OR updated_at IS NULL")
+    if connection.execute("SELECT 1 FROM users WHERE is_superadmin=1 LIMIT 1").fetchone():
+        return
+    admin_role = connection.execute("SELECT id FROM roles WHERE code='admin'").fetchone()
+    legacy = connection.execute("SELECT id FROM users WHERE username='admin'").fetchone()
+    if admin_role and legacy:
+        connection.execute("UPDATE users SET role='admin',role_id=?,status='enabled',is_superadmin=1,updated_at=CURRENT_TIMESTAMP WHERE id=?", (admin_role["id"], legacy["id"]))
+
+
+def _seed_source(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """INSERT OR IGNORE INTO lookout_sources(code,name,base_url,description,default_headers,enabled)
+        VALUES ('baidu_news','百度新闻','https://www.baidu.com/s','公开新闻搜索演示源；不保存 Cookie 或登录凭据。',?,1)""",
+        (json.dumps(SAFE_BAIDU_HEADERS, ensure_ascii=False, separators=(",", ":")),),
+    )
+    connection.execute("UPDATE lookout_sources SET code='baidu_news' WHERE name='百度新闻' AND code='' ")
+    source = connection.execute("SELECT id FROM lookout_sources WHERE name='百度新闻'").fetchone()
+    if source:
+        connection.execute(
+            """INSERT OR IGNORE INTO collection_rules
+            (source_id,name,keyword_param,page_param,page_start,page_step,page_size,fixed_params,request_headers,parser_type,parser_config,enabled)
+            VALUES (?,'百度新闻关键词采集','word','pn',0,10,12,?,'{}','baidu_news',?,1)""",
+            (source["id"], json.dumps({"rtt": "1", "bsst": "1", "cl": "2", "tn": "news", "rsv_dl": "ns_pc"}, separators=(",", ":")), '{"result_limit":12}'),
+        )
+
+    # Source 2: 四川大学新闻网 (SCU News)
+    connection.execute(
+        """INSERT OR IGNORE INTO lookout_sources(code,name,base_url,description,default_headers,enabled)
+        VALUES ('scu_news','四川大学新闻网','https://news.scu.edu.cn/','四川大学官方新闻网站；校园动态与学术资讯。',?,1)""",
+        (json.dumps(SAFE_BAIDU_HEADERS, ensure_ascii=False, separators=(",", ":")),),
+    )
+    scu_source = connection.execute("SELECT id FROM lookout_sources WHERE code='scu_news'").fetchone()
+    if scu_source:
+        connection.execute(
+            """INSERT OR IGNORE INTO collection_rules
+            (source_id,name,keyword_param,page_param,page_start,page_step,page_size,fixed_params,request_headers,parser_type,parser_config,enabled)
+            VALUES (?,'四川大学新闻采集','word','page',1,1,20,'{}','{}','generic_links',?,1)""",
+            (scu_source["id"], '{"result_limit":20}'),
+        )
+
+    # Source 3: 36Kr (创投热点) - Using RSS/news feed endpoint
+    connection.execute(
+        """INSERT OR IGNORE INTO lookout_sources(code,name,base_url,description,default_headers,enabled)
+        VALUES ('kr36_trending','36氪热点','https://www.36kr.com/search','创投行业动态与融资信息。',?,1)""",
+        (json.dumps(SAFE_BAIDU_HEADERS, ensure_ascii=False, separators=(",", ":")),),
+    )
+    kr36_source = connection.execute("SELECT id FROM lookout_sources WHERE code='kr36_trending'").fetchone()
+    if kr36_source:
+        connection.execute(
+            """INSERT OR IGNORE INTO collection_rules
+            (source_id,name,keyword_param,page_param,page_start,page_step,page_size,fixed_params,request_headers,parser_type,parser_config,enabled)
+            VALUES (?,'36氪创投采集','keyword','page',1,1,30,'{}','{}','generic_links',?,1)""",
+            (kr36_source["id"], '{"result_limit":30}'),
+        )
+
+
+def _seed_employees(connection: sqlite3.Connection) -> None:
+    connection.execute(
+        """INSERT OR IGNORE INTO digital_employees
+        (code,name,mention,employee_type,description,use_default_model,system_prompt,prompt_template,skills,crawl4ai_enabled,crawl4ai_config,enabled,is_system)
+        VALUES ('collection_specialist','采集专员','采集专员','llm',?,1,?,'{{input}}',?,1,?,1,1)""",
+        ("负责公开网页正文提取、字段整理与深度采集任务执行。", "你是数据采集专员，仅处理公开网页，输出可追溯的结构化采集结果。", json.dumps(["网页正文提取", "字段整理", "来源追溯"], ensure_ascii=False), '{"reader":"crawl4ai","max_chars":200000}'),
+    )
+    connection.execute(
+        """UPDATE digital_employees SET crawl4ai_enabled=1,
+        crawl4ai_config='{"reader":"crawl4ai","max_chars":200000}', updated_at=CURRENT_TIMESTAMP
+        WHERE code='collection_specialist'"""
+    )
+    connection.execute(
+        """INSERT OR IGNORE INTO digital_employees
+        (code,name,mention,employee_type,description,use_default_model,skills,api_method,api_url,request_headers,request_params,response_mode,timeout_seconds,enabled,is_system)
+        VALUES ('weather','天气专员','天气','api',?,1,?,'GET','https://wttr.in/{{input_url}}','{}',?,'card',20,1,1)""",
+        ("通过 wttr.in 公共接口查询城市当前天气与未来三日预报。", json.dumps(["实时天气", "三日预报", "城市气象"], ensure_ascii=False), '{"format":"j1","lang":"zh"}'),
+    )
+
+
+def seed_database(connection: sqlite3.Connection) -> None:
+    """幂等写入系统运行所需的最小初始数据。"""
+    _seed_permissions(connection)
+    _seed_admin(connection)
+    _upgrade_legacy_users(connection)
+    _seed_source(connection)
+    _seed_employees(connection)
+    for version, description in ((2, "permissions and collection"), (3, "feature hierarchy"), (4, "digital employees"), (5, "conversations")):
+        connection.execute("INSERT OR IGNORE INTO schema_migrations(version,name,description,checksum) VALUES (?,?,?,'legacy')", (version, f"legacy_{version}", description))

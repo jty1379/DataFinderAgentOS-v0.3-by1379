@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block admin_content %}
+<section class="management-page task2-management-page">
+    <header class="management-heading">
+        <div>
+            <p class="section-kicker">系统能力目录</p>
+            <h2>功能管理</h2>
+            <p>以一级、二级结构维护功能图标、名称和路由；停用后所有角色都无法操作，关联菜单也会同步隐藏。</p>
+        </div>
+        {% if not can_write %}<span class="v02-readonly"><i class="layui-icon layui-icon-auz"></i>只读角色</span>{% end %}
+    </header>
+
+    {% if not can_write %}<div class="readonly-banner">当前角色只能查看功能目录；新增、编辑、启停和删除仅限默认超级管理员。</div>{% end %}
+
+    <div class="task2-toolbar" aria-label="功能管理操作区">
+        <form class="filter-bar" method="get" action="/admin/features">
+            <label><span>搜索功能</span><input class="layui-input" name="q" value="{{ keyword }}" placeholder="名称、编码或路由"></label>
+            <label><span>状态</span><select name="enabled"><option value="">全部状态</option><option value="1" {% if selected_enabled == '1' %}selected{% end %}>已启用</option><option value="0" {% if selected_enabled == '0' %}selected{% end %}>已停用</option></select></label>
+            <button class="filter-submit" type="submit"><i class="layui-icon layui-icon-search"></i>查询</button>
+            <a class="filter-reset" href="/admin/features">重置</a>
+        </form>
+        {% if can_write %}<div class="task2-toolbar-actions"><button class="management-primary" type="button" data-dialog-open="create-feature"><i class="layui-icon layui-icon-add-1"></i>新增功能</button></div>{% end %}
+    </div>
+
+    <div class="management-card">
+        <div class="management-summary"><b>功能目录</b><span>共 {{ pager["total"] }} 项，每页 {{ pager["page_size"] }} 项</span></div>
+        <div class="table-responsive">
+            <table class="management-table task2-table feature-hierarchy-table">
+                <caption class="sr-only">一级、二级功能列表</caption>
+                <thead><tr><th>功能</th><th>层级 / 上级</th><th>编码 / 路由</th><th>分组</th><th>授权角色</th><th>菜单</th><th>状态</th><th>操作</th></tr></thead>
+                <tbody>
+                    {% for item in features %}
+                    <tr data-feature-level="{{ item['level'] }}">
+                        <td><div class="feature-cell hierarchical-feature {% if item['level'] == 2 %}is-child{% end %}"><i class="layui-icon {{ item['icon'] }}"></i><div><b>{{ item["name"] }}</b><small>{{ item["description"] or "暂无说明" }}</small></div></div></td>
+                        <td><span class="feature-level-badge level-{{ item['level'] }}">{{ "一级" if item["level"] == 1 else "二级" }}</span><small class="feature-parent-name">{{ item["parent_name"] or "—" }}</small></td>
+                        <td><code>{{ item["code"] }}</code><small class="route-text" title="{{ item['route'] }}">{{ item["route"] }}</small></td>
+                        <td>{{ item["category"] }}</td>
+                        <td>{{ item["role_count"] }}</td>
+                        <td>{{ "已配置" if item["has_menu"] else "未配置" }}</td>
+                        <td><span class="state-badge {{ 'enabled' if item['enabled'] else 'disabled' }}">{{ "启用" if item["enabled"] else "停用" }}</span></td>
+                        <td>{% if can_write %}<div class="row-actions"><button type="button" data-dialog-open="edit-feature-{{ item['id'] }}">编辑</button><form method="post"><input type="hidden" name="action" value="toggle"><input type="hidden" name="feature_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button type="submit">{{ "禁用" if item["enabled"] else "启用" }}</button></form>{% if not item["is_system"] %}<form method="post" data-confirm="确认删除功能“{{ item['name'] }}”？有关联子功能、授权或菜单时将拒绝删除。"><input type="hidden" name="action" value="delete"><input type="hidden" name="feature_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="danger" type="submit">删除</button></form>{% end %}</div>{% else %}<span class="state-badge disabled">只读</span>{% end %}</td>
+                    </tr>
+                    {% end %}
+                    {% if not features %}<tr><td colspan="8"><div class="empty-state"><i class="layui-icon layui-icon-face-surprised"></i><b>没有找到功能</b><span>请调整搜索条件或新增功能。</span></div></td></tr>{% end %}
+                </tbody>
+            </table>
+        </div>
+        <nav class="v02-pagination task2-pagination" aria-label="功能列表分页">
+            <span class="pager-meta">第 {{ pager["page"] }} / {{ pager["total_pages"] }} 页</span>
+            {% if pager["prev_url"] %}<a href="{{ pager['prev_url'] }}" aria-label="上一页">上一页</a>{% else %}<span aria-disabled="true">上一页</span>{% end %}
+            {% for link in pager["page_links"] %}{% if link["current"] %}<span class="current" aria-current="page">{{ link["number"] }}</span>{% else %}<a href="{{ link['url'] }}">{{ link["number"] }}</a>{% end %}{% end %}
+            {% if pager["next_url"] %}<a href="{{ pager['next_url'] }}" aria-label="下一页">下一页</a>{% else %}<span aria-disabled="true">下一页</span>{% end %}
+        </nav>
+    </div>
+</section>
+
+{% if can_write %}
+<dialog class="management-dialog" id="create-feature"><form method="post"><header><h3>新增功能</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header><div class="dialog-body"><input type="hidden" name="action" value="create">{% raw xsrf_form_html() %}<label>功能层级<select name="parent_id"><option value="0">一级功能（无上级）</option>{% for parent in root_features %}{% if parent["enabled"] %}<option value="{{ parent['id'] }}">二级功能，归属：{{ parent["name"] }}</option>{% end %}{% end %}</select><small>系统仅支持一级与二级；二级功能必须选择一个一级功能。</small></label><label>功能名称<input class="layui-input" name="name" required maxlength="30"></label><label>功能编码<input class="layui-input" name="code" required pattern="[a-z][a-z0-9_]{2,40}" placeholder="例如 report_export"></label><label>访问路由<input class="layui-input" name="route" required value="/admin/modules/"></label><label>Layui 图标<input class="layui-input" name="icon" required value="layui-icon-app"></label><label>功能分组<input class="layui-input" name="category" required value="数据与智能"></label><label>排序值<input class="layui-input" name="sort_order" type="number" value="100"></label><label>功能说明<textarea class="layui-textarea" name="description" maxlength="200"></textarea></label></div><footer><button type="button" data-dialog-close>取消</button><button class="management-primary" type="submit">创建功能</button></footer></form></dialog>
+
+{% for item in features %}<dialog class="management-dialog" id="edit-feature-{{ item['id'] }}"><form method="post"><header><h3>编辑功能</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header><div class="dialog-body"><input type="hidden" name="action" value="update"><input type="hidden" name="feature_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<label>功能层级<select name="parent_id"><option value="0" {% if not item["parent_id"] %}selected{% end %}>一级功能（无上级）</option>{% for parent in root_features %}{% if parent["id"] != item["id"] %}<option value="{{ parent['id'] }}" {% if item["parent_id"] == parent["id"] %}selected{% end %}>二级功能，归属：{{ parent["name"] }}</option>{% end %}{% end %}</select><small>有下级功能的一级功能不能改为二级；系统会拒绝循环层级。</small></label><label>功能名称<input class="layui-input" name="name" value="{{ item['name'] }}" required maxlength="30"></label><label>功能编码<input class="layui-input" value="{{ item['code'] }}" disabled><small>功能编码创建后不可修改。</small></label><label>访问路由<input class="layui-input" name="route" value="{{ item['route'] }}" required></label><label>Layui 图标<input class="layui-input" name="icon" value="{{ item['icon'] }}" required></label><label>功能分组<input class="layui-input" name="category" value="{{ item['category'] }}" required></label><label>排序值<input class="layui-input" name="sort_order" type="number" value="{{ item['sort_order'] }}"></label><label>功能说明<textarea class="layui-textarea" name="description" maxlength="200">{{ item["description"] }}</textarea></label></div><footer><button type="button" data-dialog-close>取消</button><button class="management-primary" type="submit">保存修改</button></footer></form></dialog>{% end %}
+{% end %}
+{% end %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block admin_content %}
+<section>
+    <div class="welcome-banner">
+        <div><p class="section-kicker">系统概览</p><h2><span data-greeting>你好</span>，{{ user["username"] }}</h2><p>欢迎回到瞭望与问数系统，权限、认证和核心服务运行正常。</p></div>
+        <time data-current-date></time>
+    </div>
+    <div class="metric-grid">
+        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-user"></i></div><div><span>注册用户数</span><strong data-count="{{ user_count }}">{{ user_count }}</strong><small><em>实时</em> 数据库统计</small></div></article>
+        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-dialogue"></i></div><div><span>今日问数</span><strong data-count="28">28</strong><small><em>+12.5%</em> 较昨日</small></div></article>
+        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-diamond"></i></div><div><span>数据源数量</span><strong data-count="12">12</strong><small><em>10</em> 个在线</small></div></article>
+        <article class="metric-card"><div class="metric-icon"><i class="layui-icon layui-icon-ok-circle"></i></div><div><span>系统成功率</span><strong data-count="96" data-suffix="%">96%</strong><small><em>稳定</em> 最近 24 小时</small></div></article>
+    </div>
+    <div class="dashboard-grid">
+        <article class="dashboard-card trend-card">
+            <header><h3>七日问数趋势</h3><span class="demo-tag">演示数据</span></header>
+            <div class="chart-summary"><strong>168</strong><span>本周累计问数</span><em>↑ 18.6%</em></div>
+            <canvas id="query-trend-chart" aria-label="七日问数趋势图"></canvas>
+        </article>
+        <article class="dashboard-card source-card">
+            <header><h3>数据源状态</h3><button data-demo-notice="数据源配置将在后续版本开放">管理</button></header>
+            <ul class="source-list">
+                <li><span class="source-logo mysql">M</span><div><b>政务业务库</b><small>MySQL · 2 分钟前同步</small></div><em class="online">在线</em></li>
+                <li><span class="source-logo excel">X</span><div><b>统计报表库</b><small>Excel · 15 分钟前同步</small></div><em class="online">在线</em></li>
+                <li><span class="source-logo api">A</span><div><b>城市开放接口</b><small>API · 1 小时前同步</small></div><em class="warning">延迟</em></li>
+                <li><span class="source-logo file">F</span><div><b>历史归档文件</b><small>File · 昨日同步</small></div><em class="offline">离线</em></li>
+            </ul>
+        </article>
+    </div>
+    <div class="dashboard-grid lower-grid">
+        <article class="dashboard-card tasks-card">
+            <header><h3>最近问数任务</h3><button data-demo-notice="完整任务中心将在后续版本开放">查看全部</button></header>
+            <div class="table-responsive"><table class="task-table"><thead><tr><th>任务编号</th><th>问数主题</th><th>数字员工</th><th>状态</th><th>更新时间</th></tr></thead><tbody>
+                <tr><td>DF-0710-028</td><td>城市运行指标日报</td><td>@川哥</td><td><span class="task-status success">已完成</span></td><td>刚刚</td></tr>
+                <tr><td>DF-0710-027</td><td>今日政务热点汇总</td><td>@新闻</td><td><span class="task-status running">分析中</span></td><td>3 分钟前</td></tr>
+                <tr><td>DF-0710-026</td><td>区域天气风险研判</td><td>@天气</td><td><span class="task-status success">已完成</span></td><td>18 分钟前</td></tr>
+            </tbody></table></div>
+        </article>
+        <article class="dashboard-card security-card">
+            <header><h3>安全基线</h3><span class="score-ring">4/4</span></header>
+            <ul><li><i class="layui-icon layui-icon-ok"></i><span><b>Secure Cookie</b><small>会话签名与 HttpOnly</small></span></li><li><i class="layui-icon layui-icon-ok"></i><span><b>XSRF 防护</b><small>表单令牌校验</small></span></li><li><i class="layui-icon layui-icon-ok"></i><span><b>SQL 参数化</b><small>阻断注入风险</small></span></li><li><i class="layui-icon layui-icon-ok"></i><span><b>PBKDF2-SHA256</b><small>密码加盐哈希</small></span></li></ul>
+        </article>
+    </div>
+</section>
+{% end %}
