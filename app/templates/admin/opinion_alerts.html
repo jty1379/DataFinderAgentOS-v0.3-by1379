@@ -1,0 +1,192 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="layui-card">
+    <div class="layui-card-header">
+        <h3>舆情预警</h3>
+    </div>
+    <div class="layui-card-body">
+        <div class="layui-row layui-col-space10">
+            <div class="layui-col-md3">
+                <div class="layui-card">
+                    <div class="layui-card-header">待处理</div>
+                    <div class="layui-card-body">
+                        <h3 style="color: #FF5722;">{{ stats.by_status.get('pending', 0) }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="layui-col-md3">
+                <div class="layui-card">
+                    <div class="layui-card-header">处理中</div>
+                    <div class="layui-card-body">
+                        <h3 style="color: #FFB800;">{{ stats.by_status.get('processing', 0) }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="layui-col-md3">
+                <div class="layui-card">
+                    <div class="layui-card-header">已解决</div>
+                    <div class="layui-card-body">
+                        <h3 style="color: #10B981;">{{ stats.by_status.get('resolved', 0) }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="layui-col-md3">
+                <div class="layui-card">
+                    <div class="layui-card-header">误报</div>
+                    <div class="layui-card-body">
+                        <h3 style="color: #6366F1;">{{ stats.by_status.get('false_positive', 0) }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <form class="layui-form layui-form-pane" action="/admin/opinion/alerts" method="get">
+            <div class="layui-form-item layui-inline">
+                <label class="layui-form-label">状态</label>
+                <div class="layui-input-inline" style="width: 150px;">
+                    <select name="status">
+                        <option value="">全部</option>
+                        <option value="pending" {% if selected_status == 'pending' %}selected{% endif %}>待处理</option>
+                        <option value="processing" {% if selected_status == 'processing' %}selected{% endif %}>处理中</option>
+                        <option value="resolved" {% if selected_status == 'resolved' %}selected{% endif %}>已解决</option>
+                        <option value="false_positive" {% if selected_status == 'false_positive' %}selected{% endif %}>误报</option>
+                    </select>
+                </div>
+            </div>
+            <div class="layui-form-item layui-inline">
+                <label class="layui-form-label">风险等级</label>
+                <div class="layui-input-inline" style="width: 150px;">
+                    <select name="risk_level">
+                        <option value="">全部</option>
+                        <option value="low" {% if selected_risk == 'low' %}selected{% endif %}>低风险</option>
+                        <option value="medium" {% if selected_risk == 'medium' %}selected{% endif %}>中风险</option>
+                        <option value="high" {% if selected_risk == 'high' %}selected{% endif %}>高风险</option>
+                        <option value="critical" {% if selected_risk == 'critical' %}selected{% endif %}>严重风险</option>
+                    </select>
+                </div>
+            </div>
+            <div class="layui-form-item layui-inline">
+                <button class="layui-btn layui-btn-normal" lay-submit lay-filter="search">搜索</button>
+                <a href="/admin/opinion/alerts" class="layui-btn layui-btn-primary">重置</a>
+            </div>
+        </form>
+        
+        <form class="layui-form" action="/admin/opinion/alerts" method="post">
+            <input type="hidden" name="action" value="batch_handle">
+            <input type="hidden" name="_xsrf" value="{{ handler.xsrf_token }}">
+            
+            <table class="layui-table">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" lay-filter="selectAll"></th>
+                        <th>预警ID</th>
+                        <th>来源</th>
+                        <th>用户</th>
+                        <th>内容摘要</th>
+                        <th>风险等级</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alert in alerts %}
+                    <tr>
+                        <td><input type="checkbox" name="alert_ids" value="{{ alert.id }}"></td>
+                        <td>{{ alert.id }}</td>
+                        <td>{{ alert.source_type }}</td>
+                        <td>{{ alert.user_name or '-' }}</td>
+                        <td>{{ alert.content[:50] }}{% if alert.content|length > 50 %}...{% endif %}</td>
+                        <td>
+                            {% if alert.risk_level == 'critical' %}
+                            <span class="layui-badge layui-bg-red">严重</span>
+                            {% elif alert.risk_level == 'high' %}
+                            <span class="layui-badge layui-bg-orange">高风险</span>
+                            {% elif alert.risk_level == 'medium' %}
+                            <span class="layui-badge layui-bg-yellow">中风险</span>
+                            {% else %}
+                            <span class="layui-badge">低风险</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if alert.status == 'pending' %}
+                            <span class="layui-badge layui-bg-red">待处理</span>
+                            {% elif alert.status == 'processing' %}
+                            <span class="layui-badge layui-bg-orange">处理中</span>
+                            {% elif alert.status == 'resolved' %}
+                            <span class="layui-badge layui-bg-green">已解决</span>
+                            {% else %}
+                            <span class="layui-badge">误报</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ alert.created_at }}</td>
+                        <td>
+                            <button type="button" class="layui-btn layui-btn-xs" onclick="handleAlert({{ alert.id }})">处理</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            <div class="layui-btn-container">
+                <select name="status" class="layui-inline">
+                    <option value="processing">标记为处理中</option>
+                    <option value="resolved">标记为已解决</option>
+                    <option value="false_positive">标记为误报</option>
+                </select>
+                <button class="layui-btn layui-btn-normal" lay-submit lay-filter="batchHandle">批量处理</button>
+            </div>
+            
+            {{ pager|safe }}
+        </form>
+    </div>
+</div>
+
+<script>
+layui.use(['form', 'layer'], function() {
+    var form = layui.form;
+    var layer = layui.layer;
+    
+    form.on('checkbox(selectAll)', function(data) {
+        var child = $(data.elem).parents('table').find('tbody input[type="checkbox"]');
+        child.each(function(index, item) {
+            item.checked = data.elem.checked;
+        });
+        form.render('checkbox');
+    });
+    
+    form.on('submit(batchHandle)', function(data) {
+        var checked = $('input[name="alert_ids"]:checked');
+        if (checked.length === 0) {
+            layer.msg('请至少选择一个预警');
+            return false;
+        }
+        return true;
+    });
+});
+
+function handleAlert(id) {
+    layer.prompt({
+        formType: 2,
+        value: '',
+        title: '处理备注',
+        area: ['400px', '150px']
+    }, function(value, index, elem) {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/admin/opinion/alerts';
+        form.innerHTML = '<input type="hidden" name="action" value="handle">' +
+                         '<input type="hidden" name="alert_id" value="' + id + '">' +
+                         '<input type="hidden" name="status" value="processing">' +
+                         '<input type="hidden" name="handle_note" value="' + value + '">' +
+                         '<input type="hidden" name="_xsrf" value="{{ handler.xsrf_token }}">';
+        document.body.appendChild(form);
+        form.submit();
+        layer.close(index);
+    });
+}
+</script>
+{% endblock %}

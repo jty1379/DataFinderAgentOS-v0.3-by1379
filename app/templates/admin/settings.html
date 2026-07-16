@@ -1,0 +1,152 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="layui-card">
+    <div class="layui-card-header">
+        <h3>系统设置</h3>
+    </div>
+    <div class="layui-card-body">
+        <form class="layui-form" action="/admin/settings" method="post">
+            <input type="hidden" name="action" value="batch_update">
+            <input type="hidden" name="_xsrf" value="{{ handler.xsrf_token }}">
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">系统名称</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="system_name">
+                    <input type="text" name="setting_values" 
+                           value="{{ settings|selectattr('setting_key', 'equalto', 'system_name')|first|attr('setting_value', '') }}"
+                           class="layui-input" placeholder="请输入系统名称">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">系统简介</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="system_description">
+                    <textarea name="setting_values" class="layui-textarea" rows="3" 
+                              placeholder="请输入系统简介">{{ settings|selectattr('setting_key', 'equalto', 'system_description')|first|attr('setting_value', '') }}</textarea>
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">首页公告</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="home_announcement">
+                    <textarea name="setting_values" class="layui-textarea" rows="3" 
+                              placeholder="请输入首页公告">{{ settings|selectattr('setting_key', 'equalto', 'home_announcement')|first|attr('setting_value', '') }}</textarea>
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">默认模型</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="default_model">
+                    <input type="text" name="setting_values" 
+                           value="{{ settings|selectattr('setting_key', 'equalto', 'default_model')|first|attr('setting_value', '') }}"
+                           class="layui-input" placeholder="默认模型ID">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">允许注册</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="allow_register">
+                    <input type="checkbox" name="setting_values" 
+                           {% if settings|selectattr('setting_key', 'equalto', 'allow_register')|first|attr('setting_value', '') == 'true' %}checked{% endif %}
+                           value="true" lay-skin="switch" lay-text="开启|关闭">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">人脸登录</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="enable_face_login">
+                    <input type="checkbox" name="setting_values" 
+                           {% if settings|selectattr('setting_key', 'equalto', 'enable_face_login')|first|attr('setting_value', '') == 'true' %}checked{% endif %}
+                           value="true" lay-skin="switch" lay-text="开启|关闭">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">语音播报</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="enable_voice_report">
+                    <input type="checkbox" name="setting_values" 
+                           {% if settings|selectattr('setting_key', 'equalto', 'enable_voice_report')|first|attr('setting_value', '') == 'true' %}checked{% endif %}
+                           value="true" lay-skin="switch" lay-text="开启|关闭">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">敏感词阈值</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="sensitive_word_threshold">
+                    <input type="number" name="setting_values" 
+                           value="{{ settings|selectattr('setting_key', 'equalto', 'sensitive_word_threshold')|first|attr('setting_value', '') }}"
+                           class="layui-input" placeholder="敏感词阈值">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">大屏刷新间隔(秒)</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="screen_refresh_interval">
+                    <input type="number" name="setting_values" 
+                           value="{{ settings|selectattr('setting_key', 'equalto', 'screen_refresh_interval')|first|attr('setting_value', '') }}"
+                           class="layui-input" placeholder="大屏刷新间隔">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">默认采集超时(秒)</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="default_collect_timeout">
+                    <input type="number" name="setting_values" 
+                           value="{{ settings|selectattr('setting_key', 'equalto', 'default_collect_timeout')|first|attr('setting_value', '') }}"
+                           class="layui-input" placeholder="默认采集超时">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">单次采集最大数量</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="max_collect_count">
+                    <input type="number" name="setting_values" 
+                           value="{{ settings|selectattr('setting_key', 'equalto', 'max_collect_count')|first|attr('setting_value', '') }}"
+                           class="layui-input" placeholder="单次采集最大数量">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">系统维护模式</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="maintenance_mode">
+                    <input type="checkbox" name="setting_values" 
+                           {% if settings|selectattr('setting_key', 'equalto', 'maintenance_mode')|first|attr('setting_value', '') == 'true' %}checked{% endif %}
+                           value="true" lay-skin="switch" lay-text="开启|关闭">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <div class="layui-input-block">
+                    <button class="layui-btn" lay-submit lay-filter="save">保存设置</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+layui.use(['form', 'layer'], function() {
+    var form = layui.form;
+    var layer = layui.layer;
+    
+    form.on('submit(save)', function(data) {
+        return true;
+    });
+});
+</script>
+{% endblock %}

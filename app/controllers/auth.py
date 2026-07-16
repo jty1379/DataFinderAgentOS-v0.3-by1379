@@ -6,6 +6,7 @@ import tornado.web
 
 from app.controllers.base import BaseHandler
 from app.core.exceptions import AppError
+from app.services.security import AuditLogService
 from app.services.user_service import UserService
 
 
@@ -46,6 +47,7 @@ class UserLoginHandler(BaseHandler):
         try:
             user = UserService.authenticate(username, password, "user")
         except AppError:
+            AuditLogService.log_login(0, username, self.get_client_ip(), success=False, error_message="用户名或密码错误")
             return self.render(
                 "login.html",
                 title="用户登录 · 瞭望与问数系统",
@@ -53,6 +55,7 @@ class UserLoginHandler(BaseHandler):
                 registered=False,
                 username=username,
             )
+        AuditLogService.log_login(user["id"], user["username"], self.get_client_ip(), success=True)
         self.login_user(user)
         self.redirect("/index")
 
@@ -110,6 +113,7 @@ class AdminLoginHandler(BaseHandler):
         try:
             user = UserService.authenticate(username, password, "admin")
         except AppError:
+            AuditLogService.log_login(0, username, self.get_client_ip(), success=False, error_message="管理员账号或密码错误")
             return self.render(
                 "admin/login.html",
                 title="管理端登录 · 瞭望与问数系统",
@@ -124,17 +128,24 @@ class AdminLoginHandler(BaseHandler):
                 error="该管理员角色尚未分配可访问功能，请联系超级管理员授权",
                 username=username,
             )
+        AuditLogService.log_login(user["id"], user["username"], self.get_client_ip(), success=True)
         self.login_user(user)
         self.redirect(landing)
 
 
 class UserLogoutHandler(BaseHandler):
     def get(self):
+        user = self.current_user
+        if user:
+            AuditLogService.log_logout(user["id"], user["username"], self.get_client_ip())
         self.logout_user()
         self.redirect("/")
 
 
 class AdminLogoutHandler(BaseHandler):
     def get(self):
+        user = self.current_user
+        if user:
+            AuditLogService.log_logout(user["id"], user["username"], self.get_client_ip())
         self.logout_user()
         self.redirect("/admin/login")

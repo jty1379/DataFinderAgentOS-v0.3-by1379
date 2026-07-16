@@ -1,0 +1,124 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="layui-card">
+    <div class="layui-card-header">
+        <h3>会话管理</h3>
+    </div>
+    <div class="layui-card-body">
+        <form class="layui-form layui-form-pane" action="/admin/sessions" method="get">
+            <div class="layui-form-item layui-inline">
+                <label class="layui-form-label">用户</label>
+                <div class="layui-input-inline" style="width: 200px;">
+                    <select name="user_id" lay-verify="">
+                        <option value="">全部用户</option>
+                        {% for user in users %}
+                        <option value="{{ user.id }}" {% if selected_user_id == user.id %}selected{% endif %}>{{ user.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="layui-form-item layui-inline">
+                <label class="layui-form-label">关键词</label>
+                <div class="layui-input-inline" style="width: 200px;">
+                    <input type="text" name="q" value="{{ keyword }}" placeholder="搜索会话标题" class="layui-input">
+                </div>
+            </div>
+            <div class="layui-form-item layui-inline">
+                <button class="layui-btn layui-btn-normal" lay-submit lay-filter="search">搜索</button>
+                <a href="/admin/sessions" class="layui-btn layui-btn-primary">重置</a>
+            </div>
+        </form>
+        
+        <form class="layui-form" action="/admin/sessions" method="post">
+            <input type="hidden" name="action" value="batch_delete">
+            <input type="hidden" name="_xsrf" value="{{ handler.xsrf_token }}">
+            
+            <table class="layui-table">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" lay-filter="selectAll"></th>
+                        <th>会话ID</th>
+                        <th>用户</th>
+                        <th>标题</th>
+                        <th>模型</th>
+                        <th>数字员工</th>
+                        <th>消息数</th>
+                        <th>创建时间</th>
+                        <th>更新时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for conv in conversations %}
+                    <tr>
+                        <td><input type="checkbox" name="conversation_ids" value="{{ conv.id }}"></td>
+                        <td>{{ conv.id }}</td>
+                        <td>{{ conv.user_name }}</td>
+                        <td><a href="/admin/messages?conversation_id={{ conv.id }}">{{ conv.title }}</a></td>
+                        <td>{{ conv.model_name or '-' }}</td>
+                        <td>{{ conv.employee_name or '-' }}</td>
+                        <td>{{ conv.message_count }}</td>
+                        <td>{{ conv.created_at }}</td>
+                        <td>{{ conv.updated_at }}</td>
+                        <td>
+                            <a href="/admin/messages?conversation_id={{ conv.id }}" class="layui-btn layui-btn-xs">查看</a>
+                            <button type="button" class="layui-btn layui-btn-xs layui-btn-danger" onclick="deleteSession({{ conv.id }})">删除</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            
+            <div class="layui-btn-container">
+                <button class="layui-btn layui-btn-danger" lay-submit lay-filter="batchDelete">批量删除</button>
+            </div>
+            
+            {{ pager|safe }}
+        </form>
+    </div>
+</div>
+
+<script>
+layui.use(['form', 'layer'], function() {
+    var form = layui.form;
+    var layer = layui.layer;
+    
+    form.on('checkbox(selectAll)', function(data) {
+        var child = $(data.elem).parents('table').find('tbody input[type="checkbox"]');
+        child.each(function(index, item) {
+            item.checked = data.elem.checked;
+        });
+        form.render('checkbox');
+    });
+    
+    form.on('submit(search)', function(data) {
+        return true;
+    });
+    
+    form.on('submit(batchDelete)', function(data) {
+        var checked = $('input[name="conversation_ids"]:checked');
+        if (checked.length === 0) {
+            layer.msg('请至少选择一个会话');
+            return false;
+        }
+        return confirm('确定要删除选中的会话吗？');
+    });
+});
+
+function deleteSession(id) {
+    if (confirm('确定要删除该会话吗？')) {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/admin/sessions';
+        form.innerHTML = '<input type="hidden" name="action" value="delete">' +
+                         '<input type="hidden" name="conversation_id" value="' + id + '">' +
+                         '<input type="hidden" name="_xsrf" value="{{ handler.xsrf_token }}">';
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

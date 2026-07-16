@@ -1,0 +1,82 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="layui-card">
+    <div class="layui-card-header">
+        <h3>对话详情</h3>
+        <a href="/admin/sessions" class="layui-btn layui-btn-primary layui-btn-xs">返回会话列表</a>
+    </div>
+    <div class="layui-card-body">
+        <div class="layui-row">
+            <div class="layui-col-md6">
+                <table class="layui-table">
+                    <tr>
+                        <th>会话ID</th>
+                        <td>{{ conversation.id }}</td>
+                    </tr>
+                    <tr>
+                        <th>用户</th>
+                        <td>{{ conversation.user_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>标题</th>
+                        <td>{{ conversation.title }}</td>
+                    </tr>
+                    <tr>
+                        <th>模型</th>
+                        <td>{{ conversation.model_name or '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>数字员工</th>
+                        <td>{{ conversation.employee_name or '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>创建时间</th>
+                        <td>{{ conversation.created_at }}</td>
+                    </tr>
+                    <tr>
+                        <th>更新时间</th>
+                        <td>{{ conversation.updated_at }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        
+        <div class="layui-row layui-col-space10">
+            <div class="layui-col-md12">
+                <div class="layui-card">
+                    <div class="layui-card-header">消息列表</div>
+                    <div class="layui-card-body">
+                        {% for message in messages %}
+                        <div class="layui-row" style="margin-bottom: 15px;">
+                            <div class="layui-col-md1">
+                                <span class="layui-btn layui-btn-xs {% if message.role == 'user' %}layui-btn-normal{% else %}layui-btn-primary{% endif %}">
+                                    {{ '用户' if message.role == 'user' else 'AI' }}
+                                </span>
+                            </div>
+                            <div class="layui-col-md11">
+                                <div class="layui-form-item">
+                                    <textarea class="layui-textarea" rows="3" readonly>{{ message.content }}</textarea>
+                                </div>
+                                <div class="layui-form-item">
+                                    <span class="layui-badge layui-bg-gray">类型: {{ message.content_type }}</span>
+                                    <span class="layui-badge layui-bg-gray">时间: {{ message.created_at }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="layui-row">
+                            <div class="layui-col-md12" style="text-align: center; padding: 50px;">
+                                暂无消息
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -4,6 +4,7 @@ from app.controllers.admin.features import AdminFeaturesHandler
 from app.controllers.admin.menus import AdminMenusHandler
 from app.controllers.admin.modules import AdminModuleHandler
 from app.controllers.admin.roles import AdminRolesHandler
+from app.controllers.admin.settings import AdminSettingsHandler
 from app.controllers.admin.users import AdminUsersHandler
 
 __all__ = [
@@ -11,5 +12,6 @@ __all__ = [
     "AdminMenusHandler",
     "AdminModuleHandler",
     "AdminRolesHandler",
+    "AdminSettingsHandler",
     "AdminUsersHandler",
 ]
