@@ -20,3 +20,5 @@ SSE 只允许六种事件：`meta`、`delta`、`card`、`audio`、`error`、`don
 - `error`：`{"error":"可展示错误"}`。
 
 不得新增临时事件名；需要扩展元信息时增加相应事件 `data` 字段并先更新本文档。
+
+浏览器端统一使用 `DataFinderSSE.stream()`；业务页面不得自行使用 `TextDecoder` 拆包或接受旧事件名。

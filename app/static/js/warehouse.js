@@ -60,7 +60,7 @@
                 const button = taskButton(id);
                 if (button) { button.dataset.status = task.status; button.querySelector("span").textContent = statusLabel(task.status); }
                 if (id === activeTaskId) renderTask(task);
-            } catch (error) { if (id === activeTaskId) api.announce(error.message, "error"); }
+            } catch (error) { if (id === activeTaskId) api.announce(api.errorMessage(error), "error"); }
         }
         if (terminal < taskIds.length) pollTimer = window.setTimeout(pollTasks, 900);
     }
@@ -80,7 +80,7 @@
             const data = await api.fetchJson("/admin/warehouse/deep-collect", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({item_ids: ids, update})});
             api.announce(data.message);
             openTasks(data.task_ids);
-        } catch (error) { api.announce(error.message, "error"); }
+        } catch (error) { api.announce(api.errorMessage(error), "error"); }
         finally { api.setBusy(button, false); }
     }
     api.qsa("[data-deep-start]").forEach((button) => button.addEventListener("click", () => startDeep([Number(button.dataset.deepStart)], button.dataset.deepUpdate === "1", button)));
@@ -99,6 +99,6 @@
             title.textContent = result.title;
             meta.textContent = `${result.employee_mention ? "@" + result.employee_mention : "采集专员"} · ${result.created_at} · ${result.is_update ? "更新采集" : "首次采集"}`;
             content.innerHTML = `<dl class="deep-result-metadata"><div><dt>来源</dt><dd>${api.escapeHtml(result.source_name || "未知")}</dd></div><div><dt>原始地址</dt><dd>${api.escapeHtml(result.item_url)}</dd></div><div><dt>正文字符</dt><dd>${Number(result.content?.length || 0)}</dd></div></dl><pre>${api.escapeHtml(result.content || "暂无正文")}</pre>`;
-        } catch (error) { content.innerHTML = `<p class="preview-error">${api.escapeHtml(error.message)}</p>`; }
+        } catch (error) { content.innerHTML = `<p class="preview-error">${api.escapeHtml(api.errorMessage(error))}</p>`; }
     }));
 })();

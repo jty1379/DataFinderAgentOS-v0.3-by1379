@@ -197,8 +197,10 @@ class V03FinishWebTest(AsyncHTTPTestCase):
         body = response.body.decode("utf-8")
         self.assertEqual(response.code, 200)
         self.assertTrue(response.headers["Content-Type"].startswith("text/event-stream"))
-        for event in ("event: status", "event: message", "event: usage", "event: conversation", "event: done"):
+        for event in ("event: meta", "event: card", "event: done"):
             self.assertIn(event, body)
+        for legacy_event in ("event: status", "event: message", "event: usage", "event: conversation"):
+            self.assertNotIn(legacy_event, body)
         self.assertIn('"kind": "analysis"', body)
         self.assertIn('"total_tokens": 0', body)
 
@@ -207,9 +209,11 @@ class V03FinishWebTest(AsyncHTTPTestCase):
         page = self.fetch("/index", headers={"Cookie": self.cookie_header(cookies)})
         self.assertEqual(page.code, 200)
         js = (ENTRY_PATH.parent / "app/static/js/user-workspace.js").read_text(encoding="utf-8")
+        renderer = (ENTRY_PATH.parent / "app/static/js/card-renderer.js").read_text(encoding="utf-8")
         template = (ENTRY_PATH.parent / "app/templates/admin/digital_employees.html").read_text(encoding="utf-8")
         self.assertIn('/api/chat/stream', js)
-        self.assertIn('analysis-canvas', js)
+        self.assertIn('DataFinderCards', js)
+        self.assertIn('analysis-canvas', renderer)
         self.assertIn('multipart/form-data', template)
         self.assertRegex(template, r'name="prompt_files"[^>]+multiple')
 

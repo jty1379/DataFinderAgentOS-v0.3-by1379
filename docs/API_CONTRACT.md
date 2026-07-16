@@ -5,6 +5,7 @@
 - JSON 成功：`{"success":true,"data":{},"message":"ok","request_id":"..."}`。
 - JSON 失败：`{"success":false,"error":{"code":"...","message":"...","request_id":"..."}}`。
 - 兼容期响应仍可能同时含 `ok`、`message` 和原业务顶层字段，新增前端必须优先读取 `success/data/error`。
+- 前端统一通过 `DataFinderApp.request()` 调用 JSON 接口，不得在业务脚本中直接使用 `fetch`。
 - 分页对象固定为 `items/page/page_size/total`。
 - 时间使用 ISO 8601；布尔值必须是 JSON Boolean；实体 ID 使用整数。
 - 所有 POST 请求启用 XSRF；管理接口还必须通过角色和功能权限校验。
@@ -41,3 +42,5 @@
 ## 卡片
 
 卡片固定为 `{"type":"<card_type>","data":{},"created_at":"ISO8601"}`。类型：`text,kpi,table,line_chart,bar_chart,pie_chart,weather,music,news,image,video`。
+
+前端由 `DataFinderCards.render()` 统一渲染，具体约束见 `FRONTEND_CONTRACT.md`。
