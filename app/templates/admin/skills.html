@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block admin_content %}
+<section class="v02-page skill-management-page">
+    <header class="v02-heading">
+        <div>
+            <p class="section-kicker">技能配置</p>
+            <h2>技能管理</h2>
+            <p>统一管理技能配置，支持绑定到数字员工，实现技能复用和动态加载。</p>
+        </div>
+        <div class="v02-heading-actions">
+            {% if can_write %}
+            <button class="v02-button" type="button" data-dialog-open="create-skill"><i class="layui-icon layui-icon-add-1"></i>新增技能</button>
+            {% else %}
+            <span class="v02-readonly"><i class="layui-icon layui-icon-auz"></i>只读角色</span>
+            {% end %}
+        </div>
+    </header>
+
+    <form class="v02-filter" method="get" action="/admin/skills">
+        <label class="v02-field"><span>搜索技能</span><input class="v02-input" name="q" value="{{ keyword }}" placeholder="输入名称、编码或描述"></label>
+        <label class="v02-field"><span>状态</span><select class="v02-select" name="status">
+            <option value="">全部</option>
+            <option value="enabled" {% if selected_status == 'enabled' %}selected{% end %}>启用</option>
+            <option value="disabled" {% if selected_status == 'disabled' %}selected{% end %}>停用</option>
+        </select></label>
+        <button class="v02-button" type="submit"><i class="layui-icon layui-icon-search"></i>查询</button>
+        <a class="v02-button-secondary" href="/admin/skills">重置</a>
+    </form>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>技能列表</h3><p>管理技能配置，包括名称、编码、系统提示词和触发条件</p></div><span class="v02-count">当前页 {{ len(skills) }} 条</span></header>
+        <div class="v02-table-wrap">
+            <table class="v02-table">
+                <caption>技能列表</caption>
+                <thead><tr><th>技能名称</th><th>编码</th><th>触发条件</th><th>绑定员工数</th><th>状态</th><th>创建时间</th>{% if can_write %}<th>操作</th>{% end %}</tr></thead>
+                <tbody>
+                {% for item in skills %}
+                <tr>
+                    <td><div class="v02-cell-title"><b>{{ item["name"] }}</b><small>{{ item["description"] or "暂无说明" }}</small></div></td>
+                    <td><code>{{ item["code"] }}</code></td>
+                    <td><div class="v02-cell-title"><small>{{ item["trigger_condition"] or "-" }}</small></div></td>
+                    <td><a href="/admin/skills/{{ item['id'] }}/bind">{{ item["employee_count"] }}</a></td>
+                    <td><span class="v02-status {{ 'enabled' if item['enabled'] else 'disabled' }}">{{ "可用" if item["enabled"] else "停用" }}</span></td>
+                    <td>{{ item["created_at"][:16] }}</td>
+                    {% if can_write %}
+                    <td><div class="v02-row-actions">
+                        <button class="v02-row-action" type="button" data-dialog-open="edit-skill-{{ item['id'] }}">编辑</button>
+                        <a href="/admin/skills/{{ item['id'] }}/bind" class="v02-row-action">绑定</a>
+                        <form method="post"><input type="hidden" name="action" value="toggle"><input type="hidden" name="skill_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action" type="submit">{{ "停用" if item["enabled"] else "启用" }}</button></form>
+                        <form method="post" data-confirm="确认删除技能“{{ item['name'] }}”？"><input type="hidden" name="action" value="delete"><input type="hidden" name="skill_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action danger" type="submit">删除</button></form>
+                    </div></td>
+                    {% end %}
+                </tr>
+                {% end %}
+                {% if not skills %}<tr><td colspan="8"><div class="v02-feedback"><i class="layui-icon layui-icon-search"></i><h4>没有找到技能</h4><p>调整搜索条件，或由超级管理员新增技能配置。</p></div></td></tr>{% end %}
+                </tbody>
+            </table>
+        </div>
+        {% if pages > 1 %}<nav class="v02-pagination" aria-label="技能分页">{% for page_number in range(1, pages + 1) %}{% if page_number == page %}<span class="current" aria-current="page">{{ page_number }}</span>{% else %}<a href="/admin/skills?q={{ url_escape(keyword) }}&status={{ url_escape(selected_status) }}&page={{ page_number }}">{{ page_number }}</a>{% end %}{% end %}</nav>{% end %}
+    </article>
+</section>
+
+{% if can_write %}
+<dialog class="management-dialog v02-dialog" id="create-skill" aria-labelledby="create-skill-title"><form method="post">
+    <header><h3 id="create-skill-title">新增技能</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header>
+    <div class="dialog-body v02-dialog-grid"><input type="hidden" name="action" value="create">{% raw xsrf_form_html() %}
+        <label class="v02-dialog-field"><span>技能名称</span><input class="v02-input" name="name" required maxlength="60" placeholder="例如：天气查询"></label>
+        <label class="v02-dialog-field"><span>技能编码</span><input class="v02-input" name="code" required pattern="[a-z][a-z0-9_]{2,39}" placeholder="例如 weather_query"></label>
+        <label class="v02-dialog-field"><span>状态</span><select class="v02-select" name="enabled"><option value="1">启用</option><option value="0">停用</option></select></label>
+        <label class="v02-dialog-field full"><span>说明</span><textarea class="v02-textarea" name="description" maxlength="500" placeholder="说明技能用途和效果"></textarea></label>
+        <label class="v02-dialog-field full"><span>系统提示词</span><textarea class="v02-textarea" name="system_prompt" maxlength="10000" placeholder="当技能触发时，注入给模型的系统提示词"></textarea></label>
+        <label class="v02-dialog-field full"><span>触发条件</span><input class="v02-input" name="trigger_condition" maxlength="500" placeholder="例如：用户询问天气、温度、气候相关问题时触发（可选）"></label>
+        <label class="v02-dialog-field full"><span>工具配置（JSON）</span><textarea class="v02-textarea v02-code-textarea" name="tools" required>{}</textarea><small class="v02-help">技能可用的工具列表，格式：{"tool_name": {"description": "..."}}</small></label>
+        <label class="v02-dialog-field full"><span>触发配置（JSON）</span><textarea class="v02-textarea v02-code-textarea" name="triggers" required>{}</textarea><small class="v02-help">触发条件配置，格式：{"keywords": ["关键词1", "关键词2"]}</small></label>
+    </div>
+    <footer><button type="button" data-dialog-close>取消</button><button class="v02-button" type="submit">保存技能</button></footer>
+</form></dialog>
+
+{% for item in skills %}
+<dialog class="management-dialog v02-dialog" id="edit-skill-{{ item['id'] }}" aria-labelledby="edit-skill-title-{{ item['id'] }}"><form method="post">
+    <header><h3 id="edit-skill-title-{{ item['id'] }}">编辑技能</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header>
+    <div class="dialog-body v02-dialog-grid"><input type="hidden" name="action" value="update"><input type="hidden" name="skill_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}
+        <label class="v02-dialog-field"><span>技能名称</span><input class="v02-input" name="name" value="{{ item['name'] }}" required maxlength="60"></label>
+        <label class="v02-dialog-field"><span>技能编码</span><input class="v02-input" name="code" value="{{ item['code'] }}" required pattern="[a-z][a-z0-9_]{2,39}"></label>
+        <label class="v02-dialog-field"><span>状态</span><select class="v02-select" name="enabled"><option value="1" {% if item['enabled'] %}selected{% end %}>启用</option><option value="0" {% if not item['enabled'] %}selected{% end %}>停用</option></select></label>
+        <label class="v02-dialog-field full"><span>说明</span><textarea class="v02-textarea" name="description" maxlength="500">{{ item["description"] }}</textarea></label>
+        <label class="v02-dialog-field full"><span>系统提示词</span><textarea class="v02-textarea" name="system_prompt" maxlength="10000">{{ item["system_prompt"] }}</textarea></label>
+        <label class="v02-dialog-field full"><span>触发条件</span><input class="v02-input" name="trigger_condition" maxlength="500" value="{{ item['trigger_condition'] }}"></label>
+        <label class="v02-dialog-field full"><span>工具配置（JSON）</span><textarea class="v02-textarea v02-code-textarea" name="tools" required>{{ item["tools_json"] }}</textarea></label>
+        <label class="v02-dialog-field full"><span>触发配置（JSON）</span><textarea class="v02-textarea v02-code-textarea" name="triggers" required>{{ item["triggers_json"] }}</textarea></label>
+    </div>
+    <footer><button type="button" data-dialog-close>取消</button><button class="v02-button" type="submit">保存修改</button></footer>
+</form></dialog>
+{% end %}
+{% end %}
+{% end %}

@@ -110,8 +110,8 @@ class FaceProfileHandler(UserJsonHandler):
 class GestureRecognizeHandler(UserJsonHandler):
     ACTIONS = {
         "victory": {"action": "weather", "employee_code": "weather", "prompt": "@天气 查询成都今天的天气", "label": "天气查询"},
-        "fist": {"action": "music", "employee_code": "music_assistant", "prompt": "@音乐 推荐一首适合工作时听的音乐", "label": "音乐推荐"},
-        "open_palm": {"action": "news", "employee_code": "news_assistant", "prompt": "@新闻 汇总今天值得关注的新闻", "label": "新闻简报"},
+        "fist": {"action": "music", "employee_code": "music", "prompt": "@音乐 推荐一首适合工作时听的音乐", "label": "音乐推荐"},
+        "open_palm": {"action": "news", "employee_code": "news", "prompt": "@新闻 汇总今天值得关注的新闻", "label": "新闻简报"},
     }
 
     async def post(self) -> None:

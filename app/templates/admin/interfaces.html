@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block admin_content %}
+<section class="v02-page interface-management-page">
+    <header class="v02-heading">
+        <div>
+            <p class="section-kicker">API 接口配置</p>
+            <h2>接口管理</h2>
+            <p>统一维护外部 API 接口配置，支持测试和查看调用日志。接口配置不保存敏感凭据，API Key 需通过环境变量配置。</p>
+        </div>
+        <div class="v02-heading-actions">
+            {% if can_write %}
+            <button class="v02-button" type="button" data-dialog-open="create-interface"><i class="layui-icon layui-icon-add-1"></i>新增接口</button>
+            {% else %}
+            <span class="v02-readonly"><i class="layui-icon layui-icon-auz"></i>只读角色</span>
+            {% end %}
+        </div>
+    </header>
+
+    <form class="v02-filter" method="get" action="/admin/interfaces">
+        <label class="v02-field"><span>搜索接口</span><input class="v02-input" name="q" value="{{ keyword }}" placeholder="输入名称、编码或网址"></label>
+        <label class="v02-field"><span>状态</span><select class="v02-select" name="status">
+            <option value="">全部</option>
+            <option value="enabled" {% if selected_status == 'enabled' %}selected{% end %}>启用</option>
+            <option value="disabled" {% if selected_status == 'disabled' %}selected{% end %}>停用</option>
+        </select></label>
+        <button class="v02-button" type="submit"><i class="layui-icon layui-icon-search"></i>查询</button>
+        <a class="v02-button-secondary" href="/admin/interfaces">重置</a>
+    </form>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>接口列表</h3><p>配置外部 API 接口地址、请求方法和参数模板</p></div><span class="v02-count">当前页 {{ len(interfaces) }} 条</span></header>
+        <div class="v02-table-wrap">
+            <table class="v02-table">
+                <caption>接口列表</caption>
+                <thead><tr><th>接口名称</th><th>编码</th><th>接口地址</th><th>请求方法</th><th>调用次数</th><th>成功率</th><th>状态</th><th>创建时间</th>{% if can_write %}<th>操作</th>{% end %}</tr></thead>
+                <tbody>
+                {% for item in interfaces %}
+                <tr>
+                    <td><div class="v02-cell-title"><b>{{ item["name"] }}</b><small>{{ item["description"] or "暂无说明" }}</small></div></td>
+                    <td><code>{{ item["code"] }}</code></td>
+                    <td><div class="v02-cell-title"><small title="{{ item['api_url'] }}">{{ item["api_url"] }}</small></div></td>
+                    <td><span class="v02-status {{ 'enabled' if item['request_method'] == 'GET' else 'disabled' }}">{{ item["request_method"] }}</span></td>
+                    <td>{{ item["call_count"] }}</td>
+                    <td>{{ item["success_rate"] }}%</td>
+                    <td><span class="v02-status {{ 'enabled' if item['enabled'] else 'disabled' }}">{{ "可用" if item["enabled"] else "停用" }}</span></td>
+                    <td>{{ item["created_at"][:16] }}</td>
+                    {% if can_write %}
+                    <td><div class="v02-row-actions">
+                        <button class="v02-row-action" type="button" data-dialog-open="edit-interface-{{ item['id'] }}">编辑</button>
+                        <button class="v02-row-action" type="button" data-dialog-open="test-interface-{{ item['id'] }}">测试</button>
+                        <a href="/admin/interfaces/{{ item['id'] }}/logs" class="v02-row-action">日志</a>
+                        <form method="post"><input type="hidden" name="action" value="toggle"><input type="hidden" name="interface_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action" type="submit">{{ "停用" if item["enabled"] else "启用" }}</button></form>
+                        <form method="post" data-confirm="确认删除接口“{{ item['name'] }}”？"><input type="hidden" name="action" value="delete"><input type="hidden" name="interface_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action danger" type="submit">删除</button></form>
+                    </div></td>
+                    {% end %}
+                </tr>
+                {% end %}
+                {% if not interfaces %}<tr><td colspan="10"><div class="v02-feedback"><i class="layui-icon layui-icon-search"></i><h4>没有找到接口</h4><p>调整搜索条件，或由超级管理员新增接口配置。</p></div></td></tr>{% end %}
+                </tbody>
+            </table>
+        </div>
+        {% if pages > 1 %}<nav class="v02-pagination" aria-label="接口分页">{% for page_number in range(1, pages + 1) %}{% if page_number == page %}<span class="current" aria-current="page">{{ page_number }}</span>{% else %}<a href="/admin/interfaces?q={{ url_escape(keyword) }}&status={{ url_escape(selected_status) }}&page={{ page_number }}">{{ page_number }}</a>{% end %}{% end %}</nav>{% end %}
+    </article>
+</section>
+
+{% if can_write %}
+<dialog class="management-dialog v02-dialog" id="create-interface" aria-labelledby="create-interface-title"><form method="post">
+    <header><h3 id="create-interface-title">新增接口</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header>
+    <div class="dialog-body v02-dialog-grid"><input type="hidden" name="action" value="create">{% raw xsrf_form_html() %}
+        <label class="v02-dialog-field"><span>接口名称</span><input class="v02-input" name="name" required maxlength="60" placeholder="例如：天气查询接口"></label>
+        <label class="v02-dialog-field"><span>接口编码</span><input class="v02-input" name="code" required pattern="[a-z][a-z0-9_]{2,39}" placeholder="例如 weather_api"></label>
+        <label class="v02-dialog-field full"><span>接口地址</span><input class="v02-input" name="api_url" type="url" required maxlength="500" placeholder="https://api.example.com/endpoint"></label>
+        <label class="v02-dialog-field"><span>请求方法</span><select class="v02-select" name="request_method"><option value="GET">GET</option><option value="POST">POST</option></select></label>
+        <label class="v02-dialog-field"><span>超时时间（秒）</span><input class="v02-input" name="timeout_seconds" type="number" min="3" max="60" value="15"></label>
+        <label class="v02-dialog-field"><span>重试次数</span><input class="v02-input" name="retry_count" type="number" min="0" max="5" value="0"></label>
+        <label class="v02-dialog-field"><span>状态</span><select class="v02-select" name="enabled"><option value="1">启用</option><option value="0">停用</option></select></label>
+        <label class="v02-dialog-field"><span>响应路径</span><input class="v02-input" name="response_path" placeholder="例如 data.result（可选）"></label>
+        <label class="v02-dialog-field full"><span>说明</span><textarea class="v02-textarea" name="description" maxlength="500" placeholder="说明接口用途和参数说明"></textarea></label>
+        <label class="v02-dialog-field full"><span>请求头（JSON）</span><textarea class="v02-textarea v02-code-textarea" name="request_headers" required>{"Accept":"application/json","User-Agent":"DataFinderAgentOS/0.3"}</textarea><small class="v02-help warning">不得填写 Cookie、Authorization、Host、Proxy-Authorization 等敏感请求头。</small></label>
+        <label class="v02-dialog-field full"><span>请求参数（JSON）</span><textarea class="v02-textarea v02-code-textarea" name="request_params" required>{}</textarea><small class="v02-help">支持 {{input}} 作为动态参数占位符。</small></label>
+    </div>
+    <footer><button type="button" data-dialog-close>取消</button><button class="v02-button" type="submit">保存接口</button></footer>
+</form></dialog>
+
+{% for item in interfaces %}
+<dialog class="management-dialog v02-dialog" id="edit-interface-{{ item['id'] }}" aria-labelledby="edit-interface-title-{{ item['id'] }}"><form method="post">
+    <header><h3 id="edit-interface-title-{{ item['id'] }}">编辑接口</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header>
+    <div class="dialog-body v02-dialog-grid"><input type="hidden" name="action" value="update"><input type="hidden" name="interface_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}
+        <label class="v02-dialog-field"><span>接口名称</span><input class="v02-input" name="name" value="{{ item['name'] }}" required maxlength="60"></label>
+        <label class="v02-dialog-field"><span>接口编码</span><input class="v02-input" name="code" value="{{ item['code'] }}" required pattern="[a-z][a-z0-9_]{2,39}"></label>
+        <label class="v02-dialog-field full"><span>接口地址</span><input class="v02-input" name="api_url" type="url" value="{{ item['api_url'] }}" required maxlength="500"></label>
+        <label class="v02-dialog-field"><span>请求方法</span><select class="v02-select" name="request_method"><option value="GET" {% if item['request_method'] == 'GET' %}selected{% end %}>GET</option><option value="POST" {% if item['request_method'] == 'POST' %}selected{% end %}>POST</option></select></label>
+        <label class="v02-dialog-field"><span>超时时间（秒）</span><input class="v02-input" name="timeout_seconds" type="number" min="3" max="60" value="{{ item['timeout_seconds'] }}"></label>
+        <label class="v02-dialog-field"><span>重试次数</span><input class="v02-input" name="retry_count" type="number" min="0" max="5" value="{{ item['retry_count'] }}"></label>
+        <label class="v02-dialog-field"><span>状态</span><select class="v02-select" name="enabled"><option value="1" {% if item['enabled'] %}selected{% end %}>启用</option><option value="0" {% if not item['enabled'] %}selected{% end %}>停用</option></select></label>
+        <label class="v02-dialog-field"><span>响应路径</span><input class="v02-input" name="response_path" value="{{ item['response_path'] }}"></label>
+        <label class="v02-dialog-field full"><span>说明</span><textarea class="v02-textarea" name="description" maxlength="500">{{ item["description"] }}</textarea></label>
+        <label class="v02-dialog-field full"><span>请求头（JSON）</span><textarea class="v02-textarea v02-code-textarea" name="request_headers" required>{{ item["headers_json"] }}</textarea><small class="v02-help warning">不得填写 Cookie、Authorization、Host 等敏感请求头。</small></label>
+        <label class="v02-dialog-field full"><span>请求参数（JSON）</span><textarea class="v02-textarea v02-code-textarea" name="request_params" required>{{ item["params_json"] }}</textarea></label>
+    </div>
+    <footer><button type="button" data-dialog-close>取消</button><button class="v02-button" type="submit">保存修改</button></footer>
+</form></dialog>
+
+<dialog class="management-dialog v02-dialog" id="test-interface-{{ item['id'] }}" aria-labelledby="test-interface-title-{{ item['id'] }}">
+    <header><h3 id="test-interface-title-{{ item['id'] }}">测试接口 - {{ item['name'] }}</h3><button type="button" data-dialog-close aria-label="关闭">×</button></header>
+    <div class="dialog-body v02-dialog-grid">
+        <label class="v02-dialog-field"><span>接口地址</span><input class="v02-input" readonly value="{{ item['api_url'] }}"></label>
+        <label class="v02-dialog-field"><span>请求方法</span><input class="v02-input" readonly value="{{ item['request_method'] }}"></label>
+        <label class="v02-dialog-field full"><span>测试输入</span><textarea class="v02-textarea" id="test-input-{{ item['id'] }}" placeholder="输入动态参数值（如果接口使用了 {{input}} 占位符）"></textarea></label>
+        <div id="test-result-{{ item['id'] }}" class="v02-dialog-field full" style="display:none;">
+            <span>测试结果</span>
+            <pre class="v02-code-textarea" id="test-output-{{ item['id'] }}"></pre>
+        </div>
+    </div>
+    <footer><button type="button" data-dialog-close>取消</button><button class="v02-button" type="button" onclick="testInterface({{ item['id'] }})">执行测试</button></footer>
+</dialog>
+{% end %}
+
+<script>
+function testInterface(interfaceId) {
+    var input = document.getElementById('test-input-' + interfaceId).value;
+    var resultDiv = document.getElementById('test-result-' + interfaceId);
+    var outputPre = document.getElementById('test-output-' + interfaceId);
+    
+    resultDiv.style.display = 'block';
+    outputPre.textContent = '正在测试...';
+    
+    fetch('/admin/interfaces/test', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-XSRFToken': '{{ xsrf_token }}'
+        },
+        body: JSON.stringify({ interface_id: interfaceId, input: input })
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.ok) {
+            outputPre.textContent = JSON.stringify(data, null, 2);
+        } else {
+            outputPre.textContent = '测试失败: ' + data.message;
+        }
+    })
+    .catch(function(error) {
+        outputPre.textContent = '请求失败: ' + error.message;
+    });
+}
+</script>
+{% end %}
+{% end %}

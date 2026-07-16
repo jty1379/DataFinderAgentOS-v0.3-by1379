@@ -125,6 +125,7 @@ class AdminBaseHandler(BaseHandler):
             admin_menu_groups=MenuRepository.grouped_for_role(self.current_user["role_id"]),
             flash_message=self.get_query_argument("message", ""),
             flash_level=self.get_query_argument("level", "success"),
+            xsrf_token=self.xsrf_token,
             **kwargs,
         )
 

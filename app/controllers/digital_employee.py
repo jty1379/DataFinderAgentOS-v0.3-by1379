@@ -133,3 +133,32 @@ class AdminDigitalEmployeePreviewHandler(AdminJsonHandler):
         except (TypeError, ValueError) as exc:
             return self.write_json({"ok": False, "message": str(exc)}, 400)
         return self.write_json({"ok": True, "result": result})
+
+
+class AdminDigitalEmployeeHealthHandler(AdminJsonHandler):
+    required_feature = "digital_employees"
+
+    async def get(self):
+        try:
+            employee_id = int(self.get_query_argument("id", "0") or 0)
+            if not employee_id:
+                return self.write_json({"ok": False, "message": "缺少员工ID"}, 400)
+            health = await DigitalEmployeeService.health_check(employee_id)
+            return self.write_json({"ok": True, "health": health})
+        except Exception as exc:
+            return self.write_json({"ok": False, "message": str(exc)}, 400)
+
+
+class AdminDigitalEmployeeLogsHandler(AdminJsonHandler):
+    required_feature = "digital_employees"
+
+    async def get(self):
+        try:
+            employee_id = int(self.get_query_argument("id", "0") or 0)
+            limit = min(50, int(self.get_query_argument("limit", "20") or 20))
+            if not employee_id:
+                return self.write_json({"ok": False, "message": "缺少员工ID"}, 400)
+            logs = DigitalEmployeeRepository.list_call_logs(employee_id, limit=limit)
+            return self.write_json({"ok": True, "logs": logs})
+        except Exception as exc:
+            return self.write_json({"ok": False, "message": str(exc)}, 400)

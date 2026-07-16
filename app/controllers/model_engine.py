@@ -233,3 +233,56 @@ class AdminModelChatHandler(AdminJsonHandler):
                 await self._event("error", {"error": message})
             except StreamClosedError:
                 return
+
+
+class AdminModelUsageLogsHandler(AdminJsonHandler):
+    """模型调用日志查询接口。"""
+    required_feature = "model_engine"
+
+    async def get(self):
+        try:
+            model_id = int(self.get_query_argument("model_id", "0"))
+            if not model_id:
+                return self.write_json({"ok": False, "message": "缺少模型ID"}, 400)
+
+            model = ModelRepository.get(model_id)
+            if not model:
+                return self.write_json({"ok": False, "message": "模型不存在"}, 404)
+
+            # 筛选参数
+            success_only = self.get_query_argument("success", "") == "1"
+            failure_only = self.get_query_argument("failure", "") == "1"
+            limit = min(100, int(self.get_query_argument("limit", "20")))
+
+            logs = ModelRepository.list_usage_logs(
+                model_id=model_id,
+                success_only=success_only,
+                failure_only=failure_only,
+                limit=limit,
+            )
+
+            # 格式化日志数据
+            formatted_logs = []
+            for log in logs:
+                formatted_logs.append({
+                    "id": log["id"],
+                    "user_name": log.get("user_name") or "系统",
+                    "success": bool(log["success"]),
+                    "prompt_tokens": log["prompt_tokens"],
+                    "completion_tokens": log["completion_tokens"],
+                    "total_tokens": log["total_tokens"],
+                    "latency_ms": log["latency_ms"],
+                    "error_message": log.get("error_message", ""),
+                    "created_at": log["created_at"],
+                })
+
+            return self.write_json({
+                "ok": True,
+                "model_name": model["name"],
+                "logs": formatted_logs,
+            })
+        except (ValueError, TypeError) as exc:
+            return self.write_json({"ok": False, "message": f"参数错误: {exc}"}, 400)
+        except Exception as exc:
+            LOGGER.exception("Failed to get model usage logs", extra={"event": "model_usage_logs_failed"})
+            return self.write_json({"ok": False, "message": f"查询失败: {exc}"}, 500)

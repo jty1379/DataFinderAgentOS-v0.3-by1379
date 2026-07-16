@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block admin_content %}
+<section class="v02-page skill-bind-page">
+    <header class="v02-heading">
+        <div>
+            <p class="section-kicker">技能绑定</p>
+            <h2>{{ skill["name"] }} - 绑定数字员工</h2>
+            <p>将技能绑定到数字员工，使数字员工具备该技能能力。</p>
+        </div>
+        <div class="v02-heading-actions">
+            <a class="v02-button" href="/admin/skills"><i class="layui-icon layui-icon-return"></i>返回技能列表</a>
+        </div>
+    </header>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>已绑定的数字员工</h3><p>已获得该技能的数字员工</p></div><span class="v02-count">{{ len(bound_employees) }} 个</span></header>
+        <div class="v02-table-wrap">
+            <table class="v02-table">
+                <caption>已绑定数字员工</caption>
+                <thead><tr><th>名称</th><th>@调度名</th><th>类型</th><th>绑定时间</th>{% if can_write %}<th>操作</th>{% end %}</tr></thead>
+                <tbody>
+                {% for item in bound_employees %}
+                <tr>
+                    <td><b>{{ item["name"] }}</b></td>
+                    <td><code>@{{ item["mention"] }}</code></td>
+                    <td><span class="v02-status {{ 'enabled' if item['employee_type'] == 'llm' else 'disabled' }}">{{ "模型型" if item['employee_type'] == 'llm' else "接口型" }}</span></td>
+                    <td>{{ item["bound_at"][:16] }}</td>
+                    {% if can_write %}
+                    <td><form method="post"><input type="hidden" name="action" value="unbind"><input type="hidden" name="employee_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action danger" type="submit">解绑</button></form></td>
+                    {% end %}
+                </tr>
+                {% end %}
+                {% if not bound_employees %}<tr><td colspan="5"><div class="v02-feedback"><i class="layui-icon layui-icon-search"></i><h4>暂无绑定</h4><p>该技能尚未绑定到任何数字员工。</p></div></td></tr>{% end %}
+                </tbody>
+            </table>
+        </div>
+    </article>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>可用数字员工</h3><p>选择要绑定该技能的数字员工</p></div><span class="v02-count">{{ len(available_employees) }} 个</span></header>
+        <div class="v02-table-wrap">
+            <table class="v02-table">
+                <caption>可用数字员工</caption>
+                <thead><tr><th>名称</th><th>@调度名</th><th>类型</th><th>描述</th>{% if can_write %}<th>操作</th>{% end %}</tr></thead>
+                <tbody>
+                {% for item in available_employees %}
+                <tr>
+                    <td><b>{{ item["name"] }}</b></td>
+                    <td><code>@{{ item["mention"] }}</code></td>
+                    <td><span class="v02-status {{ 'enabled' if item['employee_type'] == 'llm' else 'disabled' }}">{{ "模型型" if item['employee_type'] == 'llm' else "接口型" }}</span></td>
+                    <td><small>{{ item["description"] or "-" }}</small></td>
+                    {% if can_write %}
+                    <td>
+                        {% if item["id"] not in bound_ids %}
+                        <form method="post"><input type="hidden" name="action" value="bind"><input type="hidden" name="employee_id" value="{{ item['id'] }}">{% raw xsrf_form_html() %}<button class="v02-row-action" type="submit">绑定</button></form>
+                        {% else %}
+                        <span class="v02-status enabled">已绑定</span>
+                        {% end %}
+                    </td>
+                    {% end %}
+                </tr>
+                {% end %}
+                {% if not available_employees %}<tr><td colspan="5"><div class="v02-feedback"><i class="layui-icon layui-icon-search"></i><h4>没有可用的数字员工</h4><p>请先创建数字员工。</p></div></td></tr>{% end %}
+                </tbody>
+            </table>
+        </div>
+    </article>
+</section>
+{% end %}

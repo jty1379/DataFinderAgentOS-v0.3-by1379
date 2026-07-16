@@ -1,0 +1,372 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% end %}
+{% block admin_content %}
+<section class="v02-page multimodal-page">
+    <header class="v02-heading">
+        <div>
+            <p class="section-kicker">多模态服务</p>
+            <h2>多模态服务配置</h2>
+            <p>配置生图、生视频等多模态服务，支持火山引擎、阿里云和OpenAI。</p>
+        </div>
+    </header>
+
+    <div class="multimodal-stat-grid">
+        <article class="v02-panel">
+            <div class="v02-panel-body multimodal-stat-item">
+                <span class="multimodal-stat-value">{{ stats["total_calls"] }}</span>
+                <span class="multimodal-stat-label">总调用次数</span>
+            </div>
+        </article>
+        <article class="v02-panel">
+            <div class="v02-panel-body multimodal-stat-item">
+                <span class="multimodal-stat-value">{{ stats["success_calls"] }}</span>
+                <span class="multimodal-stat-label">成功次数</span>
+            </div>
+        </article>
+        <article class="v02-panel">
+            <div class="v02-panel-body multimodal-stat-item">
+                <span class="multimodal-stat-value">{{ stats["image_calls"] }}</span>
+                <span class="multimodal-stat-label">生图次数</span>
+            </div>
+        </article>
+        <article class="v02-panel">
+            <div class="v02-panel-body multimodal-stat-item">
+                <span class="multimodal-stat-value">{{ stats["video_calls"] }}</span>
+                <span class="multimodal-stat-label">生视频次数</span>
+            </div>
+        </article>
+    </div>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>服务配置</h3><p>配置多模态服务参数</p></div></header>
+        <div class="v02-panel-body">
+            <form method="post" action="/admin/multimodal/config">
+                {% raw xsrf_form_html() %}
+                <div class="multimodal-form-grid">
+                    <label class="multimodal-form-field"><span>启用多模态</span><select class="v02-select" name="enabled"><option value="1" {% if config["enabled"] %}selected{% end %}>启用</option><option value="0" {% if not config["enabled"] %}selected{% end %}>停用</option></select></label>
+                    <label class="multimodal-form-field"><span>服务提供商</span><select class="v02-select" name="provider">{% for value, label in provider_options %}<option value="{{ value }}" {% if config["provider"] == value %}selected{% end %}>{{ label }}</option>{% end %}</select></label>
+                    <label class="multimodal-form-field"><span>默认图片尺寸</span><select class="v02-select" name="default_image_size">{% for value, label in image_sizes %}<option value="{{ value }}" {% if config["default_image_size"] == value %}selected{% end %}>{{ label }}</option>{% end %}</select></label>
+                    <label class="multimodal-form-field"><span>默认视频时长</span><input class="v02-input" type="number" name="default_video_duration" value="{{ config["default_video_duration"] }}" min="1" max="60" placeholder="5"></label>
+                    <label class="multimodal-form-field full"><span>API Key 环境变量</span><input class="v02-input" name="api_key_env" value="{{ config["api_key_env"] }}" placeholder="例如：MULTIMODAL_API_KEY"><small class="v02-help">只保存环境变量名；请勿在此粘贴真实密钥。</small></label>
+                    <label class="multimodal-form-field full"><span>API Secret 环境变量</span><input class="v02-input" name="api_secret_env" value="{{ config["api_secret_env"] }}" placeholder="例如：MULTIMODAL_API_SECRET"><small class="v02-help">只保存环境变量名；请勿在此粘贴真实密钥。</small></label>
+                    <label class="multimodal-form-field full"><span>服务地址</span><input class="v02-input" name="base_url" value="{{ config["base_url"] }}" placeholder="例如：https://image.bytedance.net"><small class="v02-help">留空使用默认地址</small></label>
+                </div>
+                <div class="multimodal-form-actions">
+                    <button class="v02-button" type="submit"><i class="layui-icon layui-icon-set"></i>保存配置</button>
+                </div>
+            </form>
+        </div>
+    </article>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>生图测试</h3><p>测试图片生成效果</p></div></header>
+        <div class="v02-panel-body">
+            <div class="multimodal-form-grid">
+                <label class="multimodal-form-field full"><span>提示词</span><textarea class="v02-textarea" id="image-prompt" rows="3" placeholder="请输入图片描述，例如：一只可爱的猫咪，坐在窗边，阳光洒进来，温暖的色调..."></textarea></label>
+                <label class="multimodal-form-field"><span>风格</span><select class="v02-select" id="image-style">{% for value, label in image_styles %}<option value="{{ value }}">{{ label }}</option>{% end %}</select></label>
+                <label class="multimodal-form-field"><span>尺寸</span><select class="v02-select" id="image-size">{% for value, label in image_sizes %}<option value="{{ value }}" {% if config["default_image_size"] == value %}selected{% end %}>{{ label }}</option>{% end %}</select></label>
+            </div>
+            <div class="multimodal-form-actions">
+                <button class="v02-button" id="generate-image-btn" type="button"><i class="layui-icon layui-icon-picture"></i>生成图片</button>
+            </div>
+            <div id="image-result" class="v02-feedback hidden"></div>
+            <div id="image-preview" style="margin-top: 16px; display: none;">
+                <img id="generated-image" src="" style="max-width: 100%; border-radius: 8px;" />
+            </div>
+        </div>
+    </article>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header"><div><h3>生视频测试</h3><p>测试视频生成效果</p></div></header>
+        <div class="v02-panel-body">
+            <div class="multimodal-form-grid">
+                <label class="multimodal-form-field full"><span>提示词</span><textarea class="v02-textarea" id="video-prompt" rows="3" placeholder="请输入视频描述，例如：一只飞鸟在蓝天中翱翔，白云飘过..."></textarea></label>
+                <label class="multimodal-form-field"><span>时长(秒)</span><input class="v02-input" type="number" id="video-duration" value="{{ config["default_video_duration"] }}" min="1" max="60"></label>
+            </div>
+            <div class="multimodal-form-actions">
+                <button class="v02-button" id="generate-video-btn" type="button"><i class="layui-icon layui-icon-play-circle"></i>生成视频</button>
+            </div>
+            <div id="video-result" class="v02-feedback hidden"></div>
+            <div id="video-preview" style="margin-top: 16px; display: none;">
+                <video id="generated-video" controls style="max-width: 100%; border-radius: 8px;">
+                    <source src="" type="video/mp4">
+                </video>
+            </div>
+        </div>
+    </article>
+
+    <article class="v02-panel">
+        <header class="v02-panel-header">
+            <div><h3>任务列表</h3><p>查看历史生成任务</p></div>
+            <div class="v02-panel-actions">
+                <button class="v02-button-secondary" id="refresh-tasks-btn" type="button"><i class="layui-icon layui-icon-refresh"></i>刷新</button>
+            </div>
+        </header>
+        <div class="v02-panel-body">
+            <div class="multimodal-task-filters">
+                <button class="v02-button-secondary task-filter-btn active" data-type="all" type="button">全部</button>
+                <button class="v02-button-secondary task-filter-btn" data-type="image" type="button">图片</button>
+                <button class="v02-button-secondary task-filter-btn" data-type="video" type="button">视频</button>
+            </div>
+            <div id="task-list" class="multimodal-task-list">
+                <div class="v02-feedback"><i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop"></i><p>加载中...</p></div>
+            </div>
+        </div>
+    </article>
+</section>
+
+<style>
+.multimodal-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+@media (max-width: 960px) { .multimodal-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .multimodal-stat-grid { grid-template-columns: 1fr; } }
+.multimodal-stat-item { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 16px 8px; }
+.multimodal-stat-value { font-size: 28px; font-weight: 700; color: #fff; font-family: Consolas, monospace; }
+.multimodal-stat-label { margin-top: 6px; font-size: 12px; color: var(--admin-v02-muted); }
+.multimodal-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 960px) { .multimodal-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .multimodal-form-grid { grid-template-columns: 1fr; } }
+.multimodal-form-field { display: grid; gap: 7px; color: var(--admin-v02-muted); font-size: 12px; }
+.multimodal-form-field > span { font-weight: 600; }
+.multimodal-form-field.full { grid-column: 1 / -1; }
+@media (max-width: 600px) { .multimodal-form-field.full { grid-column: auto; } }
+.multimodal-form-actions { margin-top: 16px; display: flex; gap: 10px; }
+.multimodal-task-filters { display: flex; gap: 8px; margin-bottom: 16px; }
+.task-filter-btn.active { background: var(--admin-v02-accent); color: #fff; border-color: var(--admin-v02-accent); }
+.multimodal-task-list { display: grid; gap: 12px; }
+.task-item { display: grid; grid-template-columns: auto 1fr auto auto; gap: 16px; align-items: center; padding: 12px 16px; background: var(--admin-v02-surface); border: 1px solid var(--admin-v02-border); border-radius: 8px; }
+.task-item-icon { font-size: 24px; color: var(--admin-v02-accent); }
+.task-item-info { display: flex; flex-direction: column; gap: 4px; }
+.task-item-prompt { font-size: 14px; color: var(--admin-v02-text); line-height: 1.4; word-break: break-all; }
+.task-item-meta { display: flex; gap: 12px; font-size: 12px; color: var(--admin-v02-muted); }
+.task-item-status { padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+.task-item-status.completed { background: rgba(82, 196, 26, 0.15); color: #52c41a; }
+.task-item-status.failed { background: rgba(255, 77, 79, 0.15); color: #ff4d4f; }
+.task-item-status.running { background: rgba(24, 144, 255, 0.15); color: #1890ff; }
+.task-item-status.pending { background: rgba(250, 173, 20, 0.15); color: #faad14; }
+.task-item-actions { display: flex; gap: 6px; }
+@media (max-width: 600px) { .task-item { grid-template-columns: 1fr; } }
+</style>
+
+<script>
+(function() {
+    var generateImageBtn = document.getElementById('generate-image-btn');
+    var generateVideoBtn = document.getElementById('generate-video-btn');
+
+    generateImageBtn.addEventListener('click', async function() {
+        var prompt = document.getElementById('image-prompt').value.trim();
+        var style = document.getElementById('image-style').value;
+        var size = document.getElementById('image-size').value;
+
+        if (!prompt) {
+            showResult('image-result', 'error', '请输入提示词');
+            return;
+        }
+
+        generateImageBtn.disabled = true;
+        showResult('image-result', 'info', '正在生成图片...');
+        document.getElementById('image-preview').style.display = 'none';
+
+        try {
+            var response = await fetch('/admin/multimodal/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-XSRFToken': '{{ xsrf_token }}',
+                },
+                body: JSON.stringify({ task_type: 'image', prompt: prompt, style: style, image_size: size }),
+            });
+            var data = await response.json();
+
+            if (data.ok && data.data && data.data.result && data.data.result.image_url) {
+                document.getElementById('generated-image').src = data.data.result.image_url;
+                document.getElementById('image-preview').style.display = 'block';
+                showResult('image-result', 'success', '图片生成成功！');
+            } else {
+                showResult('image-result', 'error', data.message || '生成失败');
+            }
+        } catch (error) {
+            showResult('image-result', 'error', '请求失败: ' + error.message);
+        } finally {
+            generateImageBtn.disabled = false;
+        }
+    });
+
+    generateVideoBtn.addEventListener('click', async function() {
+        var prompt = document.getElementById('video-prompt').value.trim();
+        var duration = parseInt(document.getElementById('video-duration').value);
+
+        if (!prompt) {
+            showResult('video-result', 'error', '请输入提示词');
+            return;
+        }
+
+        generateVideoBtn.disabled = true;
+        showResult('video-result', 'info', '正在生成视频...（可能需要较长时间）');
+        document.getElementById('video-preview').style.display = 'none';
+
+        try {
+            var response = await fetch('/admin/multimodal/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-XSRFToken': '{{ xsrf_token }}',
+                },
+                body: JSON.stringify({ task_type: 'video', prompt: prompt, duration: duration }),
+            });
+            var data = await response.json();
+
+            if (data.ok && data.data && data.data.result && data.data.result.video_url) {
+                document.getElementById('generated-video').src = data.data.result.video_url;
+                document.getElementById('video-preview').style.display = 'block';
+                showResult('video-result', 'success', '视频生成成功！');
+            } else {
+                showResult('video-result', 'error', data.message || '生成失败');
+            }
+        } catch (error) {
+            showResult('video-result', 'error', '请求失败: ' + error.message);
+        } finally {
+            generateVideoBtn.disabled = false;
+        }
+    });
+
+    function showResult(elementId, type, message) {
+        var resultDiv = document.getElementById(elementId);
+        resultDiv.className = 'v02-feedback ' + type;
+        resultDiv.innerHTML = '<p>' + message + '</p>';
+        resultDiv.classList.remove('hidden');
+    }
+
+    // 任务列表功能
+    var currentTaskFilter = 'all';
+    var refreshTasksBtn = document.getElementById('refresh-tasks-btn');
+    var taskFilterBtns = document.querySelectorAll('.task-filter-btn');
+
+    async function loadTasks(taskType) {
+        var taskList = document.getElementById('task-list');
+        taskList.innerHTML = '<div class="v02-feedback"><i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop"></i><p>加载中...</p></div>';
+
+        try {
+            var url = '/admin/multimodal/tasks';
+            if (taskType && taskType !== 'all') {
+                url += '?type=' + taskType;
+            }
+
+            var response = await fetch(url, {
+                headers: {
+                    'X-XSRFToken': '{{ xsrf_token }}',
+                },
+            });
+            var data = await response.json();
+
+            if (data.ok && data.data) {
+                renderTaskList(data.data);
+            } else {
+                taskList.innerHTML = '<div class="v02-feedback error"><p>加载失败：' + (data.message || '未知错误') + '</p></div>';
+            }
+        } catch (error) {
+            taskList.innerHTML = '<div class="v02-feedback error"><p>请求失败：' + error.message + '</p></div>';
+        }
+    }
+
+    function renderTaskList(tasks) {
+        var taskList = document.getElementById('task-list');
+
+        if (!tasks || tasks.length === 0) {
+            taskList.innerHTML = '<div class="v02-feedback"><i class="layui-icon layui-icon-picture"></i><p>暂无任务记录</p></div>';
+            return;
+        }
+
+        var html = '';
+        tasks.forEach(function(task) {
+            var taskType = task.task_type || task.type;
+            var icon = taskType === 'image' ? 'layui-icon-picture' : 'layui-icon-play-circle';
+            var statusClass = task.status || 'pending';
+            var statusText = {
+                'pending': '等待中',
+                'running': '生成中',
+                'completed': '已完成',
+                'failed': '失败'
+            }[statusClass] || statusClass;
+
+            var time = new Date(task.created_at * 1000).toLocaleString('zh-CN');
+            var prompt = task.prompt || '';
+            if (prompt.length > 60) {
+                prompt = prompt.substring(0, 60) + '...';
+            }
+
+            html += '<div class="task-item">';
+            html += '  <i class="layui-icon ' + icon + ' task-item-icon"></i>';
+            html += '  <div class="task-item-info">';
+            html += '    <div class="task-item-prompt">' + escapeHtml(prompt) + '</div>';
+            html += '    <div class="task-item-meta">';
+            html += '      <span>类型：' + (taskType === 'image' ? '图片' : '视频') + '</span>';
+            html += '      <span>时间：' + time + '</span>';
+            html += '    </div>';
+            html += '  </div>';
+            html += '  <span class="task-item-status ' + statusClass + '">' + statusText + '</span>';
+            html += '  <div class="task-item-actions">';
+            html += '    <button class="v02-button-secondary" onclick="deleteTask(\'' + task.task_id + '\')" title="删除"><i class="layui-icon layui-icon-delete"></i></button>';
+            html += '  </div>';
+            html += '</div>';
+        });
+
+        taskList.innerHTML = html;
+    }
+
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    window.deleteTask = async function(taskId) {
+        if (!confirm('确定要删除这个任务吗？')) {
+            return;
+        }
+
+        try {
+            var response = await fetch('/admin/multimodal/tasks/' + taskId + '/delete', {
+                method: 'POST',
+                headers: {
+                    'X-XSRFToken': '{{ xsrf_token }}',
+                },
+            });
+            var data = await response.json();
+
+            if (data.ok) {
+                loadTasks(currentTaskFilter);
+            } else {
+                alert('删除失败：' + (data.message || '未知错误'));
+            }
+        } catch (error) {
+            alert('请求失败：' + error.message);
+        }
+    };
+
+    taskFilterBtns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            taskFilterBtns.forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            currentTaskFilter = btn.dataset.type;
+            loadTasks(currentTaskFilter);
+        });
+    });
+
+    refreshTasksBtn.addEventListener('click', function() {
+        loadTasks(currentTaskFilter);
+    });
+
+    // 初始加载任务列表
+    loadTasks('all');
+
+    // 生成图片/视频后自动刷新任务列表
+    generateImageBtn.addEventListener('click', function() {
+        setTimeout(function() { loadTasks(currentTaskFilter); }, 1000);
+    });
+
+    generateVideoBtn.addEventListener('click', function() {
+        setTimeout(function() { loadTasks(currentTaskFilter); }, 1000);
+    });
+})();
+</script>
+{% end %}
