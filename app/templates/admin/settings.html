@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% end %}
+
+{% block admin_content %}
+<div class="layui-card">
+    <div class="layui-card-header">
+        <h3>系统设置</h3>
+    </div>
+    <div class="layui-card-body">
+        <form class="layui-form" action="/admin/settings" method="post">
+            <input type="hidden" name="action" value="batch_update">
+            {% raw xsrf_form_html() %}
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">系统名称</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="system_name">
+                    <input type="text" name="setting_values" 
+                           value="{{ settings['system_name'] if settings.get('system_name') else '' }}"
+                           class="layui-input" placeholder="请输入系统名称">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">系统简介</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="system_description">
+                    <textarea name="setting_values" class="layui-textarea" rows="3" 
+                              placeholder="请输入系统简介">{{ settings['system_description'] if settings.get('system_description') else '' }}</textarea>
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">首页公告</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="home_announcement">
+                    <textarea name="setting_values" class="layui-textarea" rows="3" 
+                              placeholder="请输入首页公告">{{ settings['home_announcement'] if settings.get('home_announcement') else '' }}</textarea>
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">默认模型</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="default_model">
+                    <input type="text" name="setting_values" 
+                           value="{{ settings['default_model'] if settings.get('default_model') else '' }}"
+                           class="layui-input" placeholder="默认模型ID">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">允许注册</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="allow_register">
+                    <input type="checkbox" name="setting_values" 
+                           {% if settings.get('allow_register') == 'true' %}checked{% end %}
+                           value="true" lay-skin="switch" lay-text="开启|关闭">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">人脸登录</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="enable_face_login">
+                    <input type="checkbox" name="setting_values" 
+                           {% if settings.get('enable_face_login') == 'true' %}checked{% end %}
+                           value="true" lay-skin="switch" lay-text="开启|关闭">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">语音播报</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="enable_voice_report">
+                    <input type="checkbox" name="setting_values" 
+                           {% if settings.get('enable_voice_report') == 'true' %}checked{% end %}
+                           value="true" lay-skin="switch" lay-text="开启|关闭">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">敏感词阈值</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="sensitive_word_threshold">
+                    <input type="number" name="setting_values" 
+                           value="{{ settings['sensitive_word_threshold'] if settings.get('sensitive_word_threshold') else '' }}"
+                           class="layui-input" placeholder="敏感词阈值">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">大屏刷新间隔(秒)</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="screen_refresh_interval">
+                    <input type="number" name="setting_values" 
+                           value="{{ settings['screen_refresh_interval'] if settings.get('screen_refresh_interval') else '' }}"
+                           class="layui-input" placeholder="大屏刷新间隔">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">默认采集超时(秒)</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="default_collect_timeout">
+                    <input type="number" name="setting_values" 
+                           value="{{ settings['default_collect_timeout'] if settings.get('default_collect_timeout') else '' }}"
+                           class="layui-input" placeholder="默认采集超时">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">单次采集最大数量</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="max_collect_count">
+                    <input type="number" name="setting_values" 
+                           value="{{ settings['max_collect_count'] if settings.get('max_collect_count') else '' }}"
+                           class="layui-input" placeholder="单次采集最大数量">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <label class="layui-form-label">系统维护模式</label>
+                <div class="layui-input-block">
+                    <input type="hidden" name="setting_keys" value="maintenance_mode">
+                    <input type="checkbox" name="setting_values" 
+                           {% if settings.get('maintenance_mode') == 'true' %}checked{% end %}
+                           value="true" lay-skin="switch" lay-text="开启|关闭">
+                </div>
+            </div>
+            
+            <div class="layui-form-item">
+                <div class="layui-input-block">
+                    <button class="layui-btn" lay-submit lay-filter="save">保存设置</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+layui.use(['form', 'layer'], function() {
+    var form = layui.form;
+    var layer = layui.layer;
+    
+    form.on('submit(save)', function(data) {
+        return true;
+    });
+});
+</script>
+{% end %}

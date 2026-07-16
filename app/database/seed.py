@@ -13,7 +13,11 @@ DEFAULT_FEATURES = (
     ("feature_management", "功能管理", "/admin/features", "layui-icon-component", "核心工作区", "维护系统功能及启用状态", 30, 1),
     ("menu_management", "菜单管理", "/admin/menus", "layui-icon-cols", "核心工作区", "配置、排序并预览管理端菜单", 40, 1),
     ("role_management", "角色管理", "/admin/roles", "layui-icon-auz", "核心工作区", "维护角色及其功能授权", 50, 1),
-    ("lookout_management", "瞭望采集", "/admin/lookout", "layui-icon-chart-screen", "数据与智能", "按瞭源规则采集并预览公开数据", 60, 1),
+    ("system_settings", "系统设置", "/admin/settings", "layui-icon-set", "核心工作区", "配置系统全局参数和运行开关", 55, 1),
+    ("session_management", "会话管理", "/admin/sessions", "layui-icon-dialogue", "核心工作区", "管理用户会话和对话记录", 58, 1),
+    ("opinion_management", "舆情管理", "/admin/opinion/alerts", "layui-icon-fire", "数据与智能", "舆情预警和敏感词管理", 59, 1),
+    ("audit_logs", "审计日志", "/admin/audit/logs", "layui-icon-file-text", "核心工作区", "系统操作日志和安全审计", 61, 1),
+    ("lookout_management", "瞭望采集", "/admin/lookout", "layui-icon-chart-screen", "数据与智能", "按瞭源规则采集并预览公开数据", 62, 1),
     ("data_management", "数据仓库", "/admin/warehouse", "layui-icon-diamond", "数据与智能", "管理已入库的采集数据与深度采集状态", 70, 1),
     ("collection_management", "瞭源管理", "/admin/sources", "layui-icon-download-circle", "数据与智能", "维护公开数据源、请求头和采集规则", 80, 1),
     ("digital_employees", "数字员工", "/admin/agents", "layui-icon-username", "数据与智能", "配置模型型与接口型数字员工，并支持后台任务调度", 90, 1),
@@ -155,5 +159,17 @@ def seed_database(connection: sqlite3.Connection) -> None:
     _upgrade_legacy_users(connection)
     _seed_source(connection)
     _seed_employees(connection)
-    for version, description in ((2, "permissions and collection"), (3, "feature hierarchy"), (4, "digital employees"), (5, "conversations")):
+    _seed_settings(connection)
+    _seed_opinion(connection)
+    for version, description in ((2, "permissions and collection"), (3, "feature hierarchy"), (4, "digital employees"), (5, "conversations"), (7, "system settings"), (8, "opinion security")):
         connection.execute("INSERT OR IGNORE INTO schema_migrations(version,name,description,checksum) VALUES (?,?,?,'legacy')", (version, f"legacy_{version}", description))
+
+
+def _seed_settings(connection) -> None:
+    from app.models.system_settings import SystemSettingsRepository
+    SystemSettingsRepository.seed_defaults(connection)
+
+
+def _seed_opinion(connection) -> None:
+    from app.models.opinion import SensitiveWordRepository
+    SensitiveWordRepository.seed_defaults(connection)

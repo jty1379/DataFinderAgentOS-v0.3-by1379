@@ -10,11 +10,15 @@ import uuid
 
 import tornado.web
 
+from datetime import timedelta
+
+from config.settings import SETTINGS
 from app.core.contracts import error_response, success_response
 from app.core.permissions import require_admin, require_login, require_permission, require_superadmin
 from app.repositories.menu_repository import MenuRepository
 from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
+from app.services.system_settings import SystemSettingsService
 
 REQUEST_LOGGER = logging.getLogger("request")
 
@@ -26,6 +30,22 @@ class BaseHandler(tornado.web.RequestHandler):
         self.request_id = self.request.headers.get("X-Request-ID", uuid.uuid4().hex)
         self.request_started = time.monotonic()
         self.set_header("X-Request-ID", self.request_id)
+        self._set_security_headers()
+
+    def _set_security_headers(self) -> None:
+        self.set_header("X-Content-Type-Options", "nosniff")
+        self.set_header("X-Frame-Options", "DENY")
+        self.set_header("X-XSS-Protection", "1; mode=block")
+        self.set_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        if SETTINGS.app_env == "production":
+            self.set_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+    def get_client_ip(self) -> str:
+        for header in ("X-Forwarded-For", "X-Real-IP", "X-Client-IP"):
+            value = self.request.headers.get(header)
+            if value:
+                return value.split(",")[0].strip()
+        return self.request.remote_ip
 
     def get_current_user(self):
         raw_user_id = self.get_secure_cookie("user_id", max_age_days=1)
@@ -38,10 +58,14 @@ class BaseHandler(tornado.web.RequestHandler):
             return None
 
     def login_user(self, user: dict) -> None:
-        self.set_secure_cookie("user_id", str(user["id"]), expires_days=1, httponly=True, samesite="Lax")
+        timeout_minutes = SystemSettingsService.get_integer("session_timeout_minutes", 1440)
+        expires_days = timeout_minutes / 1440.0
+        self.set_secure_cookie("user_id", str(user["id"]), expires_days=expires_days, httponly=True, samesite="Strict", secure=SETTINGS.app_env == "production")
+        self.set_secure_cookie("session_start", str(int(time.time())), expires_days=expires_days, httponly=True, samesite="Strict", secure=SETTINGS.app_env == "production")
 
     def logout_user(self) -> None:
         self.clear_cookie("user_id")
+        self.clear_cookie("session_start")
 
     def on_finish(self) -> None:
         user = self.current_user

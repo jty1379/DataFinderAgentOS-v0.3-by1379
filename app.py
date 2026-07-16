@@ -13,8 +13,15 @@ from app.controllers.admin import (
     AdminMenusHandler,
     AdminModuleHandler,
     AdminRolesHandler,
+    AdminSettingsHandler,
     AdminUsersHandler,
 )
+from app.controllers.admin.audit import AdminAuditLogsHandler
+from app.controllers.admin.opinion import (
+    AdminOpinionAlertsHandler,
+    AdminSensitiveWordsHandler,
+)
+from app.controllers.admin.sessions import AdminMessagesHandler, AdminSessionsHandler
 from app.controllers.auth import (
     AdminLoginHandler,
     AdminLogoutHandler,
@@ -111,6 +118,12 @@ def make_app() -> tornado.web.Application:
             (r"/api/admin/opinion/alerts/([0-9]+)", OpinionAlertActionHandler),
             (r"/admin/modules/agents", tornado.web.RedirectHandler, {"url": "/admin/agents", "permanent": True}),
             (r"/admin/modules/([a-z]+)", AdminModuleHandler),
+            (r"/admin/settings", AdminSettingsHandler),
+            (r"/admin/sessions", AdminSessionsHandler),
+            (r"/admin/messages", AdminMessagesHandler),
+            (r"/admin/opinion/alerts", AdminOpinionAlertsHandler),
+            (r"/admin/opinion/words", AdminSensitiveWordsHandler),
+            (r"/admin/audit/logs", AdminAuditLogsHandler),
         ],
         template_path=str(BASE_DIR / "app" / "templates"),
         static_path=str(BASE_DIR / "app" / "static"),

@@ -145,3 +145,77 @@ class ConversationRepository:
             )
             connection.commit()
         return cursor.rowcount == 1
+
+    @staticmethod
+    def _list_all_for_admin(user_id: int | None, keyword: str = "", page: int = 1, page_size: int = 20) -> list[dict]:
+        pattern = f"%{keyword}%"
+        clauses = []
+        params = []
+        if user_id:
+            clauses.append("c.user_id = ?")
+            params.append(user_id)
+        if keyword:
+            clauses.append("c.title LIKE ?")
+            params.append(pattern)
+        
+        where_sql = " AND ".join(clauses) if clauses else "1=1"
+        
+        offset = (page - 1) * page_size
+        
+        with connection_scope() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT c.*, m.name AS model_name, e.name AS employee_name,
+                       u.username AS user_name,
+                       (SELECT COUNT(*) FROM user_messages um
+                        WHERE um.conversation_id = c.id) AS message_count
+                FROM user_conversations c
+                LEFT JOIN model_configs m ON m.id = c.model_id
+                LEFT JOIN digital_employees e ON e.id = c.employee_id
+                LEFT JOIN users u ON u.id = c.user_id
+                WHERE {where_sql}
+                ORDER BY c.updated_at DESC, c.id DESC LIMIT ? OFFSET ?
+                """,
+                [*params, page_size, offset],
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    @staticmethod
+    def _get_for_admin(conversation_id: int) -> dict | None:
+        with connection_scope() as connection:
+            row = connection.execute(
+                """
+                SELECT c.*, m.name AS model_name, e.name AS employee_name,
+                       u.username AS user_name
+                FROM user_conversations c
+                LEFT JOIN model_configs m ON m.id = c.model_id
+                LEFT JOIN digital_employees e ON e.id = c.employee_id
+                LEFT JOIN users u ON u.id = c.user_id
+                WHERE c.id = ?
+                """,
+                (conversation_id,),
+            ).fetchone()
+        return _conversation(row)
+
+    @staticmethod
+    def _messages_for_admin(conversation_id: int) -> list[dict]:
+        with connection_scope() as connection:
+            rows = connection.execute(
+                """
+                SELECT um.* FROM user_messages um
+                WHERE um.conversation_id = ?
+                ORDER BY um.id
+                """,
+                (conversation_id,),
+            ).fetchall()
+        return [_message(row) for row in rows]
+
+    @staticmethod
+    def _delete_for_admin(conversation_id: int) -> bool:
+        with connection_scope() as connection:
+            cursor = connection.execute(
+                "DELETE FROM user_conversations WHERE id=?",
+                (conversation_id,),
+            )
+            connection.commit()
+        return cursor.rowcount == 1
