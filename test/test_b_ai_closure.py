@@ -138,6 +138,13 @@ class TestAIRuntimeClosure(unittest.TestCase):
         self.assertEqual(query_result["mode"], "card")
         self.assertEqual(query_result["data"]["intent"], "sources_breakdown")
         self.assertIn("database_query", query_result["skills_used"])
+        with self.assertRaisesRegex(DigitalEmployeeError, "安全策略拒绝"):
+            asyncio.run(
+                DigitalEmployeeService.execute(analyst["id"], "drop table users", None)
+            )
+        self.assertFalse(
+            DigitalEmployeeRepository.list_call_logs(analyst["id"], 1)[0]["success"]
+        )
 
     def test_tts_uses_database_config_and_records_cache(self):
         TTSConfigRepository.update_config(

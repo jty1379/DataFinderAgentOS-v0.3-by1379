@@ -145,6 +145,23 @@ class DigitalEmployeeService:
                 latency_ms=latency_ms,
             )
             raise
+        except Exception as exc:
+            latency_ms = int((time.time() - start_time) * 1000)
+            message = str(exc)[:500] or "数字员工执行失败"
+            DigitalEmployeeRepository.record_call(employee_id, success=False)
+            DigitalEmployeeRepository.record_call_log(
+                employee_id=employee_id,
+                user_id=user_id,
+                input_text=text,
+                success=False,
+                error_message=message,
+                latency_ms=latency_ms,
+            )
+            LOGGER.exception(
+                "digital employee execution failed",
+                extra={"employee_id": employee_id, "user_id": user_id, "event": "employee_execution_failed"},
+            )
+            raise DigitalEmployeeError(message) from exc
 
     @staticmethod
     async def preview(employee_id: int, text: str, user_id: int | None = None) -> dict:

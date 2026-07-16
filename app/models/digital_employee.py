@@ -352,7 +352,7 @@ class DigitalEmployeeRepository:
             rows = connection.execute(
                 """SELECT * FROM employee_call_logs
                 WHERE employee_id = ?
-                ORDER BY created_at DESC
+                ORDER BY created_at DESC, id DESC
                 LIMIT ?""",
                 (employee_id, limit),
             ).fetchall()
