@@ -19,6 +19,42 @@
         }
     }
 
+    const QUERY_INTENT_TITLES = {
+        overview: "数据仓库概览",
+        source_distribution: "数据来源分布",
+        sources_breakdown: "各来源数据统计",
+        trend: "近七日入仓趋势",
+        deep_collection: "深度采集进度",
+        knowledge_graph: "来源—数据关系图谱",
+        report: "数据仓库分析简报",
+        daily_collection: "今日采集统计",
+        failure_analysis: "采集失败率分析",
+        risk_analysis: "高风险内容分析",
+        timing_analysis: "采集耗时分析",
+        keyword_frequency: "关键词频率",
+        unrecognized: "问数结果"
+    };
+
+    function analysisFromQuery(card) {
+        const visualizations = [];
+        if (Array.isArray(card.kpis) && card.kpis.length) {
+            visualizations.push({type: "kpi", title: "核心指标", data: card.kpis});
+        }
+        (Array.isArray(card.charts) ? card.charts : []).forEach((item) => {
+            visualizations.push({type: item.type, title: item.title, data: item.data || [], nodes: item.nodes, edges: item.edges});
+        });
+        const t = card.table || {};
+        if (Array.isArray(t.rows) && t.rows.length) {
+            visualizations.push({type: "table", title: "明细数据", columns: t.columns || [], labels: t.labels || [], data: t.rows});
+        }
+        return {
+            title: QUERY_INTENT_TITLES[card.intent] || "问数结果",
+            narrative: card.conclusion || "",
+            visualizations,
+            source_note: "数据来源：数据仓库统计（安全只读）"
+        };
+    }
+
     function normalize(card) {
         if (!card || typeof card !== "object") return {type: "text", data: {text: String(card ?? "")}};
         if (TYPES.has(card.type)) return {type: card.type, data: card.data && typeof card.data === "object" ? card.data : {text: card.data}};
@@ -26,6 +62,11 @@
         if (card.kind === "music") return {type: "music", data: card};
         if (card.kind === "news") return {type: "news", data: card};
         if (card.kind === "analysis") return {type: "analysis", data: card};
+        // 数字员工「数据分析师」问数契约：{intent, conclusion, kpis, charts, table}
+        if (typeof card.intent === "string" && typeof card.conclusion === "string"
+            && (Array.isArray(card.kpis) || Array.isArray(card.charts) || card.table)) {
+            return {type: "analysis", data: analysisFromQuery(card)};
+        }
         return {type: "text", data: {text: card.text || card.content || JSON.stringify(card, null, 2)}};
     }
 

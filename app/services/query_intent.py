@@ -64,6 +64,40 @@ class QueryIntentService:
         return None
 
     @classmethod
+    def _analyst_fallback(cls, text: str) -> dict | None:
+        """@分析师专用的宽松兜底匹配。
+
+        用户已显式 @分析师，意图就是查仓库数据，因此比通用聊天路由
+        （``analyze``）更宽容；仅当完全与仓库无关时才回退到未识别。
+        """
+        text = str(text or "")
+        if any(term in text for term in ("采集量", "今日采集", "今天采集", "采集情况", "采集多少", "多少条")):
+            return cls._daily_collection()
+        if any(term in text for term in ("来源", "数据源", "网站", "媒体")):
+            return cls._sources_breakdown()
+        if any(term in text for term in ("失败", "成功率", "报错")):
+            return cls._failure_analysis()
+        if any(term in text for term in ("风险", "预警", "敏感", "危险")):
+            return cls._risk_analysis()
+        if any(term in text for term in ("关键词", "关键字", "词频", "高频词", "热词")):
+            return cls._keyword_analysis()
+        if any(term in text for term in ("趋势", "走势", "变化", "近七日", "近期")):
+            return cls._trend()
+        if any(term in text for term in ("深度采集", "深采", "深度")):
+            return cls._deep()
+        if any(term in text for term in ("图谱", "关联", "关系")):
+            return cls._graph()
+        # 分析、仓库、数据、报告等泛泛而谈的诉求，统一回以综合简报。
+        if any(term in text for term in (
+            "仓库", "分析", "报告", "简报", "研判", "综述", "汇总", "总结",
+            "整体", "概况", "全面", "综合",
+        )):
+            return cls._report()
+        if any(term in text for term in ("数据", "统计", "概览", "情况", "多少", "量")):
+            return cls._overview()
+        return None
+
+    @classmethod
     def query(cls, question: str, user_id: int | None = None) -> dict:
         """Return the stable read-only analytics contract consumed by Skills.
 
@@ -71,7 +105,7 @@ class QueryIntentService:
         aggregate, allowlisted repository queries and never accepts SQL from callers.
         """
         del user_id
-        routed = cls.analyze(question)
+        routed = cls.analyze(question) or cls._analyst_fallback(question)
         if routed is None:
             return {
                 "intent": "unrecognized",

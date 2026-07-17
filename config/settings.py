@@ -37,6 +37,8 @@ class Settings:
     database_path: Path
     cookie_secret_file: Path
     cookie_secret: str
+    database_key_file: Path
+    database_key: str
     xsrf_cookies: bool
     log_level: str
     log_dir: Path
@@ -85,6 +87,27 @@ def _cookie_secret(app_env: str, secret_file: Path) -> str:
     return generated
 
 
+def _database_key(app_env: str, key_file: Path) -> str:
+    """数据库文件加密密钥：环境变量优先，其次密钥文件；均不入库、不进代码。"""
+    explicit = _value("DATABASE_KEY", "DATAFINDER_DB_KEY").strip()
+    if explicit:
+        if len(explicit) < 16:
+            raise RuntimeError("DATABASE_KEY 至少需要 16 个字符")
+        return explicit
+    if key_file.exists():
+        saved = key_file.read_text(encoding="utf-8").strip()
+        if saved:
+            return saved
+    if app_env == "testing":
+        return ""
+    if app_env == "production":
+        raise RuntimeError("生产环境必须通过 DATABASE_KEY 或密钥文件提供数据库加密密钥")
+    key_file.parent.mkdir(parents=True, exist_ok=True)
+    generated = secrets.token_urlsafe(48)
+    key_file.write_text(generated, encoding="utf-8")
+    return generated
+
+
 def load_settings() -> Settings:
     app_env = _value("APP_ENV", default="development").strip().lower()
     if app_env not in PROFILES:
@@ -95,6 +118,7 @@ def load_settings() -> Settings:
         raise RuntimeError("生产环境禁止开启 DEBUG")
     database_path = Path(_value("DATABASE_PATH", "DATAFINDER_DB_PATH", str(defaults["database_path"]))).resolve()
     secret_file = Path(_value("COOKIE_SECRET_FILE", "DATAFINDER_COOKIE_SECRET_FILE", str(BASE_DIR / "config" / "runtime_secret.txt"))).resolve()
+    db_key_file = Path(_value("DATABASE_KEY_FILE", "DATAFINDER_DB_KEY_FILE", str(BASE_DIR / "config" / "db_secret.key"))).resolve()
     return Settings(
         app_env=app_env,
         debug=debug,
@@ -103,6 +127,8 @@ def load_settings() -> Settings:
         database_path=database_path,
         cookie_secret_file=secret_file,
         cookie_secret=_cookie_secret(app_env, secret_file),
+        database_key_file=db_key_file,
+        database_key=_database_key(app_env, db_key_file),
         xsrf_cookies=_bool(_value("XSRF_COOKIES", default="true")),
         log_level=_value("LOG_LEVEL", default="INFO").upper(),
         log_dir=Path(_value("LOG_DIR", default=str(BASE_DIR / "logs"))).resolve(),

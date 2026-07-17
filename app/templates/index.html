@@ -107,6 +107,32 @@
                 <span><i class="layui-icon layui-icon-username"></i><b data-active-employee-name></b> 已接入</span>
                 <button type="button" data-clear-employee>取消调度</button>
             </div>
+            {% if capabilities['vision'] or capabilities['image'] or capabilities['audio'] or capabilities['video'] or models %}
+            <div class="composer-tools" data-composer-tools>
+                {% if capabilities['vision'] or models %}
+                <button type="button" class="composer-tool" data-attach-image title="上传图片或文档（PDF/TXT/Markdown），交给模型理解">
+                    <i class="layui-icon layui-icon-upload-drag"></i><span>上传文件</span>
+                </button>
+                <input class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,.pdf,.txt,.md,.markdown" multiple data-file-input>
+                {% end %}
+                {% if capabilities['image'] %}
+                <button type="button" class="composer-tool" data-generate-image title="根据描述生成图片">
+                    <i class="layui-icon layui-icon-picture-fine"></i><span>生成图片</span>
+                </button>
+                {% end %}
+                {% if capabilities['audio'] %}
+                <button type="button" class="composer-tool" data-generate-audio title="将文本合成语音朗读">
+                    <i class="layui-icon layui-icon-speaker"></i><span>语音朗读</span>
+                </button>
+                {% end %}
+                {% if capabilities['video'] %}
+                <button type="button" class="composer-tool" data-generate-video title="生成视频">
+                    <i class="layui-icon layui-icon-video"></i><span>生成视频</span>
+                </button>
+                {% end %}
+            </div>
+            <div class="attachment-strip" data-attachment-strip hidden></div>
+            {% end %}
             <form class="question-composer" data-question-composer>
                 <label class="sr-only" for="question-input">输入问数问题</label>
                 <textarea id="question-input" rows="1" maxlength="8000" autocomplete="off" placeholder="输入问题，或键入 @ / 调度数字员工" data-question-input></textarea>
@@ -114,6 +140,7 @@
                 <button class="stop-generation" type="button" data-stop-button hidden><i class="layui-icon layui-icon-pause"></i><span>停止</span></button>
             </form>
             <p class="composer-note">仓库问数来自本地只读统计；天气数据由 wttr.in 提供。回答请结合来源复核。</p>
+            <script type="application/json" data-workspace-caps>{% raw capabilities_json %}</script>
         </section>
     </main>
 </div>
@@ -126,6 +153,13 @@
         <footer><button class="danger-text" type="button" data-face-delete hidden>删除人脸档案</button><button type="button" data-biometric-close>取消</button><button class="primary-action compact" type="button" data-biometric-capture>开始采集</button></footer>
     </div>
 </dialog>
+<div class="gesture-silent-bar" data-gesture-silent hidden role="status" aria-live="polite">
+    <span class="gesture-silent-dot" aria-hidden="true"></span>
+    <div class="gesture-silent-text"><strong>正在调用摄像头…</strong><small data-gesture-silent-hint>静默识别手势中，请在镜头前保持手势约 1 秒</small></div>
+    <button type="button" data-gesture-silent-cancel aria-label="停止手势识别">停止</button>
+    <video class="gesture-silent-media" data-gesture-silent-video autoplay muted playsinline></video>
+    <canvas data-gesture-silent-canvas hidden></canvas>
+</div>
 {% end %}
 {% block scripts %}
 <script src="{{ static_url('js/user-workspace.js') }}"></script>

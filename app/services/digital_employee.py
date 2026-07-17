@@ -707,15 +707,68 @@ class DigitalEmployeeService:
                 raise DigitalEmployeeError(payload.get("message", "数据仓库统计接口返回异常"))
             period = payload.get("period", "week")
             period_labels = {"today": "今日", "week": "本周", "month": "本月", "all": "全部"}
+            period_label = period_labels.get(period, period)
+            total_items = int(payload.get("total_items", 0))
+            deep_collected = int(payload.get("deep_collected", 0))
+            deep_rate = payload.get("deep_rate", 0)
+            sources = [
+                item for item in (payload.get("sources") or [])
+                if isinstance(item, dict)
+            ]
+            recent = [
+                item for item in (payload.get("recent") or [])
+                if isinstance(item, dict)
+            ]
+
+            visualizations = [
+                {
+                    "type": "kpi",
+                    "title": "核心指标",
+                    "data": [
+                        {"label": "入仓总量", "value": total_items},
+                        {"label": "深度采集", "value": deep_collected},
+                        {"label": "深采占比", "value": f"{deep_rate}%"},
+                        {"label": "来源数", "value": len(sources)},
+                    ],
+                }
+            ]
+            if sources:
+                visualizations.append({
+                    "type": "bar",
+                    "title": "来源分布 Top 10",
+                    "data": [
+                        {"name": str(item.get("name", "未知来源")),
+                         "value": int(item.get("count", 0))}
+                        for item in sources
+                    ],
+                })
+            if recent:
+                visualizations.append({
+                    "type": "table",
+                    "title": "最新入仓",
+                    "columns": ["title", "source_name", "created_at"],
+                    "labels": ["标题", "来源", "入仓时间"],
+                    "data": [
+                        {
+                            "title": str(item.get("title", "") or "未命名"),
+                            "source_name": str(item.get("source_name", "") or "未知来源"),
+                            "created_at": str(item.get("created_at", "") or "--"),
+                        }
+                        for item in recent
+                    ],
+                })
+
+            top_source = sources[0].get("name") if sources else "暂无来源"
+            narrative = (
+                f"{period_label}共入仓 {total_items} 条信息，其中深度采集 {deep_collected} 条，"
+                f"深采占比 {deep_rate}%；活跃来源共 {len(sources)} 个，主力来源为「{top_source}」。"
+            )
             return {
-                "kind": "analyst",
-                "period": period_labels.get(period, period),
-                "total_items": int(payload.get("total_items", 0)),
-                "deep_collected": int(payload.get("deep_collected", 0)),
-                "deep_rate": payload.get("deep_rate", 0),
-                "sources": payload.get("sources", []),
-                "recent": payload.get("recent", []),
-                "source": "数据仓库统计",
+                "kind": "analysis",
+                "title": f"{period_label}数据仓库分析",
+                "narrative": narrative,
+                "visualizations": visualizations,
+                "source_note": "数据来源：数据仓库统计（安全只读）",
             }
         except DigitalEmployeeError:
             raise

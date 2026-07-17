@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from datetime import date
 from urllib.parse import quote
@@ -111,12 +112,30 @@ class AdminMessagesHandler(AdminBaseHandler):
         )
         if not conversation:
             return self.redirect_with_message("/admin/sessions", "会话不存在", "error")
+        messages = ConversationRepository._messages_for_admin(conversation["id"])
+        payload = [
+            {
+                "role": message.get("role") or "assistant",
+                "content": message.get("content") or "",
+                "content_type": message.get("content_type") or "text",
+                "created_at": str(message.get("created_at") or ""),
+                "risk_level": message.get("risk_level") or "low",
+                "latency_ms": int(message.get("latency_ms") or 0),
+                "token_count": int(message.get("token_count") or 0),
+                "matched_words": message.get("matched_words") or "",
+                "metadata": message.get("metadata") or {},
+            }
+            for message in messages
+        ]
+        # 序列化后转义 </，避免提前闭合 <script> 标签。
+        messages_json = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
         self.render_admin(
             "admin/messages.html",
             title="对话详情 · 零界",
             active_menu="session_management",
             conversation=conversation,
-            messages=ConversationRepository._messages_for_admin(conversation["id"]),
+            messages=messages,
+            messages_json=messages_json,
         )
 
 

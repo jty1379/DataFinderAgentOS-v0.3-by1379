@@ -4,3 +4,4 @@ crawl4ai==0.8.5
 beautifulsoup4==4.15.0
 reportlab==5.0.0
 mediapipe==0.10.32
+sqlcipher3-wheels==0.5.7

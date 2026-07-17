@@ -301,7 +301,7 @@ def _seed_employees(connection: sqlite3.Connection) -> None:
     connection.execute(
         """INSERT OR IGNORE INTO digital_employees
         (code,name,mention,employee_type,description,use_default_model,skills,api_method,api_url,request_headers,request_params,response_mode,timeout_seconds,enabled,is_system)
-        VALUES ('analyst','数据分析师','分析师','api',?,1,?,'GET','http://localhost:10010/api/warehouse/stats','{}',?,'json',20,1,1)""",
+        VALUES ('analyst','数据分析师','分析师','api',?,1,?,'GET','http://localhost:10010/api/warehouse/stats','{}',?,'card',20,1,1)""",
         ("分析数据仓库的统计信息，提供数据趋势分析。", json.dumps(["数据分析", "趋势分析", "统计报告"], ensure_ascii=False), '{"period":"week"}'),
     )
 

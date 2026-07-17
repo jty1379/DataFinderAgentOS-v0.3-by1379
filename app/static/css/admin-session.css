@@ -1,0 +1,39 @@
+/* 管理端「对话详情」——消息气泡、回放工具栏与回放动画。
+   卡片本体样式复用 user-workspace.css（--uw-* 变量已在其 :root 中定义）。 */
+
+.session-replay-panel .v02-panel-header { flex-wrap: wrap; padding: 12px 18px; }
+.replay-toolbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+.replay-mode-switch { display: inline-flex; padding: 2px; border: 1px solid var(--admin-v02-line); border-radius: 8px; background: var(--admin-v02-bg, #f2f6fa); }
+.replay-mode-switch button { min-width: 66px; padding: 5px 12px; border: 0; border-radius: 6px; background: transparent; color: var(--admin-v02-muted); font-size: 12px; font-weight: 600; cursor: pointer; }
+.replay-mode-switch button.active { background: var(--admin-v02-surface, #fff); color: var(--admin-v02-text); box-shadow: 0 1px 4px rgba(24, 58, 82, .12); }
+
+.replay-controls { display: inline-flex; align-items: center; gap: 10px; }
+.replay-controls[hidden] { display: none; }
+.replay-btn { min-width: 56px; padding: 5px 12px; border: 1px solid var(--admin-v02-line); border-radius: 6px; background: var(--admin-v02-surface, #fff); color: var(--admin-v02-text); font-size: 12px; cursor: pointer; }
+.replay-btn:hover { border-color: var(--admin-v02-accent, #246b9e); color: var(--admin-v02-accent, #246b9e); }
+.replay-speed { display: inline-flex; align-items: center; gap: 6px; color: var(--admin-v02-muted); font-size: 12px; }
+.replay-speed select { padding: 4px 6px; border: 1px solid var(--admin-v02-line); border-radius: 6px; background: var(--admin-v02-surface, #fff); color: var(--admin-v02-text); font-size: 12px; }
+.replay-progress { min-width: 52px; color: var(--admin-v02-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* 消息列表与气泡 */
+.session-message-list { display: flex; flex-direction: column; gap: 16px; padding: 20px; min-height: 120px; }
+.session-message { display: grid; gap: 8px; max-width: 860px; padding: 14px 16px; border: 1px solid var(--uw-border, #c8d8e4); border-radius: 12px; background: var(--uw-surface, #fff); box-shadow: 0 6px 18px rgba(24, 58, 82, .05); }
+.session-message.user { margin-left: auto; border-color: #bcd2e6; background: #eef4fb; }
+.session-message.assistant { margin-right: auto; }
+.session-message.error { border-color: #e6b8bf; background: #fdf1f3; }
+.session-message > header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.session-message > header b { font-size: 13px; color: var(--uw-primary-dark, #1a2a4a); }
+.session-message > header time { color: var(--uw-muted, #5a7a94); font-size: 11px; font-variant-numeric: tabular-nums; }
+.session-message-content { color: var(--uw-text, #1a2a4a); font-size: 13.5px; line-height: 1.7; word-break: break-word; }
+.session-message-content .contract-card, .session-message-content .analysis-card { box-shadow: none; }
+.session-message > footer { display: flex; flex-wrap: wrap; gap: 6px 14px; padding-top: 8px; border-top: 1px dashed var(--uw-border, #c8d8e4); color: var(--uw-muted, #5a7a94); font-size: 11px; }
+.session-message > footer span { white-space: nowrap; }
+
+/* 回放淡入动画 */
+.session-message.replay-enter { opacity: 0; transform: translateY(10px); }
+.session-message.replay-enter-active { opacity: 1; transform: translateY(0); transition: opacity .34s ease, transform .34s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+    .session-message.replay-enter, .session-message.replay-enter-active { opacity: 1; transform: none; transition: none; }
+}

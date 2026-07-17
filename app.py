@@ -57,6 +57,8 @@ from app.controllers.home import (
     UserChatStreamHandler,
     UserConversationHandler,
     UserIndexHandler,
+    UserUploadAssetHandler,
+    UserUploadHandler,
 )
 from app.controllers.interface import (
     AdminInterfaceLogsHandler,
@@ -131,6 +133,8 @@ def make_app() -> tornado.web.Application:
             (r"/index", UserIndexHandler),
             (r"/api/chat", UserChatHandler),
             (r"/api/chat/stream", UserChatStreamHandler),
+            (r"/api/uploads", UserUploadHandler),
+            (r"/api/uploads/([0-9]+)/([\w.-]+)", UserUploadAssetHandler),
             (r"/api/auth/face-login", FaceLoginHandler),
             (r"/api/profile/face", FaceProfileHandler),
             (r"/api/gestures/recognize", GestureRecognizeHandler),

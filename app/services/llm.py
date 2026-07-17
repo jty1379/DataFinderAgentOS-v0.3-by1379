@@ -126,9 +126,18 @@ class _ReasoningStreamFilter:
         return "".join(output)
 
 
+def _user_message(prompt: str, images: list[str] | None) -> dict:
+    """有图片时构造 OpenAI 兼容的多模态 content 数组，否则纯文本。"""
+    if images:
+        content = [{"type": "text", "text": prompt}]
+        content += [{"type": "image_url", "image_url": {"url": url}} for url in images]
+        return {"role": "user", "content": content}
+    return {"role": "user", "content": prompt}
+
+
 class LLMService:
     @staticmethod
-    async def complete(model: dict, prompt: str) -> dict:
+    async def complete(model: dict, prompt: str, images: list[str] | None = None) -> dict:
         prompt = prompt.strip()
         if not 1 <= len(prompt) <= 20000:
             raise LLMError("对话内容需为 1—20000 个字符")
@@ -142,11 +151,11 @@ class LLMService:
         if api_key_env and not api_key:
             raise LLMError(f"环境变量 {api_key_env} 未配置")
 
-        messages: list[dict[str, str]] = []
+        messages: list[dict] = []
         system_prompt = str(model.get("system_prompt") or "").strip()
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
+        messages.append(_user_message(prompt, images))
         payload = {
             "model": model_name,
             "messages": messages,
@@ -225,7 +234,7 @@ class LLMService:
         }
 
     @staticmethod
-    async def complete_stream(model: dict, prompt: str, on_delta) -> dict:
+    async def complete_stream(model: dict, prompt: str, on_delta, images: list[str] | None = None) -> dict:
         """Consume an OpenAI-compatible SSE response and expose each text delta."""
         prompt = prompt.strip()
         if not 1 <= len(prompt) <= 20000:
@@ -243,7 +252,7 @@ class LLMService:
         system_prompt = str(model.get("system_prompt") or "").strip()
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
+        messages.append(_user_message(prompt, images))
         payload = {
             "model": model_name, "messages": messages,
             "temperature": float(model.get("temperature", 0.7)),

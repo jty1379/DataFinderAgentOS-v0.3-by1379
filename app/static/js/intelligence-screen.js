@@ -117,45 +117,7 @@
 
     const EARTH_TEXTURE_URL = "/static/img/earth-base.jpg";
 
-    function composeGlobeTexture(image, points) {
-        const width = image && image.naturalWidth ? image.naturalWidth : 2048;
-        const height = image && image.naturalHeight ? image.naturalHeight : 1024;
-        const canvas = document.createElement("canvas");
-        canvas.width = width; canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (image) ctx.drawImage(image, 0, 0, width, height);
-        else ctx.drawImage(buildEarthTexture(), 0, 0, width, height);
-        const dot = Math.max(4, Math.round(width / 220));
-        const font = Math.max(20, Math.round(width / 64));
-        ctx.textAlign = "left";
-        ctx.textBaseline = "middle";
-        ctx.font = `600 ${font}px "PingFang SC","Microsoft YaHei",sans-serif`;
-        points.forEach((point) => {
-            const [lng, lat] = point.value || [0, 0];
-            const x = (Number(lng) + 180) / 360 * width;
-            const y = (90 - Number(lat)) / 180 * height;
-            const glow = ctx.createRadialGradient(x, y, 0, x, y, dot * 3);
-            glow.addColorStop(0, "rgba(255,214,120,.95)");
-            glow.addColorStop(0.45, "rgba(255,180,70,.55)");
-            glow.addColorStop(1, "rgba(255,180,70,0)");
-            ctx.fillStyle = glow;
-            ctx.beginPath(); ctx.arc(x, y, dot * 3, 0, Math.PI * 2); ctx.fill();
-            ctx.fillStyle = "#ffd76b"; ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.lineWidth = Math.max(1.5, dot * 0.4);
-            ctx.beginPath(); ctx.arc(x, y, dot, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-            const label = point.name || "";
-            if (label) {
-                const lx = x + dot * 3 + font * 0.35;
-                ctx.lineWidth = Math.max(3, font * 0.16);
-                ctx.strokeStyle = "rgba(6,14,26,.85)";
-                ctx.strokeText(label, lx, y);
-                ctx.fillStyle = "#fff7e6";
-                ctx.fillText(label, lx, y);
-            }
-        });
-        return canvas;
-    }
-
-    function globeOption(baseTexture) {
+    function globeOption(baseTexture, points) {
         const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         return {
             backgroundColor: "transparent",
@@ -166,7 +128,56 @@
                 atmosphere: {show: true, color: "#4b8fd0", glowPower: 5, innerGlowPower: 2, offset: 2},
                 light: {main: {intensity: 1.25, shadow: false, alpha: 40, beta: 30}, ambient: {intensity: 0.6}},
                 viewControl: {autoRotate: !reduceMotion, autoRotateSpeed: 6, autoRotateAfterStill: 3, alpha: 20, beta: -150, distance: 155, minDistance: 120, maxDistance: 280, rotateSensitivity: 1.4}
-            }
+            },
+            series: [{
+                type: "scatter3D",
+                coordinateSystem: "globe",
+                symbol: "circle",
+                symbolSize: 7,
+                // 光点浮在球面上，标签为面向相机的 billboard，不再随球面弯曲
+                itemStyle: {color: "#ffd76b", opacity: 0.95, borderColor: "rgba(255,255,255,.9)", borderWidth: 1},
+                label: {
+                    show: true,
+                    distance: 6,
+                    formatter: (params) => `${params.name} ${params.data && params.data.count != null ? params.data.count : 0}`,
+                    textStyle: {
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: "#fff7e6",
+                        backgroundColor: "rgba(6,14,26,.55)",
+                        borderColor: "rgba(255,214,120,.35)",
+                        borderWidth: 1,
+                        padding: [2, 6],
+                        borderRadius: 5
+                    }
+                },
+                emphasis: {
+                    // 鼠标悬停时的轻微交互：光点放大、标签高亮，不绑定任何点击行为
+                    itemStyle: {color: "#ffffff", opacity: 1},
+                    label: {
+                        show: true,
+                        textStyle: {
+                            fontSize: 12,
+                            color: "#ffffff",
+                            backgroundColor: "rgba(255,140,26,.9)",
+                            borderColor: "rgba(255,255,255,.85)",
+                            borderWidth: 1,
+                            padding: [3, 7],
+                            borderRadius: 5
+                        }
+                    }
+                },
+                data: (points || []).map((point) => ({
+                    name: point.name,
+                    // 热点数量单独存为 count；不能放进 value[2]，否则 echarts-gl
+                    // 会把第三个分量当作球面高度，导致计数大的地区标签浮空更高。
+                    count: Number(point.value?.[2] || 0),
+                    value: [
+                        Number(point.value?.[0] || 0),
+                        Number(point.value?.[1] || 0)
+                    ]
+                }))
+            }]
         };
     }
 
@@ -174,7 +185,6 @@
         const host = root.querySelector('[data-chart="globe"]');
         const previous = charts.get("globe");
         if (previous) {
-            if (previous.__earthTextureUrl) URL.revokeObjectURL(previous.__earthTextureUrl);
             previous.dispose();
             charts.delete("globe");
         }
@@ -182,29 +192,8 @@
         host.style.display = "block";
         const instance = echarts.init(host, null, {renderer: "canvas"});
         charts.set("globe", instance);
-        // echarts-gl in this build only uploads baseTexture from a real resource URL;
-        // a canvas or data-URL Image renders a blank sphere, so bake markers into the
-        // NASA texture and hand it over as a Blob object URL.
-        const paint = (baseImage) => {
-            if (charts.get("globe") !== instance) return;
-            composeGlobeTexture(baseImage, points).toBlob((blob) => {
-                if (!blob || charts.get("globe") !== instance) return;
-                const textureUrl = URL.createObjectURL(blob);
-                const textureImage = new Image();
-                textureImage.onload = () => {
-                    if (charts.get("globe") !== instance) { URL.revokeObjectURL(textureUrl); return; }
-                    if (instance.__earthTextureUrl) URL.revokeObjectURL(instance.__earthTextureUrl);
-                    instance.__earthTextureUrl = textureUrl;
-                    instance.setOption(globeOption(textureImage));
-                };
-                textureImage.onerror = () => URL.revokeObjectURL(textureUrl);
-                textureImage.src = textureUrl;
-            }, "image/jpeg", 0.92);
-        };
-        const earth = new Image();
-        earth.onload = () => paint(earth);
-        earth.onerror = () => paint(null);
-        earth.src = EARTH_TEXTURE_URL;
+        // baseTexture 仅接受真实资源 URL，直接交付 NASA 影像；地区标签改由 scatter3D 系列浮标渲染。
+        instance.setOption(globeOption(EARTH_TEXTURE_URL, points));
     }
 
     function renderEarth(points = []) {

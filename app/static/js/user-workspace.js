@@ -30,6 +30,13 @@
     const activeEmployeeName = $("[data-active-employee-name]");
     const historyList = $("[data-history-list]");
     const historyEmpty = $("[data-history-empty]");
+    const composerZone = $(".composer-zone");
+    const fileInput = $("[data-file-input]");
+    const attachStrip = $("[data-attachment-strip]");
+    const attachButton = $("[data-attach-image]");
+    const genImageButton = $("[data-generate-image]");
+    const genAudioButton = $("[data-generate-audio]");
+    const genVideoButton = $("[data-generate-video]");
     let conversationId = null;
     let employeeId = null;
     let employeeMention = "";
@@ -38,6 +45,19 @@
     let streamController = null;
     let voiceEnabled = window.localStorage.getItem("datafinder-voice") === "1";
     const modelAvailable = Array.from(modelSelect.options).some((option) => Boolean(option.value));
+    const MAX_ATTACHMENTS = 4;
+    const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+    const ALLOWED_DOC_EXT = ["pdf", "txt", "md", "markdown"];
+    const workspaceCaps = (() => {
+        try { return JSON.parse($("[data-workspace-caps]")?.textContent || "{}"); }
+        catch (_) { return {}; }
+    })();
+    const IMAGE_STYLES = [["default", "默认风格"], ["photo", "写实风格"], ["cartoon", "卡通风格"], ["anime", "动漫风格"], ["oil", "油画风格"], ["sketch", "素描风格"], ["watercolor", "水彩风格"], ["3d", "3D 风格"], ["minimal", "极简风格"]];
+    const IMAGE_SIZES = [["512x512", "512×512"], ["1024x1024", "1024×1024"], ["1024x1536", "1024×1536"], ["1536x1024", "1536×1024"]];
+    const VOICE_OPTIONS = [["male-qn-qingse", "MiniMax · 青涩男声"], ["female-shaonv", "MiniMax · 少女音色"], ["zh_female", "中文女声"], ["zh_male", "中文男声"], ["zh_child", "中文童声"], ["zh_gentle", "中文温柔女声"], ["zh_intelligent", "中文知性女声"], ["zh_energetic", "中文活力女声"], ["zh_calm", "中文沉稳男声"], ["zh_youth", "中文年轻男声"], ["en_female", "英文女声"], ["en_male", "英文男声"], ["en_us_female", "英文美式女声"], ["en_us_male", "英文美式男声"], ["en_uk_female", "英文英式女声"], ["en_uk_male", "英文英式男声"], ["ja_female", "日语女声"], ["ja_male", "日语男声"], ["ko_female", "韩语女声"], ["ko_male", "韩语男声"]];
+    let pendingAttachments = [];
+    let activePanel = null;
+    let broadcastAudio = null;
 
     function stripInternalReasoning(value) {
         return String(value || "")
@@ -65,13 +85,46 @@
         voiceButton.title = voiceEnabled ? "关闭语音播报" : "开启语音播报";
     }
 
-    function speak(text) {
-        if (!voiceEnabled || !text || !("speechSynthesis" in window)) return;
+    function stopBroadcast() {
+        if (broadcastAudio) {
+            broadcastAudio.pause();
+            broadcastAudio = null;
+        }
+        if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    }
+
+    function browserSpeak(text) {
+        if (!("speechSynthesis" in window)) return;
         window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(stripInternalReasoning(text).replace(/[`*_#>-]/g, " ").slice(0, 3000));
+        const utterance = new SpeechSynthesisUtterance(text.slice(0, 3000));
         utterance.lang = "zh-CN";
         utterance.rate = 1;
         window.speechSynthesis.speak(utterance);
+    }
+
+    async function speakViaTts(text) {
+        try {
+            const result = await app.request("/api/tts", {
+                method: "POST",
+                json: {text: text.slice(0, 5000)},
+                timeoutMs: 30000
+            });
+            const url = markdown.safeUrl(result.audio_url);
+            if (!url) throw new Error("empty audio");
+            stopBroadcast();
+            broadcastAudio = new Audio(url);
+            broadcastAudio.play().catch(() => browserSpeak(text));
+        } catch (_) {
+            browserSpeak(text);
+        }
+    }
+
+    function speak(text) {
+        if (!voiceEnabled || !text) return;
+        const clean = stripInternalReasoning(text).replace(/[`*_#>-]/g, " ").trim();
+        if (!clean) return;
+        if (workspaceCaps.audio) speakViaTts(clean);
+        else browserSpeak(clean);
     }
 
     updateVoiceButton();
@@ -233,6 +286,32 @@
         } else {
             content.append(markdown.render(stripInternalReasoning(message.content)));
         }
+        const attachments = (message.metadata && message.metadata.attachments) || message.attachments;
+        if (!temporary && message.role === "user" && Array.isArray(attachments) && attachments.length) {
+            const gallery = document.createElement("div");
+            gallery.className = "message-attachments";
+            attachments.forEach((item) => {
+                const url = markdown.safeUrl(item && item.url);
+                if (!url) return;
+                if (item && item.kind === "doc") {
+                    const link = document.createElement("a");
+                    link.className = "message-doc";
+                    link.href = url;
+                    link.target = "_blank";
+                    link.rel = "noopener";
+                    link.innerHTML = '<i class="layui-icon layui-icon-file"></i>';
+                    link.append(document.createTextNode(item.name || "文档附件"));
+                    gallery.append(link);
+                    return;
+                }
+                const image = document.createElement("img");
+                image.src = url;
+                image.alt = (item && item.name) || "上传图片";
+                image.loading = "lazy";
+                gallery.append(image);
+            });
+            if (gallery.childElementCount) content.append(gallery);
+        }
         if (!temporary && message.metadata) {
             const source = message.metadata.employee || message.metadata.model || "系统服务";
             const usage = message.metadata.usage || {};
@@ -277,6 +356,262 @@
         }
     }
 
+    function renderAttachments() {
+        if (!attachStrip) return;
+        attachStrip.replaceChildren();
+        attachStrip.hidden = pendingAttachments.length === 0;
+        pendingAttachments.forEach((item, index) => {
+            const chip = document.createElement("div");
+            chip.className = "attachment-chip";
+            if (item.kind === "doc") {
+                chip.classList.add("attachment-doc");
+                const icon = document.createElement("i");
+                icon.className = "layui-icon layui-icon-file";
+                const name = document.createElement("span");
+                name.className = "attachment-name";
+                name.textContent = item.name || "文档附件";
+                chip.append(icon, name);
+            } else {
+                const image = document.createElement("img");
+                image.src = item.url;
+                image.alt = item.name || "已上传图片";
+                chip.append(image);
+            }
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.className = "attachment-remove";
+            remove.setAttribute("aria-label", "移除附件");
+            remove.textContent = "×";
+            remove.addEventListener("click", () => {
+                pendingAttachments.splice(index, 1);
+                renderAttachments();
+            });
+            chip.append(remove);
+            attachStrip.append(chip);
+        });
+    }
+
+    function clearAttachments() {
+        pendingAttachments = [];
+        renderAttachments();
+    }
+
+    async function uploadFiles(fileList) {
+        const files = Array.from(fileList || []);
+        for (const file of files) {
+            if (pendingAttachments.length >= MAX_ATTACHMENTS) {
+                app.announce("最多上传 4 个文件", "warning");
+                break;
+            }
+            const extension = (file.name.split(".").pop() || "").toLowerCase();
+            const isImage = ALLOWED_IMAGE_TYPES.includes(file.type);
+            const isDoc = ALLOWED_DOC_EXT.includes(extension);
+            if (!isImage && !isDoc) {
+                app.announce(`不支持的文件格式：${file.name}`, "error");
+                continue;
+            }
+            if (file.size > 8 * 1024 * 1024) {
+                app.announce(`文件超过 8MB：${file.name}`, "error");
+                continue;
+            }
+            const formData = new FormData();
+            formData.append("file", file);
+            try {
+                const result = await app.request("/api/uploads", {method: "POST", body: formData, timeoutMs: 20000});
+                pendingAttachments.push({
+                    url: result.url,
+                    name: result.name || file.name,
+                    kind: result.kind === "doc" ? "doc" : "image"
+                });
+                renderAttachments();
+            } catch (error) {
+                app.announce(app.errorMessage(error, "文件上传失败"), "error");
+            }
+        }
+    }
+
+    function buildSelect(options, selectedValue) {
+        const select = document.createElement("select");
+        options.forEach(([value, label]) => {
+            const option = document.createElement("option");
+            option.value = value;
+            option.textContent = label;
+            if (value === selectedValue) option.selected = true;
+            select.append(option);
+        });
+        return select;
+    }
+
+    function labeledField(labelText, node) {
+        const field = document.createElement("label");
+        field.className = "gen-field";
+        field.append(textNode("span", "", labelText), node);
+        return field;
+    }
+
+    function closePanel() {
+        if (activePanel) {
+            activePanel.remove();
+            activePanel = null;
+        }
+    }
+
+    function mountPanel(panel) {
+        if (!composerZone) return;
+        composerZone.insertBefore(panel, composerZone.firstChild);
+        activePanel = panel;
+    }
+
+    function lastAssistantText() {
+        const nodes = $$(".chat-message.assistant .message-content", stream);
+        for (let index = nodes.length - 1; index >= 0; index -= 1) {
+            const clone = nodes[index].cloneNode(true);
+            clone.querySelectorAll(".message-meta, .message-recovery, audio").forEach((item) => item.remove());
+            const text = clone.textContent.trim();
+            if (text) return text.slice(0, 1000);
+        }
+        return "";
+    }
+
+    async function generateImage(prompt, style, size) {
+        const created = await app.request("/api/multimodal/generate", {
+            method: "POST",
+            json: {task_type: "image", prompt, style, image_size: size},
+            timeoutMs: 20000
+        });
+        const taskId = created.task_id;
+        if (!taskId) throw new Error("生成任务提交失败");
+        for (let count = 0; count < 60; count += 1) {
+            await new Promise((resolve) => window.setTimeout(resolve, 1000));
+            const task = await app.request(`/api/multimodal/tasks/${taskId}`, {method: "GET"});
+            if (task.status === "completed") return task;
+            if (task.status === "failed") throw new Error(task.error_message || "图片生成失败");
+        }
+        throw new Error("生成任务仍在执行，请稍后重试");
+    }
+
+    function appendGeneratedImage(url, prompt) {
+        const wrapper = appendMessage({role: "assistant", content_type: "text", content: prompt ? `已根据「${prompt}」生成图片` : "已生成图片"});
+        const content = wrapper.querySelector(".message-content");
+        const safe = markdown.safeUrl(url);
+        if (safe) {
+            const image = document.createElement("img");
+            image.className = "generated-image";
+            image.src = safe;
+            image.alt = prompt || "生成的图片";
+            image.loading = "lazy";
+            content.append(image);
+        }
+    }
+
+    function openImagePanel() {
+        closePanel();
+        const panel = document.createElement("div");
+        panel.className = "gen-panel";
+        panel.append(textNode("div", "gen-panel-title", "生成图片"));
+        const promptInput = document.createElement("textarea");
+        promptInput.rows = 2;
+        promptInput.placeholder = "描述想要生成的图片，例如：黄昏下的城市天际线，写实风格";
+        panel.append(promptInput);
+        const controls = document.createElement("div");
+        controls.className = "gen-panel-controls";
+        const styleSelect = buildSelect(IMAGE_STYLES, "default");
+        const sizeSelect = buildSelect(IMAGE_SIZES, "1024x1024");
+        controls.append(labeledField("风格", styleSelect), labeledField("尺寸", sizeSelect));
+        panel.append(controls);
+        const actions = document.createElement("div");
+        actions.className = "gen-panel-actions";
+        const cancel = textNode("button", "", "取消");
+        cancel.type = "button";
+        cancel.addEventListener("click", closePanel);
+        const submit = textNode("button", "primary", "开始生成");
+        submit.type = "button";
+        actions.append(cancel, submit);
+        panel.append(actions);
+        submit.addEventListener("click", async () => {
+            const prompt = promptInput.value.trim();
+            if (!prompt) {
+                app.announce("请输入图片描述", "warning");
+                return;
+            }
+            submit.disabled = true;
+            submit.textContent = "生成中…";
+            try {
+                const task = await generateImage(prompt, styleSelect.value, sizeSelect.value);
+                closePanel();
+                appendGeneratedImage(task.resource_url, prompt);
+            } catch (error) {
+                submit.disabled = false;
+                submit.textContent = "开始生成";
+                app.announce(app.errorMessage(error, "图片生成失败"), "error");
+            }
+        });
+        mountPanel(panel);
+        promptInput.focus();
+    }
+
+    function openAudioPanel() {
+        closePanel();
+        const panel = document.createElement("div");
+        panel.className = "gen-panel";
+        panel.append(textNode("div", "gen-panel-title", "语音朗读"));
+        const textArea = document.createElement("textarea");
+        textArea.rows = 3;
+        textArea.maxLength = 5000;
+        textArea.placeholder = "输入要朗读的文本";
+        textArea.value = lastAssistantText();
+        panel.append(textArea);
+        const controls = document.createElement("div");
+        controls.className = "gen-panel-controls";
+        const voiceSelect = buildSelect(VOICE_OPTIONS, "zh_female");
+        controls.append(labeledField("音色", voiceSelect));
+        panel.append(controls);
+        const actions = document.createElement("div");
+        actions.className = "gen-panel-actions";
+        const cancel = textNode("button", "", "取消");
+        cancel.type = "button";
+        cancel.addEventListener("click", closePanel);
+        const submit = textNode("button", "primary", "生成语音");
+        submit.type = "button";
+        actions.append(cancel, submit);
+        panel.append(actions);
+        submit.addEventListener("click", async () => {
+            const text = textArea.value.trim();
+            if (!text) {
+                app.announce("请输入要朗读的文本", "warning");
+                return;
+            }
+            submit.disabled = true;
+            submit.textContent = "合成中…";
+            try {
+                const result = await app.request("/api/tts", {
+                    method: "POST",
+                    json: {text, voice: voiceSelect.value},
+                    timeoutMs: 30000
+                });
+                closePanel();
+                appendAudio({text, audio_url: result.audio_url, title: "语音朗读结果"});
+            } catch (error) {
+                submit.disabled = false;
+                submit.textContent = "生成语音";
+                app.announce(app.errorMessage(error, "语音合成失败"), "error");
+            }
+        });
+        mountPanel(panel);
+        textArea.focus();
+    }
+
+    if (attachButton && fileInput) {
+        attachButton.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", async () => {
+            await uploadFiles(fileInput.files);
+            fileInput.value = "";
+        });
+    }
+    genImageButton?.addEventListener("click", openImagePanel);
+    genAudioButton?.addEventListener("click", openAudioPanel);
+    genVideoButton?.addEventListener("click", () => app.announce("视频生成尚未开放，敬请期待", "info"));
+
     function resetWorkspace() {
         conversationId = null;
         employeeId = null;
@@ -289,6 +624,8 @@
         welcome.hidden = false;
         $$(".history-item", historyList).forEach((item) => item.classList.remove("active"));
         input.value = "";
+        clearAttachments();
+        closePanel();
         resizeInput();
         input.focus();
         closeRail();
@@ -316,6 +653,8 @@
     async function loadConversation(button) {
         if (loading) return;
         closeRail();
+        closePanel();
+        clearAttachments();
         $$(".history-item", historyList).forEach((item) => item.classList.toggle("active", item === button));
         stream.replaceChildren();
         appendMessage({role: "assistant"}, true);
@@ -340,7 +679,7 @@
     voiceButton.addEventListener("click", () => {
         voiceEnabled = !voiceEnabled;
         window.localStorage.setItem("datafinder-voice", voiceEnabled ? "1" : "0");
-        if (!voiceEnabled && "speechSynthesis" in window) window.speechSynthesis.cancel();
+        if (!voiceEnabled) stopBroadcast();
         updateVoiceButton();
         app.announce(voiceEnabled ? "已开启回答语音播报" : "已关闭回答语音播报", "info");
     });
@@ -373,13 +712,16 @@
 
     async function submitMessage(message, submission = null) {
         if (!message || loading) return;
+        const attachments = submission ? (submission.attachments || []) : pendingAttachments.slice();
         const request = submission || {
             message,
             model_id: modelSelect.value || null,
-            employee_id: employeeId
+            employee_id: employeeId,
+            attachments
         };
         setGenerating(true);
-        if (!request.retry) appendMessage({role: "user", content_type: "text", content: message});
+        if (!request.retry) appendMessage({role: "user", content_type: "text", content: message, metadata: {attachments}});
+        if (!submission) clearAttachments();
         const pending = appendMessage({role: "assistant"}, true);
         let reply = {role: "assistant", content_type: "text", content: "", metadata: {}};
         streamController = new AbortController();
@@ -390,7 +732,7 @@
             await sse.stream("/api/chat/stream", {
                 method: "POST",
                 signal: streamController.signal,
-                json: {message, conversation_id: conversationId, model_id: request.model_id, employee_id: request.employee_id},
+                json: {message, conversation_id: conversationId, model_id: request.model_id, employee_id: request.employee_id, images: (request.attachments || []).filter((item) => item.kind !== "doc").map((item) => item.url), documents: (request.attachments || []).filter((item) => item.kind === "doc").map((item) => ({url: item.url, name: item.name}))},
                 onEvent: ({event: eventName, data}) => {
                     if (eventName === "delta") {
                         reply.content = stripInternalReasoning(reply.content + (data.text || ""));
