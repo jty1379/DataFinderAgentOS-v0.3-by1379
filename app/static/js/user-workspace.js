@@ -208,7 +208,19 @@
         const wrapper = document.createElement("article");
         wrapper.className = `chat-message ${message.role || "assistant"}`;
         if (temporary) wrapper.dataset.temporary = "1";
-        const avatar = textNode("span", "message-avatar", message.role === "user" ? "我" : "DF");
+        const avatar = document.createElement("span");
+        avatar.className = "message-avatar";
+        if (message.role === "user") {
+            avatar.textContent = "我";
+        } else {
+            // AI 助手头像使用零界品牌标识。
+            avatar.classList.add("is-logo");
+            const logo = document.createElement("img");
+            logo.src = "/static/img/logo-mark.png";
+            logo.alt = "零界";
+            logo.className = "message-avatar-logo";
+            avatar.append(logo);
+        }
         const content = document.createElement("div");
         content.className = `message-content${message.content_type === "error" ? " error" : ""}`;
         if (temporary) {

@@ -92,6 +92,8 @@ body:has(.user-workspace) { margin: 0; overflow: hidden; background: var(--uw-bg
 .chat-message.user { grid-template-columns: minmax(0,1fr) 34px; }
 .chat-message.user .message-avatar { grid-column: 2; }.chat-message.user .message-content { grid-column: 1; grid-row: 1; justify-self: end; background: #e5eef4; border-color: #c8d8e2; }
 .message-avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 7px; background: var(--uw-primary); color: #fff; font-size: 11px; font-weight: 800; }
+.message-avatar.is-logo { background: #fff; padding: 3px; border: 1px solid #c8d8e2; overflow: hidden; }
+.message-avatar-logo { width: 100%; height: 100%; object-fit: contain; display: block; }
 .chat-message.user .message-avatar { background: #d6e2e9; color: var(--uw-primary-dark); }
 .message-content { max-width: min(720px, 100%); padding: 13px 15px; border: 1px solid var(--uw-border); border-radius: 9px; background: var(--uw-surface); color: var(--uw-text); font-size: 14px; line-height: 1.75; overflow-wrap: anywhere; }
 .message-content.error { border-color: #e2bebe; background: #fff6f6; color: #813838; }

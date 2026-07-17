@@ -6,21 +6,35 @@ import logging
 
 LOGGER = logging.getLogger("security_analysis")
 
-# 敏感词库（示例）
+# 敏感词库：使用具体短语而非「政治」「暴力」等泛词，以降低误报。
 SENSITIVE_KEYWORDS = {
+    # 政治安全 / 暴恐：真实高风险，需立即处置
     "critical": [
-        "恐怖", "极端", "暴力", "违法", "犯罪", "诈骗",
-        "贩毒", "贩运", "走私", "洗钱", "恐怖融资",
+        "颠覆国家政权", "颠覆政府", "分裂国家", "煽动分裂",
+        "民族分裂", "危害国家安全", "境外渗透", "武装叛乱",
+        "恐怖袭击", "恐怖主义", "暴力恐怖", "制造爆炸", "邪教组织",
     ],
+    # 社会稳定 / 失泄密 / 敌对舆论 / 廉政：重点关注
     "high": [
-        "政治", "敏感", "抗争", "游行", "示威", "罢工",
-        "泄露", "机密", "谍报", "黑客", "入侵",
+        "群体性事件", "非法集会", "非法游行", "聚众闹事", "聚众滋事",
+        "打砸抢烧", "煽动闹事", "造谣传谣", "网络谣言",
+        "境外势力", "敌对势力", "反华势力",
+        "泄露国家机密", "泄露机密", "军事机密", "数据泄露",
+        "网络攻击", "黑客入侵", "官商勾结", "权钱交易", "严重腐败",
     ],
+    # 公共安全 / 经济金融 / 民生：常规监测
     "medium": [
-        "投资风险", "市场波动", "经济衰退", "失业", "债务危机",
-        "环境污染", "食品安全", "医疗事故",
+        "重大安全事故", "食品安全事故", "环境污染事件", "医疗事故", "疫情扩散",
+        "非法集资", "集资诈骗", "债务违约", "楼盘烂尾", "大规模裁员",
+        "强制拆迁", "拖欠工资", "暴力执法", "群体投诉",
     ],
 }
+
+# 执法 / 处置类语境，通常为正面报道，用于抑制非关键级误报。
+ENFORCEMENT_CONTEXT = (
+    "打击", "严打", "破获", "侦破", "查处", "取缔", "整治",
+    "严禁", "抓获", "逮捕", "判处", "依法惩处", "专项行动", "防范化解",
+)
 
 # 积极词库（降低风险等级）
 POSITIVE_KEYWORDS = {
@@ -76,23 +90,28 @@ class SecurityAnalyzer:
             if keyword.lower() in text:
                 positive_matches.append(keyword)
 
-        # 计算风险得分
+        # 计算风险得分（同一等级内取最高级，避免单个中危词误升为高危）
         risk_score = 0.0
         if critical_matches:
             risk_score += len(critical_matches) * 3.0
             result["risk_level"] = "critical"
-        if high_matches:
+        elif high_matches:
             risk_score += len(high_matches) * 2.0
-            if result["risk_level"] == "normal":
-                result["risk_level"] = "high"
-        if medium_matches:
+            result["risk_level"] = "high"
+        elif medium_matches:
             risk_score += len(medium_matches) * 1.0
-            if result["risk_level"] in ("normal",):
-                result["risk_level"] = "high"
+            result["risk_level"] = "normal"
 
         # 正面词汇降低风险
         if positive_matches:
             risk_score = max(0.0, risk_score - len(positive_matches) * 0.5)
+
+        # 执法/处置语境抑制误报：非关键级内容若明显为正面执法报道，则下调等级
+        enforcement_matches = [word for word in ENFORCEMENT_CONTEXT if word in text]
+        if enforcement_matches and not critical_matches:
+            risk_score = max(0.0, risk_score - len(enforcement_matches) * 1.0)
+            if result["risk_level"] == "high" and len(high_matches) <= 1:
+                result["risk_level"] = "normal"
 
         # 标准化风险得分到 0-10
         result["risk_score"] = min(10.0, max(0.0, risk_score / 2.0))

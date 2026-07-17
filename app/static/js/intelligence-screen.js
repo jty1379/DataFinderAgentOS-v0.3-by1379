@@ -15,7 +15,7 @@
     function chart(name) {
         if (charts.has(name)) return charts.get(name);
         const element = root.querySelector(`[data-chart="${name}"]`);
-        const instance = echarts.init(element, null, {renderer: name === "globe" ? "canvas" : "canvas"});
+        const instance = echarts.init(element, null, {renderer: "canvas"});
         charts.set(name, instance);
         return instance;
     }
@@ -82,7 +82,142 @@
         return `${visiblePoints.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ")} Z`;
     }
 
+    function hasWebGL() {
+        try {
+            const probe = document.createElement("canvas");
+            return Boolean(window.WebGLRenderingContext && (probe.getContext("webgl") || probe.getContext("experimental-webgl")));
+        } catch (_) { return false; }
+    }
+    let webglGlobe = hasWebGL();
+
+    function buildEarthTexture() {
+        const width = 1024, height = 512;
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        const ocean = ctx.createLinearGradient(0, 0, 0, height);
+        ocean.addColorStop(0, "#0e3f5f"); ocean.addColorStop(0.55, "#0a2c46"); ocean.addColorStop(1, "#061d31");
+        ctx.fillStyle = ocean; ctx.fillRect(0, 0, width, height);
+        ctx.strokeStyle = "rgba(120,170,205,.12)"; ctx.lineWidth = 1;
+        for (let lat = -60; lat <= 60; lat += 30) { const y = (90 - lat) / 180 * height; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke(); }
+        for (let lng = -150; lng <= 150; lng += 30) { const x = (lng + 180) / 360 * width; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke(); }
+        const landFill = ctx.createLinearGradient(0, 0, width, height);
+        landFill.addColorStop(0, "#3f8296"); landFill.addColorStop(1, "#1f5568");
+        ctx.fillStyle = landFill; ctx.strokeStyle = "rgba(150,210,225,.5)"; ctx.lineWidth = 1.2; ctx.lineJoin = "round";
+        worldLand.forEach((polygon) => {
+            ctx.beginPath();
+            polygon.forEach(([lng, lat], index) => {
+                const x = (lng + 180) / 360 * width, y = (90 - lat) / 180 * height;
+                if (index) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+            });
+            ctx.closePath(); ctx.fill(); ctx.stroke();
+        });
+        return canvas;
+    }
+
+    const EARTH_TEXTURE_URL = "/static/img/earth-base.jpg";
+
+    function composeGlobeTexture(image, points) {
+        const width = image && image.naturalWidth ? image.naturalWidth : 2048;
+        const height = image && image.naturalHeight ? image.naturalHeight : 1024;
+        const canvas = document.createElement("canvas");
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (image) ctx.drawImage(image, 0, 0, width, height);
+        else ctx.drawImage(buildEarthTexture(), 0, 0, width, height);
+        const dot = Math.max(4, Math.round(width / 220));
+        const font = Math.max(20, Math.round(width / 64));
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.font = `600 ${font}px "PingFang SC","Microsoft YaHei",sans-serif`;
+        points.forEach((point) => {
+            const [lng, lat] = point.value || [0, 0];
+            const x = (Number(lng) + 180) / 360 * width;
+            const y = (90 - Number(lat)) / 180 * height;
+            const glow = ctx.createRadialGradient(x, y, 0, x, y, dot * 3);
+            glow.addColorStop(0, "rgba(255,214,120,.95)");
+            glow.addColorStop(0.45, "rgba(255,180,70,.55)");
+            glow.addColorStop(1, "rgba(255,180,70,0)");
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(x, y, dot * 3, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "#ffd76b"; ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.lineWidth = Math.max(1.5, dot * 0.4);
+            ctx.beginPath(); ctx.arc(x, y, dot, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            const label = point.name || "";
+            if (label) {
+                const lx = x + dot * 3 + font * 0.35;
+                ctx.lineWidth = Math.max(3, font * 0.16);
+                ctx.strokeStyle = "rgba(6,14,26,.85)";
+                ctx.strokeText(label, lx, y);
+                ctx.fillStyle = "#fff7e6";
+                ctx.fillText(label, lx, y);
+            }
+        });
+        return canvas;
+    }
+
+    function globeOption(baseTexture) {
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        return {
+            backgroundColor: "transparent",
+            globe: {
+                baseTexture,
+                shading: "lambert",
+                environment: "#050b16",
+                atmosphere: {show: true, color: "#4b8fd0", glowPower: 5, innerGlowPower: 2, offset: 2},
+                light: {main: {intensity: 1.25, shadow: false, alpha: 40, beta: 30}, ambient: {intensity: 0.6}},
+                viewControl: {autoRotate: !reduceMotion, autoRotateSpeed: 6, autoRotateAfterStill: 3, alpha: 20, beta: -150, distance: 155, minDistance: 120, maxDistance: 280, rotateSensitivity: 1.4}
+            }
+        };
+    }
+
+    function renderEarthGlobe(points) {
+        const host = root.querySelector('[data-chart="globe"]');
+        const previous = charts.get("globe");
+        if (previous) {
+            if (previous.__earthTextureUrl) URL.revokeObjectURL(previous.__earthTextureUrl);
+            previous.dispose();
+            charts.delete("globe");
+        }
+        host.replaceChildren();
+        host.style.display = "block";
+        const instance = echarts.init(host, null, {renderer: "canvas"});
+        charts.set("globe", instance);
+        // echarts-gl in this build only uploads baseTexture from a real resource URL;
+        // a canvas or data-URL Image renders a blank sphere, so bake markers into the
+        // NASA texture and hand it over as a Blob object URL.
+        const paint = (baseImage) => {
+            if (charts.get("globe") !== instance) return;
+            composeGlobeTexture(baseImage, points).toBlob((blob) => {
+                if (!blob || charts.get("globe") !== instance) return;
+                const textureUrl = URL.createObjectURL(blob);
+                const textureImage = new Image();
+                textureImage.onload = () => {
+                    if (charts.get("globe") !== instance) { URL.revokeObjectURL(textureUrl); return; }
+                    if (instance.__earthTextureUrl) URL.revokeObjectURL(instance.__earthTextureUrl);
+                    instance.__earthTextureUrl = textureUrl;
+                    instance.setOption(globeOption(textureImage));
+                };
+                textureImage.onerror = () => URL.revokeObjectURL(textureUrl);
+                textureImage.src = textureUrl;
+            }, "image/jpeg", 0.92);
+        };
+        const earth = new Image();
+        earth.onload = () => paint(earth);
+        earth.onerror = () => paint(null);
+        earth.src = EARTH_TEXTURE_URL;
+    }
+
     function renderEarth(points = []) {
+        if (webglGlobe) {
+            try { renderEarthGlobe(points); return; }
+            catch (_) { webglGlobe = false; }
+        }
+        const fallbackHost = root.querySelector('[data-chart="globe"]');
+        if (fallbackHost) fallbackHost.style.display = "";
+        renderEarthSvg(points);
+    }
+
+    function renderEarthSvg(points = []) {
         const host = root.querySelector('[data-chart="globe"]');
         const previousChart = charts.get("globe");
         if (previousChart) {
