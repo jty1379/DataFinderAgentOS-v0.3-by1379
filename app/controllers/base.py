@@ -60,13 +60,28 @@ class BaseHandler(tornado.web.RequestHandler):
         return self.request.remote_ip
 
     def get_current_user(self):
-        raw_user_id = self.get_secure_cookie("user_id", max_age_days=1)
+        timeout_minutes = SystemSettingsService.get_integer("session_timeout_minutes", 1440)
+        max_age_days = timeout_minutes / 1440.0
+        raw_user_id = self.get_secure_cookie("user_id", max_age_days=max_age_days)
         if not raw_user_id:
             return None
+        # 校验 session_start 是否超时
+        raw_session_start = self.get_secure_cookie("session_start", max_age_days=max_age_days)
+        if raw_session_start:
+            try:
+                session_start = int(raw_session_start.decode("utf-8"))
+                elapsed = time.time() - session_start
+                if elapsed > timeout_minutes * 60:
+                    self.clear_cookie("user_id")
+                    self.clear_cookie("session_start")
+                    return None
+            except (TypeError, ValueError, UnicodeDecodeError):
+                pass
         try:
             return UserRepository.get_user_by_id(int(raw_user_id.decode("utf-8")))
         except (TypeError, ValueError, UnicodeDecodeError):
             self.clear_cookie("user_id")
+            self.clear_cookie("session_start")
             return None
 
     def login_user(self, user: dict) -> None:

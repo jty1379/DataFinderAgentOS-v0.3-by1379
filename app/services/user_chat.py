@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from app.models.conversation import ConversationRepository
@@ -33,6 +35,9 @@ MAX_DOCS = 4
 MAX_DOC_CHARS = 12000
 MAX_DOC_BYTES = 8 * 1024 * 1024
 PROMPT_LIMIT = 20000
+
+# 线程池用于卸载阻塞的 I/O 和 CPU 密集型操作
+_executor = ThreadPoolExecutor(max_workers=4)
 
 
 class UserChatError(ValueError):
@@ -169,9 +174,14 @@ class UserChatService:
             raise UserChatError("所选数字员工不存在或不可用于用户问数")
 
         image_urls = _image_urls(payload.get("images"))
-        image_data_urls = [_image_data_url(url, user_id) for url in image_urls]
+        # 将阻塞的 I/O 操作卸载到线程池，避免阻塞事件循环
+        image_data_urls = await asyncio.gather(*[
+            asyncio.to_thread(_image_data_url, url, user_id) for url in image_urls
+        ])
         document_refs = _document_refs(payload.get("documents"))
-        documents = [_document_text(ref, user_id) for ref in document_refs]
+        documents = list(await asyncio.gather(*[
+            asyncio.to_thread(_document_text, ref, user_id) for ref in document_refs
+        ]))
         documents_text = ""
         if documents:
             blocks: list[str] = []

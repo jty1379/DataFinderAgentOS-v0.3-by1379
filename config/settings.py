@@ -147,7 +147,7 @@ def _database_key(app_env: str, key_file: Path) -> str:
 
 
 def _initial_admin_password(app_env: str) -> str:
-    """初始超管口令：环境变量优先；生产必须显式提供，开发/测试回退课堂演示口令。"""
+    """初始超管口令：环境变量优先；未配置时自动生成强随机密码并写入本地文件。"""
     explicit = _value("ADMIN_INITIAL_PASSWORD", "DATAFINDER_ADMIN_PASSWORD").strip()
     if explicit:
         if len(explicit) < 6:
@@ -155,8 +155,20 @@ def _initial_admin_password(app_env: str) -> str:
         return explicit
     if app_env == "production":
         raise RuntimeError("生产环境必须通过 ADMIN_INITIAL_PASSWORD 提供初始管理员口令")
-    # 非生产环境保留课堂演示口令，仍可用环境变量覆盖。
-    return _value("DEV_ADMIN_PASSWORD", default="123456")
+    # 非生产环境：优先读取 DEV_ADMIN_PASSWORD 环境变量
+    dev = _value("DEV_ADMIN_PASSWORD", "").strip()
+    if dev:
+        return dev
+    # 无环境变量时，生成强随机密码并持久化到本地文件（类似 cookie_secret 的处理方式）
+    pwd_file = BASE_DIR / "config" / "runtime_admin_password.txt"
+    if pwd_file.exists():
+        stored = pwd_file.read_text(encoding="utf-8").strip()
+        if stored:
+            return stored
+    generated = secrets.token_urlsafe(12)
+    _write_private_file(pwd_file, generated)
+    print(f"[DataFinder] 已自动生成初始管理员密码并保存到 {pwd_file}，请妥善保管。")
+    return generated
 
 
 def load_settings() -> Settings:

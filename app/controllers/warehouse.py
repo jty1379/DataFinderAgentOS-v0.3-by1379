@@ -268,6 +268,7 @@ class AdminWarehouseDeepResultHandler(AdminJsonHandler):
 
 class WarehouseStatsHandler(AdminJsonHandler):
     """数据仓库统计接口，供数据分析师数字员工调用。"""
+    required_feature = "data_management"
 
     def get(self):
         period = self.get_query_argument("period", "week").strip().lower()

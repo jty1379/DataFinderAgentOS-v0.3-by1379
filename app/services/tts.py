@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import json
@@ -171,7 +172,11 @@ class TTSService:
         elif provider == "aliyun":
             return await TTSService._aliyun_tts(text, voice, config)
         elif provider == "local":
-            return TTSService._local_tts(text, voice, config)
+            # 将阻塞的 pyttsx3 调用卸载到线程池，避免阻塞事件循环
+            return await asyncio.wait_for(
+                asyncio.to_thread(TTSService._local_tts, text, voice, config),
+                timeout=30
+            )
         else:
             raise TTSConfigurationError(f"不支持的 TTS 提供商: {provider}")
 
