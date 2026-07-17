@@ -8,7 +8,9 @@ import logging
 import time
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
-from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+from tornado.httpclient import HTTPRequest
+
+from app.core.net_guard import guarded_fetch
 
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.interface import InterfaceCallRepository, InterfaceRepository
@@ -516,7 +518,7 @@ class DigitalEmployeeService:
             chunks.extend(chunk)
 
         try:
-            response = await AsyncHTTPClient().fetch(
+            response = await guarded_fetch(
                 HTTPRequest(
                     url=url, method=method, headers=headers, body=body,
                     connect_timeout=min(10, config["timeout_seconds"]),

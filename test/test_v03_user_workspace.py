@@ -77,7 +77,7 @@ class V03WorkspaceRepositoryTest(unittest.IsolatedAsyncioTestCase):
 
         client = SimpleNamespace(fetch=fake_fetch)
         with patch("app.services.digital_employee._validate_public_url", AsyncMock()), patch(
-            "app.services.digital_employee.AsyncHTTPClient", return_value=client
+            "app.services.digital_employee.guarded_fetch", fake_fetch
         ):
             result = await DigitalEmployeeService.preview(weather["id"], "成都", None)
         self.assertIn("%E6%88%90%E9%83%BD", captured["url"])

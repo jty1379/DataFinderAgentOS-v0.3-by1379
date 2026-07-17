@@ -6,6 +6,7 @@ import re
 import sqlite3
 from urllib.parse import urlsplit
 
+from app.core.net_guard import assert_public_url
 from app.models.db import connection_scope
 from app.models.model_engine import ModelRepository
 
@@ -70,6 +71,7 @@ class TTSConfigRepository:
             parsed = urlsplit(base_url)
             if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
                 raise ValueError("外部 TTS 服务地址必须是无凭据的 HTTPS URL")
+            assert_public_url(base_url)
         rate = int(values.get("rate", 0))
         volume = int(values.get("volume", 0))
         pitch = int(values.get("pitch", 0))

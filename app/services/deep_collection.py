@@ -9,8 +9,9 @@ import re
 from urllib.parse import urljoin, urlsplit
 
 from bs4 import BeautifulSoup
-from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+from tornado.httpclient import HTTPRequest
 
+from app.core.net_guard import guarded_fetch
 from app.models.deep_collection import DeepCollectionRepository
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.warehouse import WarehouseRepository
@@ -117,7 +118,7 @@ class DeepCollectionService:
         response = None
         for _ in range(4):
             await _validate_public_url(current_url)
-            response = await AsyncHTTPClient().fetch(
+            response = await guarded_fetch(
                 HTTPRequest(
                     current_url,
                     method="GET",

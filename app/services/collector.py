@@ -15,7 +15,9 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request as UrlRequest
 from urllib.request import urlopen
 
-from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+from tornado.httpclient import HTTPRequest
+
+from app.core.net_guard import guarded_fetch
 
 LOGGER = logging.getLogger("collection")
 
@@ -427,7 +429,7 @@ class CollectorService:
                 streaming_callback=receive_chunk,
             )
             try:
-                response = await AsyncHTTPClient().fetch(request, raise_error=False)
+                response = await guarded_fetch(request, raise_error=False)
             except CollectionError:
                 raise
             except Exception as exc:

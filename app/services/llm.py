@@ -8,8 +8,9 @@ import re
 import time
 from urllib.parse import urlsplit
 
-from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+from tornado.httpclient import HTTPRequest
 
+from app.core.net_guard import guarded_fetch
 from config.settings import SETTINGS
 
 LOGGER = logging.getLogger("model")
@@ -189,7 +190,7 @@ class LLMService:
         )
         started = time.monotonic()
         try:
-            response = await AsyncHTTPClient().fetch(request, raise_error=False)
+            response = await guarded_fetch(request, raise_error=False)
         except LLMError:
             raise
         except Exception as exc:
@@ -323,7 +324,7 @@ class LLMService:
         )
         started = time.monotonic()
         try:
-            response = await AsyncHTTPClient().fetch(request, raise_error=False)
+            response = await guarded_fetch(request, raise_error=False)
         except LLMError:
             raise
         except Exception as exc:

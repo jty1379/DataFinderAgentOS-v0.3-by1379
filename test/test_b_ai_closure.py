@@ -65,8 +65,8 @@ class TestAIRuntimeClosure(unittest.TestCase):
         with (
             patch("app.services.digital_employee._validate_public_url", AsyncMock()),
             patch(
-                "app.services.digital_employee.AsyncHTTPClient",
-                return_value=SimpleNamespace(fetch=fake_fetch),
+                "app.services.digital_employee.guarded_fetch",
+                fake_fetch,
             ),
         ):
             result = asyncio.run(DigitalEmployeeService.execute(employee_id, "成都", None))
@@ -199,8 +199,8 @@ class TestAIRuntimeClosure(unittest.TestCase):
             patch.dict(os.environ, {"TEST_MM_KEY": "secret-value"}),
             patch("app.services.multimodal._validate_public_url", AsyncMock()),
             patch(
-                "app.services.multimodal.AsyncHTTPClient",
-                return_value=SimpleNamespace(fetch=fake_fetch),
+                "app.services.multimodal.guarded_fetch",
+                fake_fetch,
             ),
         ):
             completed = asyncio.run(MultimodalService.run(image_task["task_id"]))
@@ -243,8 +243,8 @@ class TestAIRuntimeClosure(unittest.TestCase):
         with (
             patch.dict(os.environ, {"TEST_MINIMAX_KEY": "secret-value"}),
             patch(
-                "app.services.tts.AsyncHTTPClient",
-                return_value=SimpleNamespace(fetch=fake_tts_fetch),
+                "app.services.tts.guarded_fetch",
+                fake_tts_fetch,
             ),
         ):
             audio = asyncio.run(
@@ -286,8 +286,8 @@ class TestAIRuntimeClosure(unittest.TestCase):
             patch.dict(os.environ, {"TEST_MINIMAX_KEY": "secret-value"}),
             patch("app.services.multimodal._validate_public_url", AsyncMock()),
             patch(
-                "app.services.multimodal.AsyncHTTPClient",
-                return_value=SimpleNamespace(fetch=fake_image_fetch),
+                "app.services.multimodal.guarded_fetch",
+                fake_image_fetch,
             ),
         ):
             completed = asyncio.run(MultimodalService.run(image_task["task_id"]))

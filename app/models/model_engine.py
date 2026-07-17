@@ -6,6 +6,7 @@ import re
 import sqlite3
 from urllib.parse import urlsplit
 
+from app.core.net_guard import assert_public_url
 from app.models.db import connection_scope
 from config.settings import SETTINGS
 
@@ -128,6 +129,7 @@ class ModelRepository:
             raise ValueError("接口地址仅支持完整的 http/https URL")
         if parsed.username or parsed.password:
             raise ValueError("接口地址不允许嵌入凭据")
+        assert_public_url(base_url)
         api_key_env = str(
             values.get("api_key_env", current.get("api_key_env", "OPENAI_API_KEY"))
         ).strip()
@@ -161,6 +163,7 @@ class ModelRepository:
                     or service_parsed.password
                 ):
                     raise ValueError("能力服务地址仅支持无凭据的完整 HTTP/HTTPS URL")
+                assert_public_url(service_url)
             service_values[field] = service_url
         if service_values["tts_enabled"] and not service_values["tts_model"]:
             raise ValueError("启用语音合成时必须填写语音模型标识")

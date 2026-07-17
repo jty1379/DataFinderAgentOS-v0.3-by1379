@@ -121,7 +121,7 @@ class V03RepositoryTest(unittest.TestCase):
         with patch(
             "app.services.digital_employee._validate_public_url", AsyncMock()
         ), patch(
-            "app.services.digital_employee.AsyncHTTPClient", return_value=client
+            "app.services.digital_employee.guarded_fetch", fake_fetch
         ):
             result = asyncio.run(
                 DigitalEmployeeService.preview(employee_id, "成都", None)

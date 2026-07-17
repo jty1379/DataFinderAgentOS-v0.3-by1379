@@ -11,8 +11,9 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import tornado.ioloop
-from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+from tornado.httpclient import HTTPRequest
 
+from app.core.net_guard import guarded_fetch
 from app.models.multimodal import MultimodalConfigRepository, MultimodalTaskRepository
 from app.services.collector import _validate_public_url
 from config.settings import BASE_DIR, SETTINGS
@@ -157,7 +158,7 @@ class MultimodalService:
             chunks.extend(chunk)
 
         try:
-            response = await AsyncHTTPClient().fetch(
+            response = await guarded_fetch(
                 HTTPRequest(
                     endpoint,
                     method="POST",

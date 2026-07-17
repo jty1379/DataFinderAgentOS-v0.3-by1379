@@ -9,8 +9,9 @@ import logging
 import re
 import time
 
-from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+from tornado.httpclient import HTTPRequest
 
+from app.core.net_guard import guarded_fetch
 from app.models.tts import TTSCallRepository, TTSConfigRepository
 from config.settings import BASE_DIR, SETTINGS
 
@@ -213,7 +214,7 @@ class TTSService:
             chunks.extend(chunk)
 
         try:
-            response = await AsyncHTTPClient().fetch(
+            response = await guarded_fetch(
                 HTTPRequest(
                     url=url,
                     method="POST",
@@ -306,7 +307,7 @@ class TTSService:
             streaming_callback=receive,
         )
         try:
-            response = await AsyncHTTPClient().fetch(request, raise_error=False)
+            response = await guarded_fetch(request, raise_error=False)
         except Exception as exc:
             LOGGER.exception("volcengine tts request failed", extra={"event": "tts_volcengine_failed"})
             raise TTSServiceError("语音合成服务连接失败") from exc
@@ -378,7 +379,7 @@ class TTSService:
             streaming_callback=receive,
         )
         try:
-            response = await AsyncHTTPClient().fetch(request, raise_error=False)
+            response = await guarded_fetch(request, raise_error=False)
         except Exception as exc:
             LOGGER.exception("aliyun tts request failed", extra={"event": "tts_aliyun_failed"})
             raise TTSServiceError("语音合成服务连接失败") from exc

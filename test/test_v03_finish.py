@@ -131,7 +131,7 @@ class V03FinishServiceTest(unittest.IsolatedAsyncioTestCase):
             "system_prompt": "安全回答",
         }
         pieces = []
-        with patch("app.services.llm.AsyncHTTPClient", return_value=SimpleNamespace(fetch=fake_fetch)):
+        with patch("app.services.llm.guarded_fetch", fake_fetch):
             result = await LLMService.complete_stream(model, "你好", pieces.append)
         self.assertTrue(captured["payload"]["stream"])
         self.assertTrue(captured["payload"]["stream_options"]["include_usage"])

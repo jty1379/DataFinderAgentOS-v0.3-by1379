@@ -7,7 +7,9 @@ import logging
 import time
 from urllib.parse import urlsplit
 
-from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+from tornado.httpclient import HTTPRequest
+
+from app.core.net_guard import guarded_fetch
 
 from app.controllers.base import AdminBaseHandler, AdminJsonHandler
 from app.models.interface import (
@@ -201,7 +203,7 @@ class AdminInterfaceTestHandler(AdminJsonHandler):
 
         started = time.monotonic()
         try:
-            response = await AsyncHTTPClient().fetch(
+            response = await guarded_fetch(
                 HTTPRequest(
                     url=url,
                     method=method,

@@ -11,6 +11,19 @@ from app.models.db import connection_scope
 
 CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{2,39}$")
 EMPLOYEE_TYPES = {"llm", "api"}
+# 名称与 @调度名中禁止出现的字符：控制字符以及 HTML/属性敏感字符，
+# 作为存储型 XSS 的纵深防御（模板已做转义，此处从源头拒绝非法字符）。
+_NAME_FORBIDDEN = set('<>"\'`') | {chr(code) for code in range(0x20)} | {"\x7f"}
+# 接口型数字员工请求头禁止名单：避免凭据泄露与请求走私/头部注入。
+FORBIDDEN_REQUEST_HEADERS = {
+    "authorization",
+    "cookie",
+    "host",
+    "connection",
+    "content-length",
+    "proxy-authorization",
+    "proxy-connection",
+}
 
 
 def _bool(value) -> bool:
@@ -72,6 +85,27 @@ def _employee(row) -> dict | None:
     for name in ("use_default_model", "crawl4ai_enabled", "enabled", "is_system"):
         item[name] = bool(item.get(name))
     return item
+
+
+def _validate_request_headers(headers: dict) -> dict:
+    """对接口型数字员工的自定义请求头做黑名单 + CRLF + 值类型校验。"""
+    forbidden = sorted(
+        str(key) for key in headers if str(key).strip().lower() in FORBIDDEN_REQUEST_HEADERS
+    )
+    if forbidden:
+        raise ValueError("请求头中禁止保存鉴权凭据或受控头：" + "、".join(forbidden))
+    normalized: dict[str, str] = {}
+    for key, raw_value in headers.items():
+        name = str(key)
+        if not name.strip() or "\r" in name or "\n" in name or ":" in name:
+            raise ValueError("请求头名称不正确")
+        if isinstance(raw_value, (dict, list, tuple)):
+            raise ValueError("请求头值必须是文本")
+        text = str(raw_value)
+        if "\r" in text or "\n" in text:
+            raise ValueError("请求头值不允许包含换行符")
+        normalized[name.strip()] = text[:1000]
+    return normalized
 
 
 class DigitalEmployeeRepository:
@@ -160,6 +194,8 @@ class DigitalEmployeeRepository:
             raise ValueError("编码需以小写字母开头，仅含小写字母、数字和下划线，长度 3—40")
         if not 2 <= len(name) <= 40 or not 2 <= len(mention) <= 30:
             raise ValueError("名称或 @调度名长度不正确")
+        if _NAME_FORBIDDEN & set(name) or _NAME_FORBIDDEN & set(mention):
+            raise ValueError("名称或 @调度名包含非法字符")
         if any(char.isspace() for char in mention):
             raise ValueError("@调度名不能包含空格")
         model_id = values.get("model_id", current.get("model_id"))
@@ -218,11 +254,7 @@ class DigitalEmployeeRepository:
                     raise ValueError("接口地址不允许嵌入凭据")
             if api_method not in {"GET", "POST"} or response_mode not in {"json", "card"}:
                 raise ValueError("接口方法或响应模式无效")
-            if any(
-                str(key).lower() in {"cookie", "authorization", "proxy-authorization"}
-                for key in request_headers
-            ):
-                raise ValueError("请求头中禁止保存 Cookie 或鉴权凭据")
+            request_headers = _validate_request_headers(request_headers)
             model_id = None
             use_default_model = False
             system_prompt = ""

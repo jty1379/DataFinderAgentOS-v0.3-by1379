@@ -104,9 +104,9 @@ class TTSAudioHandler(tornado.web.StaticFileHandler):
         self.root = str(BASE_DIR / "data" / "tts_cache")
 
     def validate_absolute_path(self, root, absolute_path):
-        if not absolute_path.startswith(root):
-            raise tornado.web.HTTPError(403, reason="Forbidden")
-        return absolute_path
+        # 复用 Tornado 内置的路径归一化与越界校验（含符号链接、`..` 处理），
+        # 避免裸 startswith 被 `..`/前缀混淆等手法绕过导致目录穿越。
+        return super().validate_absolute_path(root, absolute_path)
 
 
 class UserTTSHandler(UserJsonHandler):
