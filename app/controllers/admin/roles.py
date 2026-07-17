@@ -31,7 +31,8 @@ class AdminRolesHandler(AdminBaseHandler):
             active_menu="role_management",
             roles=roles,
             features=FeatureRepository.list_features(),
-            feature_tree_json=json.dumps(tree, ensure_ascii=False).replace("</", "<\\/"),
+            # 将 < 统一转义为 \u003c，避免任意大小写的 </script> 提前闭合脚本块（存储型 XSS）。
+            feature_tree_json=json.dumps(tree, ensure_ascii=False).replace("<", "\\u003c"),
             pager=pager_context("/admin/roles", pager, q=keyword),
             keyword=keyword,
         )

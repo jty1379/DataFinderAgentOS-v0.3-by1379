@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import ipaddress
 import re
+import socket
 import sqlite3
 from urllib.parse import urlsplit
 
@@ -66,6 +68,41 @@ def _headers_json(value) -> str:
     return json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
 
 
+def _is_blocked_ip(candidate: str) -> bool:
+    """判断字符串是否为需要拦截的内网/环回/链路本地等地址。"""
+    try:
+        addr = ipaddress.ip_address(candidate)
+    except ValueError:
+        return False
+    return (
+        addr.is_private
+        or addr.is_loopback
+        or addr.is_link_local
+        or addr.is_multicast
+        or addr.is_reserved
+        or addr.is_unspecified
+    )
+
+
+def assert_public_url(value: str) -> None:
+    """拒绝指向内网、环回、链路本地等地址的 URL，防御 SSRF。
+
+    主机名为 IP 字面量时直接判定；为域名时解析全部结果，任一命中即拒绝。
+    """
+    hostname = (urlsplit(value).hostname or "").strip("[]")
+    if not hostname:
+        raise ValueError("接口地址主机名无效")
+    if _is_blocked_ip(hostname):
+        raise ValueError("接口地址不允许指向内网或环回地址")
+    try:
+        resolved = socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        resolved = []
+    for info in resolved:
+        if _is_blocked_ip(info[4][0]):
+            raise ValueError("接口地址解析到内网或环回地址，已被拒绝")
+
+
 def _valid_http_url(value: str) -> str:
     value = value.strip()
     parsed = urlsplit(value)
@@ -73,6 +110,7 @@ def _valid_http_url(value: str) -> str:
         raise ValueError("接口地址仅支持完整的 http/https URL")
     if parsed.username or parsed.password:
         raise ValueError("接口地址不允许嵌入凭据")
+    assert_public_url(value)
     return value
 
 

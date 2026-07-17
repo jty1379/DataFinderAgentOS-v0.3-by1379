@@ -10,7 +10,11 @@ from urllib.parse import urlsplit
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 
 from app.controllers.base import AdminBaseHandler, AdminJsonHandler
-from app.models.interface import InterfaceCallRepository, InterfaceRepository
+from app.models.interface import (
+    InterfaceCallRepository,
+    InterfaceRepository,
+    assert_public_url,
+)
 
 LOGGER = logging.getLogger("interface")
 
@@ -145,7 +149,8 @@ class AdminInterfaceTestHandler(AdminJsonHandler):
         payload = self.json_body()
         try:
             interface_id = int(payload.get("interface_id") or 0)
-            test_input = str(payload.get("input", "") or "")
+            # 限制测试输入长度，缩小其对被替换 URL/参数/请求头的操纵面。
+            test_input = str(payload.get("input", "") or "")[:2000]
         except (TypeError, ValueError) as exc:
             return self.write_json({"ok": False, "message": str(exc)}, 400)
 
@@ -182,6 +187,12 @@ class AdminInterfaceTestHandler(AdminJsonHandler):
             body = json.dumps(params, ensure_ascii=False).encode("utf-8")
 
         chunks = bytearray()
+
+        # 占位符替换后重新校验最终 URL，拒绝解析到内网/环回地址的目标（SSRF 防御）。
+        try:
+            assert_public_url(url)
+        except ValueError as exc:
+            return self.write_json({"ok": False, "message": str(exc)}, 400)
 
         def receive(chunk: bytes) -> None:
             if len(chunks) + len(chunk) > 2 * 1024 * 1024:

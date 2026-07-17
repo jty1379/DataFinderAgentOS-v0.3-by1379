@@ -229,7 +229,7 @@
 
             renderUsageTable(data.logs, modelName);
         } catch (error) {
-            usageTable.innerHTML = `<div class="v02-feedback error"><i class="layui-icon layui-icon-error"></i><h4>加载失败</h4><p>${error.message || "未知错误"}</p></div>`;
+            usageTable.innerHTML = `<div class="v02-feedback error"><i class="layui-icon layui-icon-error"></i><h4>加载失败</h4><p>${api.escapeHtml(error.message || "未知错误")}</p></div>`;
             api.announce(error.message || "加载调用统计失败", "error");
         }
     }
@@ -283,18 +283,28 @@
         `;
         const tbody = table.querySelector("tbody");
 
+        // 逐单元格用 textContent 写入，避免 user_name / error_message 等字段中的 HTML 被解析（存储型 XSS）。
+        function cell(value, className = "") {
+            const element = document.createElement("td");
+            if (className) element.className = className;
+            element.textContent = String(value ?? "-");
+            return element;
+        }
         logs.forEach(log => {
             const row = document.createElement("tr");
             row.className = "error";
-            row.innerHTML = `
-                <td>${log.user_name || "系统"}</td>
-                <td>${log.prompt_tokens}</td>
-                <td>${log.completion_tokens}</td>
-                <td>${log.total_tokens}</td>
-                <td>${log.latency_ms}</td>
-                <td>${log.created_at}</td>
-                <td><span class="error-message">${log.error_message || "-"}</span></td>
-            `;
+            row.append(cell(log.user_name || "系统"));
+            row.append(cell(log.prompt_tokens));
+            row.append(cell(log.completion_tokens));
+            row.append(cell(log.total_tokens));
+            row.append(cell(log.latency_ms));
+            row.append(cell(log.created_at));
+            const errorCell = document.createElement("td");
+            const errorSpan = document.createElement("span");
+            errorSpan.className = "error-message";
+            errorSpan.textContent = String(log.error_message || "-");
+            errorCell.append(errorSpan);
+            row.append(errorCell);
             tbody.appendChild(row);
         });
 
@@ -312,7 +322,7 @@
 
             renderFailureTable(data.logs, modelName);
         } catch (error) {
-            failureTable.innerHTML = `<div class="v02-feedback error"><i class="layui-icon layui-icon-error"></i><h4>加载失败</h4><p>${error.message || "未知错误"}</p></div>`;
+            failureTable.innerHTML = `<div class="v02-feedback error"><i class="layui-icon layui-icon-error"></i><h4>加载失败</h4><p>${api.escapeHtml(error.message || "未知错误")}</p></div>`;
             api.announce(error.message || "加载失败日志失败", "error");
         }
     }

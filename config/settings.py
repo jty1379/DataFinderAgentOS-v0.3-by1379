@@ -28,6 +28,26 @@ def _value(name: str, legacy_name: str | None = None, default: str = "") -> str:
     return os.environ.get(name, os.environ.get(legacy_name, default) if legacy_name else default)
 
 
+# 应用自身的敏感环境变量：禁止业务层经 secret_from_env 间接读取，
+# 防止被配置为模型/TTS/多模态的 api_key_env 后随外部请求外泄。
+_PROTECTED_ENV_NAMES = frozenset(
+    {
+        "COOKIE_SECRET",
+        "DATAFINDER_COOKIE_SECRET",
+        "COOKIE_SECRET_FILE",
+        "DATAFINDER_COOKIE_SECRET_FILE",
+        "DATABASE_KEY",
+        "DATAFINDER_DB_KEY",
+        "DATABASE_KEY_FILE",
+        "DATAFINDER_DB_KEY_FILE",
+        "ADMIN_INITIAL_PASSWORD",
+        "DATAFINDER_ADMIN_PASSWORD",
+        "DEV_ADMIN_PASSWORD",
+        "SECRET_KEY",
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     app_env: str
@@ -49,12 +69,17 @@ class Settings:
     system_name: str
     default_model: str
     open_registration: bool
+    initial_admin_password: str
 
     def secret_from_env(self, variable_name: str) -> str:
         """按数据库记录的变量名读取密钥，但不向业务层暴露 environ。"""
         if not variable_name:
             return ""
-        return os.environ.get(variable_name, "").strip()
+        name = variable_name.strip()
+        # 拒绝读取应用自身的敏感变量，防止被配置为 api_key_env 后随外部请求外泄。
+        if name.upper() in _PROTECTED_ENV_NAMES:
+            return ""
+        return os.environ.get(name, "").strip()
 
     def public_summary(self) -> dict[str, object]:
         """仅返回可安全写入启动日志的非敏感配置。"""
@@ -69,6 +94,21 @@ class Settings:
         }
 
 
+def _write_private_file(path: Path, content: str) -> None:
+    """以仅所有者可读写权限写入密钥文件，避免本地其他用户读取（CWE-732）。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(path.parent, 0o700)
+    except OSError:
+        # Windows 等平台可能不支持 POSIX 权限位，忽略即可。
+        pass
+    path.write_text(content, encoding="utf-8")
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
 def _cookie_secret(app_env: str, secret_file: Path) -> str:
     explicit = _value("COOKIE_SECRET", "DATAFINDER_COOKIE_SECRET").strip()
     if explicit:
@@ -81,9 +121,8 @@ def _cookie_secret(app_env: str, secret_file: Path) -> str:
             return saved
     if app_env == "production":
         raise RuntimeError("生产环境必须通过 COOKIE_SECRET 或密钥文件提供至少 32 位密钥")
-    secret_file.parent.mkdir(parents=True, exist_ok=True)
     generated = secrets.token_urlsafe(48)
-    secret_file.write_text(generated, encoding="utf-8")
+    _write_private_file(secret_file, generated)
     return generated
 
 
@@ -102,10 +141,22 @@ def _database_key(app_env: str, key_file: Path) -> str:
         return ""
     if app_env == "production":
         raise RuntimeError("生产环境必须通过 DATABASE_KEY 或密钥文件提供数据库加密密钥")
-    key_file.parent.mkdir(parents=True, exist_ok=True)
     generated = secrets.token_urlsafe(48)
-    key_file.write_text(generated, encoding="utf-8")
+    _write_private_file(key_file, generated)
     return generated
+
+
+def _initial_admin_password(app_env: str) -> str:
+    """初始超管口令：环境变量优先；生产必须显式提供，开发/测试回退课堂演示口令。"""
+    explicit = _value("ADMIN_INITIAL_PASSWORD", "DATAFINDER_ADMIN_PASSWORD").strip()
+    if explicit:
+        if len(explicit) < 6:
+            raise RuntimeError("ADMIN_INITIAL_PASSWORD 至少需要 6 个字符")
+        return explicit
+    if app_env == "production":
+        raise RuntimeError("生产环境必须通过 ADMIN_INITIAL_PASSWORD 提供初始管理员口令")
+    # 非生产环境保留课堂演示口令，仍可用环境变量覆盖。
+    return _value("DEV_ADMIN_PASSWORD", default="123456")
 
 
 def load_settings() -> Settings:
@@ -139,6 +190,7 @@ def load_settings() -> Settings:
         system_name=_value("SYSTEM_NAME", default="瞭望与问数系统"),
         default_model=_value("DEFAULT_MODEL", "DATAFINDER_LLM_MODEL"),
         open_registration=_bool(_value("OPEN_REGISTRATION", default="true")),
+        initial_admin_password=_initial_admin_password(app_env),
     )
 
 

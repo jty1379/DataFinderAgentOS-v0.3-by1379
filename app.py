@@ -220,7 +220,7 @@ def prepare_runtime() -> bool:
     init_db()
     DeepCollectionRepository.recover_interrupted()
     CollectionTaskService.recover_interrupted()
-    return UserRepository.ensure_admin("admin", "123456")
+    return UserRepository.ensure_admin("admin", SETTINGS.initial_admin_password)
 
 
 def main() -> None:

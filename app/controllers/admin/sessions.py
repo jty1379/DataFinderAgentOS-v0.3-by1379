@@ -127,8 +127,8 @@ class AdminMessagesHandler(AdminBaseHandler):
             }
             for message in messages
         ]
-        # 序列化后转义 </，避免提前闭合 <script> 标签。
-        messages_json = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
+        # 将 < 统一转义为 \u003c，避免消息内容里任意大小写的 </script> 提前闭合脚本块（存储型 XSS）。
+        messages_json = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
         self.render_admin(
             "admin/messages.html",
             title="对话详情 · 零界",

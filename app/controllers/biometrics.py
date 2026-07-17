@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import tornado.web
 
@@ -18,6 +19,11 @@ from app.services.biometrics import (
     dumps_embedding,
     loads_embedding,
 )
+
+LOGGER = logging.getLogger("biometrics")
+
+# 人脸登录失败统一返回该消息，避免因区分「账号不存在/未录入/不匹配」而被用于用户枚举（CWE-204）。
+FACE_LOGIN_FAILURE = "人脸验证失败，请检查账号或重新录入人脸"
 
 
 def _json_payload(handler: BaseHandler) -> dict:
@@ -44,18 +50,22 @@ class FaceLoginHandler(BaseHandler):
         username = str(payload.get("username") or "").strip()
         user = UserRepository.get_active_user_by_username(username)
         if not user or user["role_scope"] != "user":
-            return _write(self, {"ok": False, "message": "未找到可用的用户账号"}, 401)
+            LOGGER.info("face login rejected: unknown user", extra={"event": "face_login_failed", "reason": "unknown_user"})
+            return _write(self, {"ok": False, "message": FACE_LOGIN_FAILURE}, 401)
         profile = BiometricRepository.face_profile(user["id"])
         if not profile or not profile["enabled"]:
-            return _write(self, {"ok": False, "message": "该账号尚未录入或已停用人脸登录"}, 403)
+            LOGGER.info("face login rejected: no profile", extra={"event": "face_login_failed", "reason": "no_profile", "user_id": user["id"]})
+            return _write(self, {"ok": False, "message": FACE_LOGIN_FAILURE}, 401)
         try:
             frames = decode_frames(payload.get("frames"), minimum=4, maximum=7)
             candidate, evidence = FaceVerifier.extract_profile(frames)
             similarity = FaceVerifier.compare(loads_embedding(profile["embedding"]), candidate)
         except BiometricError as exc:
-            return _write(self, {"ok": False, "message": str(exc)}, 422)
+            LOGGER.info("face login rejected: %s", exc, extra={"event": "face_login_failed", "reason": "biometric_error", "user_id": user["id"]})
+            return _write(self, {"ok": False, "message": FACE_LOGIN_FAILURE}, 401)
         if similarity < 0.82:
-            return _write(self, {"ok": False, "message": "人脸与该账号不匹配"}, 401)
+            LOGGER.info("face login rejected: low similarity %.4f", similarity, extra={"event": "face_login_failed", "reason": "mismatch", "user_id": user["id"]})
+            return _write(self, {"ok": False, "message": FACE_LOGIN_FAILURE}, 401)
         self.login_user(user)
         _write(
             self,

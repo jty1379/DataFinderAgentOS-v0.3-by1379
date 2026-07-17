@@ -7,6 +7,8 @@ import json
 import secrets
 import sqlite3
 
+from config.settings import SETTINGS
+
 DEFAULT_FEATURES = (
     ("dashboard", "控制台", "/admin/", "layui-icon-console", "控制台", "系统运行概览与关键指标", 10, 1),
     ("user_management", "用户管理", "/admin/users", "layui-icon-user", "权限与系统", "集中管理普通用户与管理员账号", 20, 1),
@@ -96,7 +98,9 @@ def _seed_admin(connection: sqlite3.Connection) -> None:
     if not role:
         return
     salt = secrets.token_bytes(16)
-    password_hash = hashlib.pbkdf2_hmac("sha256", b"123456", salt, 100_000).hex()
+    # 初始口令收口到 SETTINGS（环境变量优先，生产强制提供），不在代码中硬编码明文。
+    password = SETTINGS.initial_admin_password.encode("utf-8")
+    password_hash = hashlib.pbkdf2_hmac("sha256", password, salt, 100_000).hex()
     connection.execute(
         """INSERT INTO users(username,password_hash,salt,role,role_id,status,is_superadmin)
         VALUES ('admin',?,?, 'admin',?,'enabled',1)""",
