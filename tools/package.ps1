@@ -49,6 +49,9 @@ function Test-ExcludedPath {
 
     if ($normalized -match '(?i)^database/.+\.(db|sqlite|sqlite3)(-shm|-wal)?$') { return $true }
     if ($normalized -match '(?i)^database/.+\.(db-shm|db-wal)$') { return $true }
+    if ($normalized -match '(?i)^data/.+\.(db|sqlite|sqlite3)(-shm|-wal)?$') { return $true }
+    if ($normalized -match '(?i)^data/(uploads|tts_cache)(/|$)') { return $true }
+    if ($normalized -match '(?i)^prompts_export(/|$)') { return $true }
     if ($normalized -match '(?i)^config/(runtime_secret\.txt|runtime_model_secrets\.json|model_secrets\.json)$') { return $true }
     if ($normalized -match '(?i)(^|/)\.env($|\.)') { return $true }
     if ($normalized -match '(?i)(^|/)(screenshots|videos|traces)/') { return $true }
@@ -76,7 +79,7 @@ function Test-TextForSecrets {
     $secretPatterns = @(
         '(?i)sk-(?!test|example|demo)[a-z0-9_-]{20,}',
         '(?i)\bBDUSS\s*=',
-        '(?i)\bCookie\s*:\s*[^\r\n]{20,}',
+        '(?im)^\s*Cookie\s*:(?!\s*["'']?_xsrf=(?:test|example|demo)[-_a-z0-9]*["'']?\s*,?\s*$)\s*[^\r\n]{20,}',
         '(?i)\bOPENAI_API_KEY\s*=\s*["'']?[a-z0-9_-]{16,}',
         '(?i)\bDATAFINDER_COOKIE_SECRET\s*=\s*["'']?[a-z0-9_-]{16,}'
     )

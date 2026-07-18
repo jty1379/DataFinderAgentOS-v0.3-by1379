@@ -150,7 +150,11 @@ class LLMService:
         api_key_env = str(model.get("api_key_env") or "").strip()
         api_key = SETTINGS.secret_from_env(api_key_env)
         if api_key_env and not api_key:
-            raise LLMError(f"环境变量 {api_key_env} 未配置")
+            LOGGER.warning(
+                "model credential is not configured",
+                extra={"event": "model_credential_missing"},
+            )
+            raise LLMError("模型服务凭据未配置，请联系管理员")
 
         messages: list[dict] = []
         system_prompt = str(model.get("system_prompt") or "").strip()
@@ -248,7 +252,11 @@ class LLMService:
         api_key_env = str(model.get("api_key_env") or "").strip()
         api_key = SETTINGS.secret_from_env(api_key_env)
         if api_key_env and not api_key:
-            raise LLMError(f"环境变量 {api_key_env} 未配置")
+            LOGGER.warning(
+                "model credential is not configured",
+                extra={"event": "model_credential_missing"},
+            )
+            raise LLMError("模型服务凭据未配置，请联系管理员")
         messages = []
         system_prompt = str(model.get("system_prompt") or "").strip()
         if system_prompt:

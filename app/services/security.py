@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from app.core.logging import single_line_log_value
 from app.models.opinion import AuditLogRepository
 from app.repositories.user_repository import UserRepository
 
@@ -26,6 +27,12 @@ class AuditLogService:
         error_message: str = "",
     ):
         try:
+            action_type = single_line_log_value(action_type, 50)
+            resource_type = single_line_log_value(resource_type, 80)
+            user_name = single_line_log_value(user_name, 100)
+            ip_address = single_line_log_value(ip_address, 100)
+            detail = single_line_log_value(detail, 2000)
+            error_message = single_line_log_value(error_message, 500)
             if user_id and not user_name:
                 user = UserRepository.get_user_by_id(int(user_id))
                 user_name = str(user.get("username") or "") if user else ""

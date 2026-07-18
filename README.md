@@ -122,9 +122,12 @@ powershell -ExecutionPolicy Bypass -File .\run.ps1
 
 - Secure Cookie + HttpOnly + SameSite=Strict，所有 POST 表单启用 XSRF
 - SQL 使用 `?` 参数占位，密码采用 PBKDF2-SHA256 100,000 轮加盐哈希
+- 密码与人脸认证按连接来源和账号组合限制失败频率；未知账号仍执行等成本 PBKDF2，降低暴力破解与时序枚举风险
 - 所有出站请求经统一网络防护 `app/core/net_guard`：公网地址校验 + DNS pinning，拒绝内网/回环/云元数据地址并消除 DNS 重绑定
+- 模型输入把问题、历史和上传文档作为转义后的不可信数据分区，拒绝覆盖或泄露系统指令的提示注入
 - 外部采集设置超时、响应大小限制与请求头白名单/CRLF 过滤
 - 静态文件下载复用框架路径归一化校验，防目录穿越；用户可见文本统一转义，防存储型 XSS
+- 请求编号、路径和审计字段统一限制为单行，敏感设置的变更前后值始终脱敏
 - 模型与采集权限同时覆盖页面地址与数据接口
 
 ## 测试
@@ -178,12 +181,12 @@ DataFinderAgentOS/
 powershell -ExecutionPolicy Bypass -File .\tools\package.ps1
 ```
 
-脚本默认在项目上一级生成 `零界-0xBoundary-v0.3源码.zip`，ZIP 根目录固定为 `DataFinderAgentOS/`，自动排除 venv、数据库、密钥、缓存、日志、浏览器测试产物与旧 ZIP。
+脚本默认在项目上一级生成 `零界-0xBoundary-v0.3源码.zip`，ZIP 根目录固定为 `DataFinderAgentOS/`，自动排除 venv、数据库、密钥、用户上传、语音缓存、本地导出、日志、浏览器测试产物与旧 ZIP。
 
 ## 更新记录
 
 - **v0.3** — 数字员工（模型/Crawl4AI/API 三型 + Skills + Markdown 资料）、Crawl4AI 深度采集、OpenAI 兼容 SSE 问答、七类真实问数与报表、关系图谱、双大屏、人脸/手势/语音交互、TTS 与多模态任务。
-- **安全加固** — 统一出站网络防护（公网校验 + DNS pinning，覆盖 LLM/TTS/多模态/采集/深采/数字员工），修复目录穿越、存储型 XSS 与请求头校验缺口。
+- **安全加固** — 统一出站网络防护（公网校验 + DNS pinning，覆盖 LLM/TTS/多模态/采集/深采/数字员工），修复目录穿越、存储型 XSS、请求头校验、认证限流、时序枚举、日志注入、错误页反射、敏感审计值和提示注入缺口。
 - **v0.2** — 权限管理四模块（用户/角色/功能/菜单）与动态菜单，默认超级管理员保护，瞭源管理与瞭望采集链路。
 - **v0.1** — Tornado MVC 基线、用户注册登录、用户/管理端隔离与安全基线。
 

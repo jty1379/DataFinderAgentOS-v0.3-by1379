@@ -6,6 +6,7 @@ import tornado.web
 
 from app.controllers.base import BaseHandler
 from app.core.exceptions import AppError
+from app.services.auth_rate_limit import AuthenticationRateLimiter
 from app.services.security import AuditLogService
 from app.services.system_settings import SystemSettingsService
 from app.services.user_service import UserService
@@ -37,6 +38,7 @@ class UserLoginHandler(BaseHandler):
             return self.redirect("/index" if self.current_user["role_scope"] == "user" else "/admin/")
         username = self.get_body_argument("username", "").strip()
         password = self.get_body_argument("password", "")
+        peer_ip = self.request.remote_ip
         if not username or not password:
             return self.render(
                 "login.html",
@@ -45,9 +47,25 @@ class UserLoginHandler(BaseHandler):
                 registered=False,
                 username=username,
             )
+        retry_after = AuthenticationRateLimiter.retry_after(
+            "user-password", peer_ip, username
+        )
+        if retry_after:
+            self.set_status(429)
+            self.set_header("Retry-After", str(retry_after))
+            return self.render(
+                "login.html",
+                title="用户登录 · 零界",
+                error="用户名或密码错误",
+                registered=False,
+                username=username,
+            )
         try:
             user = UserService.authenticate(username, password, "user")
         except AppError:
+            AuthenticationRateLimiter.record_failure(
+                "user-password", peer_ip, username
+            )
             AuditLogService.log_login(0, username, self.get_client_ip(), success=False, error_message="用户名或密码错误")
             return self.render(
                 "login.html",
@@ -56,6 +74,7 @@ class UserLoginHandler(BaseHandler):
                 registered=False,
                 username=username,
             )
+        AuthenticationRateLimiter.record_success("user-password", peer_ip, username)
         AuditLogService.log_login(user["id"], user["username"], self.get_client_ip(), success=True)
         self.login_user(user)
         self.redirect("/index")
@@ -115,9 +134,25 @@ class AdminLoginHandler(BaseHandler):
     def post(self):
         username = self.get_body_argument("username", "").strip()
         password = self.get_body_argument("password", "")
+        peer_ip = self.request.remote_ip
+        retry_after = AuthenticationRateLimiter.retry_after(
+            "admin-password", peer_ip, username
+        )
+        if retry_after:
+            self.set_status(429)
+            self.set_header("Retry-After", str(retry_after))
+            return self.render(
+                "admin/login.html",
+                title="管理端登录 · 零界",
+                error="管理员账号或密码错误",
+                username=username,
+            )
         try:
             user = UserService.authenticate(username, password, "admin")
         except AppError:
+            AuthenticationRateLimiter.record_failure(
+                "admin-password", peer_ip, username
+            )
             AuditLogService.log_login(0, username, self.get_client_ip(), success=False, error_message="管理员账号或密码错误")
             return self.render(
                 "admin/login.html",
@@ -125,6 +160,7 @@ class AdminLoginHandler(BaseHandler):
                 error="管理员账号或密码错误",
                 username=username,
             )
+        AuthenticationRateLimiter.record_success("admin-password", peer_ip, username)
         landing = _admin_landing_path(user)
         if not landing:
             return self.render(

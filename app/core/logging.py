@@ -3,12 +3,27 @@
 from __future__ import annotations
 
 import logging
+import re
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from config.settings import Settings
 
 FORMAT = "%(asctime)s %(levelname)s %(name)s request_id=%(request_id)s user_id=%(user_id)s task_id=%(task_id)s event=%(event)s %(message)s"
+
+
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f]+")
+
+
+def single_line_log_value(value, max_length: int = 512) -> str:
+    """Return one bounded log-safe line for data derived from a request.
+
+    Plain-text log handlers treat CR/LF and other control characters as record
+    separators.  Replacing them before formatting prevents a request path,
+    header or audit field from forging additional log entries.
+    """
+    text = _CONTROL_CHARACTERS.sub(" ", str(value or ""))
+    return " ".join(text.split())[: max(1, int(max_length))]
 
 
 class ContextFilter(logging.Filter):

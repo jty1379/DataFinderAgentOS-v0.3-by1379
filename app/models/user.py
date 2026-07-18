@@ -20,6 +20,13 @@ def _hash_password(password: str, salt: bytes) -> str:
     ).hex()
 
 
+# Missing/disabled users take the same PBKDF2 path as existing users.  A fixed
+# non-secret dummy record avoids generating a new salt on each attempt while
+# keeping the observable cost independent of username existence.
+_DUMMY_SALT = bytes.fromhex("9e2c4d449a8f6b93f207e46bd8fcf519")
+_DUMMY_PASSWORD_HASH = _hash_password("invalid-authentication-record", _DUMMY_SALT)
+
+
 def _public_user(row):
     if row is None:
         return None
@@ -98,6 +105,8 @@ class UserRepository:
                 (username,),
             ).fetchone()
         if row is None:
+            computed = _hash_password(password, _DUMMY_SALT)
+            secrets.compare_digest(computed, _DUMMY_PASSWORD_HASH)
             return None
         computed = _hash_password(password, bytes.fromhex(row["salt"]))
         if not secrets.compare_digest(computed, row["password_hash"]):
@@ -227,6 +236,10 @@ class UserRepository:
         skipped: Counter[str] = Counter()
         changed = 0
         with connection_scope() as connection:
+            # Acquire SQLite's write reservation before COUNT + UPDATE so two
+            # concurrent administrators cannot both observe the same last
+            # enabled administrator and then remove it.
+            connection.execute("BEGIN IMMEDIATE")
             actor = connection.execute(
                 """
                 SELECT id FROM users

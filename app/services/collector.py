@@ -12,8 +12,6 @@ from datetime import UTC
 from html import unescape
 from html.parser import HTMLParser
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
-from urllib.request import Request as UrlRequest
-from urllib.request import urlopen
 
 from tornado.httpclient import HTTPRequest
 
@@ -150,19 +148,56 @@ def _chinanews_results(document: str, limit: int) -> list[dict]:
     return output
 
 
-def _download_bing(url: str, headers: dict[str, str], timeout: int) -> tuple[str, str, bytes]:
-    """Bing 会按网络区域跳转；使用其公开页面并将跳转结果限定在 Bing 域名。"""
-    request = UrlRequest(url, headers=headers, method="GET")
-    with urlopen(request, timeout=timeout) as response:  # noqa: S310 - URL 已经公网页校验
-        effective_url = response.geturl()
-        hostname = (urlsplit(effective_url).hostname or "").lower()
-        if hostname != "bing.com" and not hostname.endswith(".bing.com"):
-            raise CollectionError("Bing 新闻返回了非 Bing 域名")
-        body = response.read(MAX_RESPONSE_BYTES + 1)
-        if len(body) > MAX_RESPONSE_BYTES:
+def _require_bing_url(url: str) -> None:
+    hostname = (urlsplit(url).hostname or "").rstrip(".").lower()
+    if hostname != "bing.com" and not hostname.endswith(".bing.com"):
+        raise CollectionError("Bing 新闻采集仅允许访问 Bing 公网域名")
+
+
+async def _download_bing(
+    url: str, headers: dict[str, str], timeout: int
+) -> tuple[str, str, bytes]:
+    """Fetch Bing with DNS pinning and revalidate every redirect hop."""
+    current_url = url
+    response = None
+    chunks = bytearray()
+
+    def receive_chunk(chunk: bytes) -> None:
+        if len(chunks) + len(chunk) > MAX_RESPONSE_BYTES:
             raise CollectionError("Bing 新闻响应内容过大")
-        content_type = str(response.headers.get("Content-Type") or "").lower()
-        return effective_url, content_type, body
+        chunks.extend(chunk)
+
+    for redirect_index in range(4):
+        _require_bing_url(current_url)
+        chunks.clear()
+        request = HTTPRequest(
+            url=current_url,
+            method="GET",
+            headers=headers,
+            connect_timeout=min(10, timeout),
+            request_timeout=timeout,
+            follow_redirects=False,
+            decompress_response=True,
+            streaming_callback=receive_chunk,
+        )
+        response = await guarded_fetch(request, raise_error=False)
+        if not 300 <= response.code < 400:
+            break
+        location = str(response.headers.get("Location") or "").strip()
+        if not location or redirect_index >= 2:
+            raise CollectionError("Bing 新闻重定向次数过多")
+        next_url = urljoin(current_url, location)
+        _require_bing_url(next_url)
+        current_url = next_url
+
+    if response is None:
+        raise CollectionError("Bing 新闻未返回响应")
+    if response.code != 200:
+        raise CollectionError(f"Bing 新闻返回 HTTP {response.code}")
+    content_type = str(response.headers.get("Content-Type") or "").lower()
+    if content_type and "html" not in content_type and "text/" not in content_type:
+        raise CollectionError("Bing 新闻未返回可解析的网页内容")
+    return current_url, content_type, bytes(chunks)
 
 
 async def _collect_bing(
@@ -173,9 +208,7 @@ async def _collect_bing(
     page_size: int,
 ) -> list[dict]:
     try:
-        effective_url, content_type, body = await asyncio.to_thread(
-            _download_bing, url, headers, timeout
-        )
+        effective_url, content_type, body = await _download_bing(url, headers, timeout)
     except CollectionError:
         raise
     except Exception as exc:

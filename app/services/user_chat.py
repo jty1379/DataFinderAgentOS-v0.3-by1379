@@ -8,6 +8,12 @@ import logging
 import time
 from pathlib import Path
 
+from app.core.prompt_safety import (
+    PromptInjectionError,
+    add_untrusted_policy,
+    validate_untrusted_content,
+    wrap_untrusted_content,
+)
 from app.models.conversation import ConversationRepository
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.model_engine import ModelRepository
@@ -107,6 +113,7 @@ def _extract_pdf_text(data: bytes) -> str:
     """用 PyPDF2 抽取 PDF 文本，最多前 50 页且受字符预算约束。"""
     try:
         from io import BytesIO
+
         from PyPDF2 import PdfReader
     except ImportError as exc:
         raise UserChatError("服务器缺少 PDF 解析组件，请联系管理员") from exc
@@ -222,7 +229,7 @@ class UserChatService:
         attachments_meta = [{"url": url, "kind": "image"} for url in image_urls]
         attachments_meta += [
             {"url": ref["url"], "name": doc["name"], "kind": "doc"}
-            for ref, doc in zip(document_refs, documents)
+            for ref, doc in zip(document_refs, documents, strict=True)
         ]
         if attachments_meta:
             user_metadata["attachments"] = attachments_meta
@@ -301,6 +308,12 @@ class UserChatService:
     @staticmethod
     async def _answer(prompt, conversation_id, user_id, employee, model, on_delta=None, images=None, documents_text="") -> dict:
         QueryIntentService.validate(prompt)
+        try:
+            validate_untrusted_content(prompt, "用户问题")
+            if documents_text:
+                validate_untrusted_content(documents_text, "上传文档")
+        except PromptInjectionError as exc:
+            raise UnsafeQueryError(str(exc)) from exc
         if employee:
             employee_prompt = prompt
             for prefix in (f"@{employee['mention']}", f"/{employee['mention']}"):
@@ -334,20 +347,35 @@ class UserChatService:
             ("用户" if item["role"] == "user" else "助手") + "：" + item["content"]
             for item in history if item["content_type"] == "text"
         )
+        try:
+            if context:
+                validate_untrusted_content(context, "会话上下文")
+        except PromptInjectionError as exc:
+            raise UnsafeQueryError(str(exc)) from exc
         segments = []
         if documents_text:
-            segments.append(f"以下是用户上传的文档内容，请结合它回答：\n{documents_text}")
+            segments.append(
+                "以下是用户上传的文档内容，请结合它回答：\n"
+                + wrap_untrusted_content("uploaded_documents", documents_text)
+            )
         if context:
-            segments.append(f"当前会话上下文：\n{context}")
-        tail = f"用户最新问题：{prompt}"
+            segments.append(
+                "当前会话上下文：\n"
+                + wrap_untrusted_content("conversation_history", context)
+            )
+        tail = "用户最新问题：\n" + wrap_untrusted_content("user_query", prompt)
         head = "\n\n".join(segments)
         budget = PROMPT_LIMIT - len(tail) - 2
         if head and len(head) > budget:
             head = head[:max(budget, 0)]
         full_prompt = f"{head}\n\n{tail}" if head else tail
+        safe_model = dict(model)
+        safe_model["system_prompt"] = add_untrusted_policy(
+            str(safe_model.get("system_prompt") or "")
+        )
         result = await (
-            LLMService.complete_stream(model, full_prompt, on_delta, images=images)
-            if on_delta else LLMService.complete(model, full_prompt, images=images)
+            LLMService.complete_stream(safe_model, full_prompt, on_delta, images=images)
+            if on_delta else LLMService.complete(safe_model, full_prompt, images=images)
         )
         ModelRepository.record_usage(
             model_id=model["id"], user_id=user_id, success=True,

@@ -53,3 +53,8 @@ Thumbs.db
 
 # 数字员工运行时上传资料（仅保留目录说明）
 data/dgUser/*/
+
+# 用户上传、语音缓存和本地导出均为运行时数据
+data/uploads/
+data/tts_cache/
+prompts_export/

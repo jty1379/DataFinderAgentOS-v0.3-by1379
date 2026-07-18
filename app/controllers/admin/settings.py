@@ -5,6 +5,20 @@ from app.services.security import AuditLogService
 from app.services.system_settings import SystemSettingsService
 
 
+def _audit_setting_values(before: dict | None, after: dict | None) -> tuple[str, str]:
+    """Mask both sides when either snapshot classifies the setting as sensitive."""
+    sensitive = bool(
+        (before and before.get("is_sensitive"))
+        or (after and after.get("is_sensitive"))
+    )
+    if sensitive:
+        return "***", "***"
+    return (
+        str((before or {}).get("setting_value", "")),
+        str((after or {}).get("setting_value", "")),
+    )
+
+
 class AdminSettingsHandler(AdminBaseHandler):
     required_feature = "system_settings"
 
@@ -42,12 +56,12 @@ class AdminSettingsHandler(AdminBaseHandler):
         if not SystemSettingsService.update_setting(setting_key, setting_value, self.current_user["id"]):
             raise ValueError("保存失败")
         after = SystemSettingsService.get_setting(setting_key)
-        sensitive = bool(after and after.get("is_sensitive"))
+        before_value, after_value = _audit_setting_values(before, after)
         AuditLogService.log_action(
             "update", "setting", after["id"] if after else None,
             self.current_user["id"], self.current_user["username"], self.get_client_ip(),
-            {"key": setting_key, "value": "***" if sensitive else (before or {}).get("setting_value", "")},
-            {"key": setting_key, "value": "***" if sensitive else (after or {}).get("setting_value", "")},
+            {"key": setting_key, "value": before_value},
+            {"key": setting_key, "value": after_value},
             "系统设置单项更新",
         )
         return "设置已更新", "success"
@@ -71,12 +85,12 @@ class AdminSettingsHandler(AdminBaseHandler):
         updated_count = SystemSettingsService.batch_update(settings_dict, self.current_user["id"])
         for key in settings_dict:
             after = SystemSettingsService.get_setting(key)
-            sensitive = bool(after and after.get("is_sensitive"))
+            before_value, after_value = _audit_setting_values(before[key], after)
             AuditLogService.log_action(
                 "update", "setting", after["id"] if after else None,
                 self.current_user["id"], self.current_user["username"], self.get_client_ip(),
-                {"key": key, "value": "***" if sensitive else (before[key] or {}).get("setting_value", "")},
-                {"key": key, "value": "***" if sensitive else (after or {}).get("setting_value", "")},
+                {"key": key, "value": before_value},
+                {"key": key, "value": after_value},
                 "系统设置批量更新",
             )
         return f"已更新 {updated_count} 项设置", "success"

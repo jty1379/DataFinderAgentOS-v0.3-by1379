@@ -10,8 +10,10 @@ import urllib.parse
 import uuid
 
 import tornado.web
+from tornado.escape import xhtml_escape
 
 from app.core.contracts import error_response, success_response
+from app.core.logging import single_line_log_value
 from app.core.permissions import (
     require_admin,
     require_login,
@@ -31,7 +33,14 @@ class BaseHandler(tornado.web.RequestHandler):
     """统一提供用户 Cookie、request_id、请求日志和 HTML 错误页。"""
 
     def initialize(self) -> None:
-        self.request_id = self.request.headers.get("X-Request-ID", uuid.uuid4().hex)
+        supplied_request_id = single_line_log_value(
+            self.request.headers.get("X-Request-ID", ""), 128
+        )
+        self.request_id = (
+            supplied_request_id
+            if re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", supplied_request_id)
+            else uuid.uuid4().hex
+        )
         self.request_started = time.monotonic()
         self.set_header("X-Request-ID", self.request_id)
         self._set_security_headers()
@@ -81,10 +90,11 @@ class BaseHandler(tornado.web.RequestHandler):
 
     def on_finish(self) -> None:
         user = self.current_user
+        safe_path = single_line_log_value(self.request.path, 2048)
         REQUEST_LOGGER.info(
             "%s %s status=%s duration_ms=%s",
             self.request.method,
-            self.request.path,
+            safe_path,
             self.get_status(),
             round((time.monotonic() - self.request_started) * 1000),
             extra={"request_id": self.request_id, "user_id": user.get("id", "-") if user else "-", "event": "request_finished"},
@@ -118,7 +128,10 @@ class BaseHandler(tornado.web.RequestHandler):
                 action_type = "create" if self.request.method == "POST" else "update"
             segments = [segment for segment in self.request.path.split("/") if segment]
             admin_index = segments.index("admin") if "admin" in segments else 0
-            resource_type = segments[admin_index + 1] if len(segments) > admin_index + 1 else "system"
+            resource_type = single_line_log_value(
+                segments[admin_index + 1] if len(segments) > admin_index + 1 else "system",
+                80,
+            )
             resource_id = next(
                 (int(segment) for segment in reversed(segments) if re.fullmatch(r"[1-9][0-9]*", segment)),
                 None,
@@ -145,12 +158,15 @@ class BaseHandler(tornado.web.RequestHandler):
             try:
                 AuditLogService.log_action(
                     action_type=action_type,
-                    resource_type=resource_type[:80],
+                    resource_type=resource_type,
                     resource_id=resource_id,
                     user_id=user["id"],
                     user_name=user.get("username", ""),
                     ip_address=self.get_client_ip(),
-                    detail=f"{self.request.method} {self.request.path}; status={self.get_status()}; request_id={self.request_id}",
+                    detail=(
+                        f"{single_line_log_value(self.request.method, 16)} {safe_path}; "
+                        f"status={self.get_status()}; request_id={self.request_id}"
+                    ),
                     success=business_success,
                     error_message="" if business_success else f"操作失败（HTTP {self.get_status()}）",
                 )
@@ -161,11 +177,12 @@ class BaseHandler(tornado.web.RequestHandler):
                 )
 
     def write_error(self, status_code: int, **kwargs) -> None:
+        safe_path = single_line_log_value(self.request.path, 2048)
         if status_code >= 500:
             REQUEST_LOGGER.error(
                 "unhandled page error status=%s path=%s",
                 status_code,
-                self.request.path,
+                safe_path,
                 exc_info=kwargs.get("exc_info"),
                 extra={"request_id": self.request_id, "event": "page_error"},
             )
@@ -174,7 +191,7 @@ class BaseHandler(tornado.web.RequestHandler):
         self.set_header("Content-Type", "text/html; charset=UTF-8")
         self.finish(
             "<!doctype html><meta charset='utf-8'><style>body{font-family:system-ui;background:#071426;color:#e6f1ff;display:grid;place-items:center;height:100vh;margin:0}main{padding:40px;border:1px solid #244968;border-radius:10px;background:#102a46}a{color:#7eb0d6}</style>"
-            f"<main><h1>{status_code} · {title}</h1><p>{message}</p><p>请求编号：{self.request_id}</p><a href='/'>返回系统首页</a></main>"
+            f"<main><h1>{status_code} · {title}</h1><p>{message}</p><p>请求编号：{xhtml_escape(self.request_id)}</p><a href='/'>返回系统首页</a></main>"
         )
 
 
@@ -235,11 +252,12 @@ class JsonResponseMixin:
         self.finish(json.dumps(payload, ensure_ascii=False))
 
     def write_error(self, status_code: int, **kwargs) -> None:
+        safe_path = single_line_log_value(self.request.path, 2048)
         if status_code >= 500:
             REQUEST_LOGGER.error(
                 "unhandled api error status=%s path=%s",
                 status_code,
-                self.request.path,
+                safe_path,
                 exc_info=kwargs.get("exc_info"),
                 extra={"request_id": self.request_id, "event": "api_error"},
             )

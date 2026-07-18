@@ -11,6 +11,7 @@ from app.controllers.base import AdminJsonHandler, BaseHandler, UserJsonHandler
 from app.models.biometrics import BiometricRepository
 from app.models.digital_employee import DigitalEmployeeRepository
 from app.models.user import UserRepository
+from app.services.auth_rate_limit import AuthenticationRateLimiter
 from app.services.biometrics import (
     BiometricError,
     FaceVerifier,
@@ -48,12 +49,20 @@ class FaceLoginHandler(BaseHandler):
             return _write(self, {"ok": False, "message": "系统已停用人脸登录"}, 403)
         payload = _json_payload(self)
         username = str(payload.get("username") or "").strip()
+        peer_ip = self.request.remote_ip
+        rate_scope = "user-face"
+        retry_after = AuthenticationRateLimiter.retry_after(rate_scope, peer_ip, username)
+        if retry_after:
+            self.set_header("Retry-After", str(retry_after))
+            return _write(self, {"ok": False, "message": FACE_LOGIN_FAILURE}, 429)
         user = UserRepository.get_active_user_by_username(username)
         if not user or user["role_scope"] != "user":
+            AuthenticationRateLimiter.record_failure(rate_scope, peer_ip, username)
             LOGGER.info("face login rejected: unknown user", extra={"event": "face_login_failed", "reason": "unknown_user"})
             return _write(self, {"ok": False, "message": FACE_LOGIN_FAILURE}, 401)
         profile = BiometricRepository.face_profile(user["id"])
         if not profile or not profile["enabled"]:
+            AuthenticationRateLimiter.record_failure(rate_scope, peer_ip, username)
             LOGGER.info("face login rejected: no profile", extra={"event": "face_login_failed", "reason": "no_profile", "user_id": user["id"]})
             return _write(self, {"ok": False, "message": FACE_LOGIN_FAILURE}, 401)
         try:
@@ -61,11 +70,14 @@ class FaceLoginHandler(BaseHandler):
             candidate, evidence = FaceVerifier.extract_profile(frames)
             similarity = FaceVerifier.compare(loads_embedding(profile["embedding"]), candidate)
         except BiometricError as exc:
+            AuthenticationRateLimiter.record_failure(rate_scope, peer_ip, username)
             LOGGER.info("face login rejected: %s", exc, extra={"event": "face_login_failed", "reason": "biometric_error", "user_id": user["id"]})
             return _write(self, {"ok": False, "message": FACE_LOGIN_FAILURE}, 401)
         if similarity < 0.82:
+            AuthenticationRateLimiter.record_failure(rate_scope, peer_ip, username)
             LOGGER.info("face login rejected: low similarity %.4f", similarity, extra={"event": "face_login_failed", "reason": "mismatch", "user_id": user["id"]})
             return _write(self, {"ok": False, "message": FACE_LOGIN_FAILURE}, 401)
+        AuthenticationRateLimiter.record_success(rate_scope, peer_ip, username)
         self.login_user(user)
         _write(
             self,

@@ -7,6 +7,7 @@ from typing import Any
 
 import tornado.web
 
+from app.core.logging import single_line_log_value
 from app.repositories.feature_repository import FeatureRepository
 from app.repositories.role_repository import RoleRepository
 
@@ -18,7 +19,7 @@ def _deny(handler: tornado.web.RequestHandler, status: int, reason: str) -> None
     SECURITY_LOGGER.warning(
         "permission denied method=%s path=%s reason=%s",
         handler.request.method,
-        handler.request.path,
+        single_line_log_value(handler.request.path, 2048),
         reason,
         extra={"request_id": getattr(handler, "request_id", "-"), "user_id": user.get("id", "-") if user else "-", "event": "permission_denied"},
     )
